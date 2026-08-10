@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FabOps Backward-Compatible Event Envelope",
+  "type": "object",
+  "required": ["event_id", "event_type", "event_time", "source", "schema_version", "payload"],
+  "properties": {
+    "event_id": {"type": "string", "minLength": 1},
+    "event_type": {"type": "string", "pattern": "^[a-z]+(?:\\.[a-z]+)+\\.v[0-9]+$"},
+    "event_time": {"type": "string", "format": "date-time"},
+    "ingested_at": {"type": "string", "format": "date-time"},
+    "source": {"type": "string", "minLength": 1},
+    "trace_id": {"type": ["string", "null"]},
+    "lot_id": {"type": ["string", "null"]},
+    "wafer_id": {"type": ["string", "null"]},
+    "equipment_id": {"type": ["string", "null"]},
+    "chamber_id": {"type": ["string", "null"]},
+    "schema_version": {"type": "integer", "minimum": 1},
+    "data_classification": {"enum": ["real-public", "synthetic", "inferred"]},
+    "payload": {"type": "object"}
+  },
+  "additionalProperties": true
+}
