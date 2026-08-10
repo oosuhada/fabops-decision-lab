@@ -1,0 +1,12 @@
+{
+  "milestone": "M1",
+  "status": "passed",
+  "profile": "test",
+  "seed": 42,
+  "event_count": 373,
+  "canonical_event_hash": "92f1c0df38d3812b2454398d030f1ad51fe6023efe85195fa322e6b4fcfe954a",
+  "canonical_ground_truth_hash": "e4f65414b4dc783354d3c082998611bd5d21dfaf0ce1188cb139e0705ce05847",
+  "fault_families": ["F1", "F2", "F3", "F4", "F5", "F6"],
+  "manifest_replay_verified": true,
+  "regression_result_at_gate": "18 passed"
+}

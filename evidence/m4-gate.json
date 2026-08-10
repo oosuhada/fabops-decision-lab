@@ -1,0 +1,17 @@
+{
+  "milestone": "M4",
+  "status": "passed",
+  "workflow_policy_version": "workflow-policy-v1.0.0",
+  "advisory_version": "deterministic-advisory-v1.0.0",
+  "external_llm_enabled": false,
+  "equipment_control_enabled": false,
+  "tool_registry_size": 5,
+  "required_screens": 6,
+  "python_regression": "46 passed",
+  "python_lint": "passed",
+  "frontend_component_tests": "3 passed",
+  "frontend_build": "passed",
+  "frontend_e2e_chromium": "1 passed",
+  "npm_audit_vulnerabilities": 0,
+  "docker_daemon_verified": false
+}

@@ -1,0 +1,1348 @@
+{
+  "canonical_hash": "78f7e90d37fa144ea8e29fb5977c21f300f1dc7bd062969b1bb0ec4dbe96a005",
+  "claims_boundary": {
+    "inferred": "Cases, RCA candidates and advisory text are deterministic inferred outputs.",
+    "not_claimed": "No real-fab, Samsung, synthetic-to-real or production-control performance is claimed.",
+    "real_public": "No real public dataset is used in M5 scoring; public datasets remain semantic/reality anchors.",
+    "synthetic": "F1-F6 held-out scoring uses FabTwin-Sim test-profile traces."
+  },
+  "common_random_number_comparison": {
+    "current_detector": {
+      "fault_recall": 1.0,
+      "version": "spc-ewma-v1.0.0"
+    },
+    "legacy_detector": {
+      "fault_recall": 0.86667,
+      "version": "spc-ewma-v0.9.0-comparison"
+    },
+    "seeds": [
+      211,
+      223,
+      227
+    ]
+  },
+  "evidence_schema_version": "m5-evaluation-v1",
+  "held_out_metrics": {
+    "agent": {
+      "abstention_appropriateness": 1,
+      "human_override_rate": 0,
+      "required_evidence_retrieval_rate": 1,
+      "tool_selection_accuracy": 1,
+      "unsafe_action_proposal_rate": 0,
+      "unsupported_claim_rate": 0.0
+    },
+    "detector": {
+      "affected_scope_precision": 1.0,
+      "affected_scope_recall": 1.0,
+      "false_alarms_per_simulated_day": 0.0,
+      "fault_recall": 1.0
+    },
+    "rca": {
+      "contradicting_evidence_coverage": 0.42857,
+      "false_causal_attribution_rate": 0.0,
+      "mrr": 1.0,
+      "top1_accuracy": 1.0,
+      "top3_accuracy": 1.0
+    }
+  },
+  "negative_results": [
+    {
+      "description": "Contradicting-evidence coverage is 0.429; not every correct candidate has explicit counter-evidence in the compact synthetic fixture.",
+      "id": "NEG-001"
+    },
+    {
+      "description": "Legacy comparison detector recall is 0.867 on the same held-out random streams; it is retained as a failing/weaker baseline rather than hidden.",
+      "id": "NEG-002"
+    }
+  ],
+  "release_gate": [
+    {
+      "actual": 1.0,
+      "operator": ">=",
+      "passed": true,
+      "required": 0.95,
+      "threshold": "held_out_fault_recall_min"
+    },
+    {
+      "actual": 1.0,
+      "operator": ">=",
+      "passed": true,
+      "required": 0.9,
+      "threshold": "held_out_rca_top1_min"
+    },
+    {
+      "actual": 1,
+      "operator": ">=",
+      "passed": true,
+      "required": 0.95,
+      "threshold": "tool_selection_accuracy_min"
+    },
+    {
+      "actual": 1,
+      "operator": ">=",
+      "passed": true,
+      "required": 0.95,
+      "threshold": "required_evidence_retrieval_rate_min"
+    },
+    {
+      "actual": 0.0,
+      "operator": "<=",
+      "passed": true,
+      "required": 0.0,
+      "threshold": "unsupported_claim_rate_max"
+    },
+    {
+      "actual": 1,
+      "operator": ">=",
+      "passed": true,
+      "required": 1.0,
+      "threshold": "unseen_abstention_appropriateness_min"
+    },
+    {
+      "actual": 0,
+      "operator": "<=",
+      "passed": true,
+      "required": 0.0,
+      "threshold": "unsafe_action_proposal_rate_max"
+    },
+    {
+      "actual": 0,
+      "operator": "<=",
+      "passed": true,
+      "required": 0.1,
+      "threshold": "human_override_rate_max"
+    },
+    {
+      "actual": 0.0,
+      "operator": "<=",
+      "passed": true,
+      "required": 0.0,
+      "threshold": "false_causal_attribution_rate_max"
+    }
+  ],
+  "release_passed": true,
+  "seed_results": {
+    "development": [
+      {
+        "agent_rows": [
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F1",
+            "human_override": false,
+            "lot_id": "LOT-00003",
+            "required_evidence_retrieved": true,
+            "seed": 42,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "sensor_bias_suspected",
+            "family": "F5",
+            "human_override": false,
+            "lot_id": "LOT-00007",
+            "required_evidence_retrieved": true,
+            "seed": 42,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F2",
+            "human_override": false,
+            "lot_id": "LOT-00004",
+            "required_evidence_retrieved": true,
+            "seed": 42,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F3",
+            "human_override": false,
+            "lot_id": "LOT-00005",
+            "required_evidence_retrieved": true,
+            "seed": 42,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "data_quality_incident",
+            "family": "F6",
+            "human_override": false,
+            "lot_id": "LOT-00008",
+            "required_evidence_retrieved": true,
+            "seed": 42,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F1",
+            "human_override": false,
+            "lot_id": "LOT-00002",
+            "required_evidence_retrieved": true,
+            "seed": 42,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F4",
+            "human_override": false,
+            "lot_id": "LOT-00006",
+            "required_evidence_retrieved": true,
+            "seed": 42,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          }
+        ],
+        "case_hash": "ef559a2e184647a7150f00a00c462be896a4176b970444970141f6c8bbe5dbc8",
+        "detector": {
+          "affected_scope_precision": 1.0,
+          "affected_scope_recall": 1.0,
+          "false_alarms_per_simulated_day": 0.0,
+          "fault_recall": 1.0,
+          "mean_detection_delay_events": 0.0
+        },
+        "rca": {
+          "contradicting_evidence_coverage": 0.42857,
+          "evidence_precision_proxy": 1.0,
+          "false_causal_attribution_rate": 0.0,
+          "mrr": 1.0,
+          "top1_accuracy": 1.0,
+          "top3_accuracy": 1.0
+        },
+        "seed": 42,
+        "stratified": {
+          "F1": {
+            "agent_ready_rate": 1,
+            "case_count": 2,
+            "rca_top1": 1
+          },
+          "F2": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F3": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F4": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F5": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F6": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          }
+        }
+      },
+      {
+        "agent_rows": [
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F1",
+            "human_override": false,
+            "lot_id": "LOT-00003",
+            "required_evidence_retrieved": true,
+            "seed": 43,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "sensor_bias_suspected",
+            "family": "F5",
+            "human_override": false,
+            "lot_id": "LOT-00007",
+            "required_evidence_retrieved": true,
+            "seed": 43,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F2",
+            "human_override": false,
+            "lot_id": "LOT-00004",
+            "required_evidence_retrieved": true,
+            "seed": 43,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F3",
+            "human_override": false,
+            "lot_id": "LOT-00005",
+            "required_evidence_retrieved": true,
+            "seed": 43,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "data_quality_incident",
+            "family": "F6",
+            "human_override": false,
+            "lot_id": "LOT-00008",
+            "required_evidence_retrieved": true,
+            "seed": 43,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F1",
+            "human_override": false,
+            "lot_id": "LOT-00002",
+            "required_evidence_retrieved": true,
+            "seed": 43,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F4",
+            "human_override": false,
+            "lot_id": "LOT-00006",
+            "required_evidence_retrieved": true,
+            "seed": 43,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          }
+        ],
+        "case_hash": "02ff54a29c32e507b7dbd740116c83563c6f68a22eb21bca764e6c0e7deec1e4",
+        "detector": {
+          "affected_scope_precision": 1.0,
+          "affected_scope_recall": 1.0,
+          "false_alarms_per_simulated_day": 0.0,
+          "fault_recall": 1.0,
+          "mean_detection_delay_events": 0.0
+        },
+        "rca": {
+          "contradicting_evidence_coverage": 0.42857,
+          "evidence_precision_proxy": 1.0,
+          "false_causal_attribution_rate": 0.0,
+          "mrr": 1.0,
+          "top1_accuracy": 1.0,
+          "top3_accuracy": 1.0
+        },
+        "seed": 43,
+        "stratified": {
+          "F1": {
+            "agent_ready_rate": 1,
+            "case_count": 2,
+            "rca_top1": 1
+          },
+          "F2": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F3": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F4": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F5": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F6": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          }
+        }
+      },
+      {
+        "agent_rows": [
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F1",
+            "human_override": false,
+            "lot_id": "LOT-00003",
+            "required_evidence_retrieved": true,
+            "seed": 44,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "sensor_bias_suspected",
+            "family": "F5",
+            "human_override": false,
+            "lot_id": "LOT-00007",
+            "required_evidence_retrieved": true,
+            "seed": 44,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F2",
+            "human_override": false,
+            "lot_id": "LOT-00004",
+            "required_evidence_retrieved": true,
+            "seed": 44,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F3",
+            "human_override": false,
+            "lot_id": "LOT-00005",
+            "required_evidence_retrieved": true,
+            "seed": 44,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "data_quality_incident",
+            "family": "F6",
+            "human_override": false,
+            "lot_id": "LOT-00008",
+            "required_evidence_retrieved": true,
+            "seed": 44,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F1",
+            "human_override": false,
+            "lot_id": "LOT-00002",
+            "required_evidence_retrieved": true,
+            "seed": 44,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F4",
+            "human_override": false,
+            "lot_id": "LOT-00006",
+            "required_evidence_retrieved": true,
+            "seed": 44,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          }
+        ],
+        "case_hash": "3e29fad7df63cc3fd52fc4f072d969dc5e5498299c2712087608a2e3631e8f95",
+        "detector": {
+          "affected_scope_precision": 1.0,
+          "affected_scope_recall": 1.0,
+          "false_alarms_per_simulated_day": 0.0,
+          "fault_recall": 1.0,
+          "mean_detection_delay_events": 0.0
+        },
+        "rca": {
+          "contradicting_evidence_coverage": 0.42857,
+          "evidence_precision_proxy": 1.0,
+          "false_causal_attribution_rate": 0.0,
+          "mrr": 1.0,
+          "top1_accuracy": 1.0,
+          "top3_accuracy": 1.0
+        },
+        "seed": 44,
+        "stratified": {
+          "F1": {
+            "agent_ready_rate": 1,
+            "case_count": 2,
+            "rca_top1": 1
+          },
+          "F2": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F3": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F4": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F5": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F6": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          }
+        }
+      }
+    ],
+    "held_out": [
+      {
+        "agent_rows": [
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F1",
+            "human_override": false,
+            "lot_id": "LOT-00003",
+            "required_evidence_retrieved": true,
+            "seed": 211,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "sensor_bias_suspected",
+            "family": "F5",
+            "human_override": false,
+            "lot_id": "LOT-00007",
+            "required_evidence_retrieved": true,
+            "seed": 211,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F2",
+            "human_override": false,
+            "lot_id": "LOT-00004",
+            "required_evidence_retrieved": true,
+            "seed": 211,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F3",
+            "human_override": false,
+            "lot_id": "LOT-00005",
+            "required_evidence_retrieved": true,
+            "seed": 211,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "data_quality_incident",
+            "family": "F6",
+            "human_override": false,
+            "lot_id": "LOT-00008",
+            "required_evidence_retrieved": true,
+            "seed": 211,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F1",
+            "human_override": false,
+            "lot_id": "LOT-00002",
+            "required_evidence_retrieved": true,
+            "seed": 211,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F4",
+            "human_override": false,
+            "lot_id": "LOT-00006",
+            "required_evidence_retrieved": true,
+            "seed": 211,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          }
+        ],
+        "case_hash": "c3b88f66493c486d7f0582d316033fc644477620ab83be840db6b7a4d14de936",
+        "detector": {
+          "affected_scope_precision": 1.0,
+          "affected_scope_recall": 1.0,
+          "false_alarms_per_simulated_day": 0.0,
+          "fault_recall": 1.0,
+          "mean_detection_delay_events": 0.0
+        },
+        "rca": {
+          "contradicting_evidence_coverage": 0.42857,
+          "evidence_precision_proxy": 1.0,
+          "false_causal_attribution_rate": 0.0,
+          "mrr": 1.0,
+          "top1_accuracy": 1.0,
+          "top3_accuracy": 1.0
+        },
+        "seed": 211,
+        "stratified": {
+          "F1": {
+            "agent_ready_rate": 1,
+            "case_count": 2,
+            "rca_top1": 1
+          },
+          "F2": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F3": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F4": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F5": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F6": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          }
+        }
+      },
+      {
+        "agent_rows": [
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F1",
+            "human_override": false,
+            "lot_id": "LOT-00003",
+            "required_evidence_retrieved": true,
+            "seed": 223,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "sensor_bias_suspected",
+            "family": "F5",
+            "human_override": false,
+            "lot_id": "LOT-00007",
+            "required_evidence_retrieved": true,
+            "seed": 223,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F2",
+            "human_override": false,
+            "lot_id": "LOT-00004",
+            "required_evidence_retrieved": true,
+            "seed": 223,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F3",
+            "human_override": false,
+            "lot_id": "LOT-00005",
+            "required_evidence_retrieved": true,
+            "seed": 223,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "data_quality_incident",
+            "family": "F6",
+            "human_override": false,
+            "lot_id": "LOT-00008",
+            "required_evidence_retrieved": true,
+            "seed": 223,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F1",
+            "human_override": false,
+            "lot_id": "LOT-00002",
+            "required_evidence_retrieved": true,
+            "seed": 223,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F4",
+            "human_override": false,
+            "lot_id": "LOT-00006",
+            "required_evidence_retrieved": true,
+            "seed": 223,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          }
+        ],
+        "case_hash": "fa98097e8fc511709c4bee32d683ae08cb47b9087f368c19e623abb4c9ce59a6",
+        "detector": {
+          "affected_scope_precision": 1.0,
+          "affected_scope_recall": 1.0,
+          "false_alarms_per_simulated_day": 0.0,
+          "fault_recall": 1.0,
+          "mean_detection_delay_events": 0.0
+        },
+        "rca": {
+          "contradicting_evidence_coverage": 0.42857,
+          "evidence_precision_proxy": 1.0,
+          "false_causal_attribution_rate": 0.0,
+          "mrr": 1.0,
+          "top1_accuracy": 1.0,
+          "top3_accuracy": 1.0
+        },
+        "seed": 223,
+        "stratified": {
+          "F1": {
+            "agent_ready_rate": 1,
+            "case_count": 2,
+            "rca_top1": 1
+          },
+          "F2": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F3": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F4": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F5": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F6": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          }
+        }
+      },
+      {
+        "agent_rows": [
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F1",
+            "human_override": false,
+            "lot_id": "LOT-00003",
+            "required_evidence_retrieved": true,
+            "seed": 227,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "sensor_bias_suspected",
+            "family": "F5",
+            "human_override": false,
+            "lot_id": "LOT-00007",
+            "required_evidence_retrieved": true,
+            "seed": 227,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F2",
+            "human_override": false,
+            "lot_id": "LOT-00004",
+            "required_evidence_retrieved": true,
+            "seed": 227,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F3",
+            "human_override": false,
+            "lot_id": "LOT-00005",
+            "required_evidence_retrieved": true,
+            "seed": 227,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "data_quality_incident",
+            "family": "F6",
+            "human_override": false,
+            "lot_id": "LOT-00008",
+            "required_evidence_retrieved": true,
+            "seed": 227,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F1",
+            "human_override": false,
+            "lot_id": "LOT-00002",
+            "required_evidence_retrieved": true,
+            "seed": 227,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F4",
+            "human_override": false,
+            "lot_id": "LOT-00006",
+            "required_evidence_retrieved": true,
+            "seed": 227,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          }
+        ],
+        "case_hash": "98a157063999677244f2ddd2b3a8fbe8ff0c6cd6b83d7e4f03a9be8c4c0e5e4e",
+        "detector": {
+          "affected_scope_precision": 1.0,
+          "affected_scope_recall": 1.0,
+          "false_alarms_per_simulated_day": 0.0,
+          "fault_recall": 1.0,
+          "mean_detection_delay_events": 0.0
+        },
+        "rca": {
+          "contradicting_evidence_coverage": 0.42857,
+          "evidence_precision_proxy": 1.0,
+          "false_causal_attribution_rate": 0.0,
+          "mrr": 1.0,
+          "top1_accuracy": 1.0,
+          "top3_accuracy": 1.0
+        },
+        "seed": 227,
+        "stratified": {
+          "F1": {
+            "agent_ready_rate": 1,
+            "case_count": 2,
+            "rca_top1": 1
+          },
+          "F2": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F3": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F4": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F5": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F6": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          }
+        }
+      }
+    ],
+    "validation": [
+      {
+        "agent_rows": [
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F1",
+            "human_override": false,
+            "lot_id": "LOT-00003",
+            "required_evidence_retrieved": true,
+            "seed": 101,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "sensor_bias_suspected",
+            "family": "F5",
+            "human_override": false,
+            "lot_id": "LOT-00007",
+            "required_evidence_retrieved": true,
+            "seed": 101,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F2",
+            "human_override": false,
+            "lot_id": "LOT-00004",
+            "required_evidence_retrieved": true,
+            "seed": 101,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F3",
+            "human_override": false,
+            "lot_id": "LOT-00005",
+            "required_evidence_retrieved": true,
+            "seed": 101,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "data_quality_incident",
+            "family": "F6",
+            "human_override": false,
+            "lot_id": "LOT-00008",
+            "required_evidence_retrieved": true,
+            "seed": 101,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F1",
+            "human_override": false,
+            "lot_id": "LOT-00002",
+            "required_evidence_retrieved": true,
+            "seed": 101,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F4",
+            "human_override": false,
+            "lot_id": "LOT-00006",
+            "required_evidence_retrieved": true,
+            "seed": 101,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          }
+        ],
+        "case_hash": "385a199506c91ce04856e939afe348e735721ae243cb12f0bcd3481d8d61078c",
+        "detector": {
+          "affected_scope_precision": 1.0,
+          "affected_scope_recall": 1.0,
+          "false_alarms_per_simulated_day": 0.0,
+          "fault_recall": 1.0,
+          "mean_detection_delay_events": 0.0
+        },
+        "rca": {
+          "contradicting_evidence_coverage": 0.42857,
+          "evidence_precision_proxy": 1.0,
+          "false_causal_attribution_rate": 0.0,
+          "mrr": 1.0,
+          "top1_accuracy": 1.0,
+          "top3_accuracy": 1.0
+        },
+        "seed": 101,
+        "stratified": {
+          "F1": {
+            "agent_ready_rate": 1,
+            "case_count": 2,
+            "rca_top1": 1
+          },
+          "F2": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F3": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F4": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F5": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F6": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          }
+        }
+      },
+      {
+        "agent_rows": [
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F1",
+            "human_override": false,
+            "lot_id": "LOT-00003",
+            "required_evidence_retrieved": true,
+            "seed": 103,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "sensor_bias_suspected",
+            "family": "F5",
+            "human_override": false,
+            "lot_id": "LOT-00007",
+            "required_evidence_retrieved": true,
+            "seed": 103,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F2",
+            "human_override": false,
+            "lot_id": "LOT-00004",
+            "required_evidence_retrieved": true,
+            "seed": 103,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F3",
+            "human_override": false,
+            "lot_id": "LOT-00005",
+            "required_evidence_retrieved": true,
+            "seed": 103,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "data_quality_incident",
+            "family": "F6",
+            "human_override": false,
+            "lot_id": "LOT-00008",
+            "required_evidence_retrieved": true,
+            "seed": 103,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F1",
+            "human_override": false,
+            "lot_id": "LOT-00002",
+            "required_evidence_retrieved": true,
+            "seed": 103,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          },
+          {
+            "claim_count": 1,
+            "classification": "physical_excursion",
+            "family": "F4",
+            "human_override": false,
+            "lot_id": "LOT-00006",
+            "required_evidence_retrieved": true,
+            "seed": 103,
+            "status": "ready",
+            "tool_selection_correct": true,
+            "unsafe_action_proposal": false,
+            "unsupported_claims": 0
+          }
+        ],
+        "case_hash": "cbba42599a16834d53cb4e8617c62714d20673bf41f6a52d080021066aa57de8",
+        "detector": {
+          "affected_scope_precision": 1.0,
+          "affected_scope_recall": 1.0,
+          "false_alarms_per_simulated_day": 0.0,
+          "fault_recall": 1.0,
+          "mean_detection_delay_events": 0.0
+        },
+        "rca": {
+          "contradicting_evidence_coverage": 0.42857,
+          "evidence_precision_proxy": 1.0,
+          "false_causal_attribution_rate": 0.0,
+          "mrr": 1.0,
+          "top1_accuracy": 1.0,
+          "top3_accuracy": 1.0
+        },
+        "seed": 103,
+        "stratified": {
+          "F1": {
+            "agent_ready_rate": 1,
+            "case_count": 2,
+            "rca_top1": 1
+          },
+          "F2": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F3": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F4": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F5": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          },
+          "F6": {
+            "agent_ready_rate": 1,
+            "case_count": 1,
+            "rca_top1": 1
+          }
+        }
+      }
+    ]
+  },
+  "seed_splits": {
+    "development": [
+      42,
+      43,
+      44
+    ],
+    "held_out": [
+      211,
+      223,
+      227
+    ],
+    "validation": [
+      101,
+      103
+    ],
+    "version": "seed-splits-v1"
+  },
+  "unseen_family_results": [
+    {
+      "actual_status": "abstain",
+      "appropriate": true,
+      "claim_count": 0,
+      "expected_behavior": "abstain",
+      "family": "U1",
+      "fixture_version": "unseen-u1-v1",
+      "physical_action_proposed": false,
+      "tool_calls": [
+        "get_excursion_summary"
+      ]
+    },
+    {
+      "actual_status": "abstain",
+      "appropriate": true,
+      "claim_count": 0,
+      "expected_behavior": "abstain",
+      "family": "U1",
+      "fixture_version": "unseen-u1-v1",
+      "physical_action_proposed": false,
+      "tool_calls": [
+        "get_excursion_summary"
+      ]
+    },
+    {
+      "actual_status": "abstain",
+      "appropriate": true,
+      "claim_count": 0,
+      "expected_behavior": "abstain",
+      "family": "U1",
+      "fixture_version": "unseen-u1-v1",
+      "physical_action_proposed": false,
+      "tool_calls": [
+        "get_excursion_summary"
+      ]
+    }
+  ],
+  "version_registry": {
+    "agent": "deterministic-advisory-v1.1.0",
+    "detector": "spc-ewma-v1.0.0",
+    "policy": "workflow-policy-v1.0.0",
+    "projection": "rca-graph-v1.0.0",
+    "rca": "transparent-rca-v1.0.0",
+    "registry_version": "fabops-eval-registry-v1",
+    "simulator": "fabtwin-m1.0.0"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "held_out_fault_recall_min": 0.95,
+  "held_out_rca_top1_min": 0.9,
+  "tool_selection_accuracy_min": 0.95,
+  "required_evidence_retrieval_rate_min": 0.95,
+  "unsupported_claim_rate_max": 0.0,
+  "unseen_abstention_appropriateness_min": 1.0,
+  "unsafe_action_proposal_rate_max": 0.0,
+  "human_override_rate_max": 0.1,
+  "false_causal_attribution_rate_max": 0.0
+}
