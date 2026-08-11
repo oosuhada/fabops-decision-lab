@@ -39,6 +39,26 @@ class InMemoryEventRepository:
     def checkpoint(self, consumer: str) -> int:
         return self._checkpoints.get(consumer, 0)
 
+    def snapshot(self) -> dict[str, Any]:
+        return {
+            "reserved": sorted(self._reserved),
+            "events": [
+                {"event": deepcopy(item.event), "delivery_status": item.delivery_status, "sequence": item.sequence}
+                for item in self._events
+            ],
+            "outbox": deepcopy(self._outbox),
+            "checkpoints": deepcopy(self._checkpoints),
+        }
+
+    def restore(self, snapshot: dict[str, Any]) -> None:
+        self._reserved = set(str(item) for item in snapshot.get("reserved", []))
+        self._events = [
+            StoredEvent(deepcopy(item["event"]), str(item["delivery_status"]), int(item["sequence"]))
+            for item in snapshot.get("events", [])
+        ]
+        self._outbox = deepcopy(snapshot.get("outbox", []))
+        self._checkpoints = {str(key): int(value) for key, value in snapshot.get("checkpoints", {}).items()}
+
 
 class InMemoryCaseRepository:
     def __init__(self) -> None:
@@ -65,6 +85,13 @@ class InMemoryCaseRepository:
 
     def audit_log(self) -> list[dict[str, Any]]:
         return deepcopy(self._audit)
+
+    def snapshot(self) -> dict[str, Any]:
+        return {"cases": deepcopy(self._cases), "audit": deepcopy(self._audit)}
+
+    def restore(self, snapshot: dict[str, Any]) -> None:
+        self._cases = {str(key): deepcopy(value) for key, value in snapshot.get("cases", {}).items()}
+        self._audit = deepcopy(snapshot.get("audit", []))
 
 
 class InMemoryQuarantine:

@@ -145,6 +145,7 @@ textarea { width: 100%; resize: vertical; border: 1px solid #acb8c3; border-radi
 .workbench-state p { margin: 0; font-size: 11px; color: #506171; }
 .state-loading { border-left: 4px solid #4b75a4; }
 .state-empty { border-left: 4px solid #788694; }
+.state-ok { border-left: 4px solid #39735a; background: #f4fbf7; }
 .state-stale, .state-degraded { border-left: 4px solid #b48832; background: #fffaf0; }
 .state-error, .state-unauthorized { border-left: 4px solid #b94a4a; background: #fff5f5; }
 .boot-state { min-height: 100vh; display: grid; place-items: center; padding: 24px; }

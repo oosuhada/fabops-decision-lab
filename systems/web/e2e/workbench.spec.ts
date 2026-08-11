@@ -23,6 +23,7 @@ test("API-backed engineering decision workbench stays consistent across overview
 
   await page.getByRole("button", {name: /Replay & Operations/i}).click();
   await expect(page.getByText("373", {exact: true}).first()).toBeVisible();
-  await expect(page.getByText(/Docker daemon unavailable in current audit/)).toBeVisible();
+  await expect(page.getByText(/Container integration (verified|degraded|unverified)/)).toBeVisible();
+  await expect(page.getByText(/Docker daemon unavailable in current audit/)).toHaveCount(0);
 });
 

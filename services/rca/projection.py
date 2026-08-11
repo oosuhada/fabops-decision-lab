@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from services.ingestion.ports import EventRepositoryPort, StoredEvent
+from services.observability.telemetry import TelemetryRecorder
 from services.rca.graph import GraphProjectionPort
 
 PROJECTION_VERSION = "rca-graph-v1.0.0"
@@ -19,12 +20,24 @@ class ProjectionStatus:
 
 
 class RcaProjectionWorker:
-    def __init__(self, event_repository: EventRepositoryPort, graph: GraphProjectionPort) -> None:
+    def __init__(
+        self,
+        event_repository: EventRepositoryPort,
+        graph: GraphProjectionPort,
+        telemetry: TelemetryRecorder | None = None,
+    ) -> None:
         self.events = event_repository
         self.graph = graph
+        self.telemetry = telemetry
         self.projection_checkpoint = 0
 
     def rebuild(self) -> ProjectionStatus:
+        if self.telemetry is not None:
+            with self.telemetry.operation("projection.rebuild", projection_version=PROJECTION_VERSION):
+                return self._rebuild()
+        return self._rebuild()
+
+    def _rebuild(self) -> ProjectionStatus:
         self.graph.clear()
         self.projection_checkpoint = 0
         for stored in self.events.all_events():
@@ -43,8 +56,20 @@ class RcaProjectionWorker:
         return ProjectionStatus(PROJECTION_VERSION, source_checkpoint, self.projection_checkpoint, lag, lag > 0)
 
     def project_stored(self, stored: StoredEvent) -> None:
-        self._project_event(stored.event)
-        self.projection_checkpoint = max(self.projection_checkpoint, stored.sequence)
+        if self.telemetry is None:
+            self._project_event(stored.event)
+            self.projection_checkpoint = max(self.projection_checkpoint, stored.sequence)
+            return
+        causal_trace_id = str(stored.event.get("trace_id") or stored.event["event_id"])
+        with self.telemetry.bind_causal_trace(causal_trace_id, causal_trace_id):
+            with self.telemetry.operation(
+                "projection.project_event",
+                event_id=stored.event.get("event_id"),
+                projection_version=PROJECTION_VERSION,
+                source_sequence=stored.sequence,
+            ):
+                self._project_event(stored.event)
+                self.projection_checkpoint = max(self.projection_checkpoint, stored.sequence)
 
     def _project_event(self, event: dict[str, Any]) -> None:
         event_type = event["event_type"]

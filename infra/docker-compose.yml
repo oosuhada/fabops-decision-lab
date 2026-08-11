@@ -1,0 +1,161 @@
+name: fabops-decision-lab-m6
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: fabops
+      POSTGRES_USER: fabops
+      POSTGRES_PASSWORD: ${FABOPS_POSTGRES_PASSWORD:?FABOPS_POSTGRES_PASSWORD must be set}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fabops -d fabops"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - fabops_postgres_data:/var/lib/postgresql/data
+    networks: [fabops_internal]
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 1.0
+
+  redpanda:
+    image: redpandadata/redpanda:v24.3.18
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - 512M
+      - --reserve-memory
+      - 0M
+      - --node-id
+      - "0"
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr
+      - PLAINTEXT://redpanda:9092
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health --exit-when-healthy"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - fabops_redpanda_data:/var/lib/redpanda/data
+    networks: [fabops_internal]
+    restart: unless-stopped
+    mem_limit: 768m
+    cpus: 1.0
+
+  redpanda-init:
+    image: redpandadata/redpanda:v24.3.18
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-ec"]
+    command: >-
+      rpk topic create fabops.events.v1 --brokers redpanda:9092 || true;
+      rpk topic create fabops.events.dlq.v1 --brokers redpanda:9092 || true
+    networks: [fabops_internal]
+    restart: "no"
+    mem_limit: 128m
+    cpus: 0.25
+
+  neo4j:
+    image: neo4j:5.26-community
+    environment:
+      NEO4J_AUTH: neo4j/${FABOPS_NEO4J_PASSWORD:?FABOPS_NEO4J_PASSWORD must be set}
+      FABOPS_NEO4J_PASSWORD: ${FABOPS_NEO4J_PASSWORD:?FABOPS_NEO4J_PASSWORD must be set}
+      NEO4J_server_memory_heap_initial__size: 256m
+      NEO4J_server_memory_heap_max__size: 384m
+      NEO4J_server_memory_pagecache_size: 128m
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p \"$$FABOPS_NEO4J_PASSWORD\" 'RETURN 1' >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - fabops_neo4j_data:/data
+    networks: [fabops_internal]
+    restart: unless-stopped
+    mem_limit: 768m
+    cpus: 1.0
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      FABOPS_POSTGRES_DSN: postgresql://fabops:${FABOPS_POSTGRES_PASSWORD}@postgres:5432/fabops
+    command: ["python", "-m", "adapters.postgres.migrate"]
+    networks: [fabops_internal]
+    restart: "no"
+    mem_limit: 256m
+    cpus: 0.5
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redpanda-init:
+        condition: service_completed_successfully
+      neo4j:
+        condition: service_healthy
+    environment:
+      FABOPS_RUNTIME_MODE: integration
+      FABOPS_POSTGRES_DSN: postgresql://fabops:${FABOPS_POSTGRES_PASSWORD}@postgres:5432/fabops
+      FABOPS_REDPANDA_BOOTSTRAP: redpanda:9092
+      FABOPS_REDPANDA_TOPIC: fabops.events.v1
+      FABOPS_REDPANDA_DLQ_TOPIC: fabops.events.dlq.v1
+      FABOPS_NEO4J_URI: bolt://neo4j:7687
+      FABOPS_NEO4J_USER: neo4j
+      FABOPS_NEO4J_PASSWORD: ${FABOPS_NEO4J_PASSWORD}
+    ports:
+      - "127.0.0.1:${FABOPS_API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import json,urllib.request; data=json.load(urllib.request.urlopen('http://127.0.0.1:8000/health/ready')); raise SystemExit(0 if data.get('ready') else 1)"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks: [fabops_internal]
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 1.0
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.web
+      args:
+        VITE_API_URL: http://127.0.0.1:${FABOPS_API_PORT:-8000}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${FABOPS_WEB_PORT:-5173}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [fabops_internal]
+    restart: unless-stopped
+    mem_limit: 128m
+    cpus: 0.5
+
+networks:
+  fabops_internal:
+    driver: bridge
+
+volumes:
+  fabops_postgres_data:
+  fabops_redpanda_data:
+  fabops_neo4j_data:

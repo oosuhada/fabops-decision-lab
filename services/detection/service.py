@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from services.ingestion.ports import CaseRepositoryPort
+from services.observability.telemetry import TelemetryRecorder
 
 STEP_INDEX = {"LITHO": 0, "ETCH": 1, "DEPOSITION": 2, "CMP": 3, "INSPECTION": 4}
 SENSOR_INDEX = {"temperature": 0, "particle_count": 1, "rf_power": 2, "pressure": 3, "gas_flow": 4, "vibration": 5, "voltage": 6, "current": 7}
@@ -29,15 +30,22 @@ class DetectorConfig:
 
 
 class DeterministicDetector:
-    def __init__(self, case_repository: CaseRepositoryPort, config: DetectorConfig | None = None) -> None:
+    def __init__(
+        self,
+        case_repository: CaseRepositoryPort,
+        config: DetectorConfig | None = None,
+        telemetry: TelemetryRecorder | None = None,
+    ) -> None:
         self.cases = case_repository
         self.config = config or DetectorConfig.load()
+        self.telemetry = telemetry
         self.ewma: dict[tuple[str, str], float] = {}
         self.lot_anomalies: dict[str, list[dict[str, Any]]] = defaultdict(list)
         self.lot_scope: dict[str, dict[str, set[str]]] = defaultdict(lambda: {"equipment": set(), "chambers": set()})
         self.lot_inspections: dict[str, list[float]] = defaultdict(list)
         self.quality_incidents: dict[str, list[str]] = defaultdict(list)
         self.alarm_codes: dict[str, list[str]] = defaultdict(list)
+        self.lot_trace_ids: dict[str, str] = {}
 
     def _case_id(self, lot_id: str, classification: str) -> str:
         digest = hashlib.sha256(f"{self.config.version}:{lot_id}:{classification}".encode()).hexdigest()[:16]
@@ -47,10 +55,24 @@ class DeterministicDetector:
         return 10.0 + SENSOR_INDEX.get(sensor, 0) * 5.0 + STEP_INDEX.get(step, 0) * 0.3
 
     def consume(self, event: dict[str, Any]) -> None:
+        if self.telemetry is not None:
+            with self.telemetry.operation(
+                "detection.consume",
+                event_id=event.get("event_id"),
+                event_type=event.get("event_type"),
+                detector_version=self.config.version,
+            ):
+                self._consume(event)
+            return
+        self._consume(event)
+
+    def _consume(self, event: dict[str, Any]) -> None:
         event_type = event["event_type"]
         lot_id = event.get("lot_id")
         if not lot_id:
             return
+        if event.get("trace_id"):
+            self.lot_trace_ids[str(lot_id)] = str(event["trace_id"])
         if event.get("equipment_id"):
             self.lot_scope[lot_id]["equipment"].add(event["equipment_id"])
         if event.get("chamber_id"):
@@ -128,9 +150,18 @@ class DeterministicDetector:
             },
             "evidence_event_ids": sorted(item["event_id"] for item in anomalies),
             "data_quality_incidents": sorted(set(self.quality_incidents.get(lot_id, []))),
+            "causal_trace_id": self.lot_trace_ids.get(lot_id),
             "state": "detected",
         }
         created = self.cases.upsert_case(case)
         if created:
             self.cases.append_audit({"case_id": case_id, "event": "case.detected", "detector_version": self.config.version, "classification": classification})
+            if self.telemetry is not None:
+                self.telemetry.emit(
+                    "case.materialized",
+                    case_id=case_id,
+                    detector_version=self.config.version,
+                    event_id=case["evidence_event_ids"][0] if case["evidence_event_ids"] else None,
+                    outcome="created",
+                )
 

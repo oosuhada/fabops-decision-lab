@@ -13,6 +13,17 @@ milestone is marked `IN PROGRESS` while implementation is active.
 | M5 Evaluation & Release Gates | PASSED | `evidence/m5-gate.json` |
 | M6 Reliability & Portfolio Release | IN PROGRESS | `evidence/m6-gate.json` |
 
+### M6 execution ledger
+
+| Sub-gate | Status | Evidence |
+|---|---|---|
+| M6-A Telemetry & Reliability Core | PASSED | `evidence/m6/telemetry-summary.json`, `evidence/m6/reliability-summary.json`, `evidence/m6/trace-sample.json` |
+| M6-B Performance, SLI/SLO & Recovery | PASSED | `evidence/m6/performance-summary.json`, `evidence/m6/recovery-summary.json`, `docs/operations/SLO.md` |
+| M6-C Runnable Stack & Infrastructure | IN PROGRESS | `evidence/m6/integration-summary.json` |
+| M6-D Security, Fitness & Operations | NOT STARTED | `evidence/m6/architecture-fitness-summary.json`, `evidence/m6/attribution-audit.json` |
+| M6-E Portfolio Release | NOT STARTED | `evidence/release/release-manifest.json`, `evidence/m6/canonical-verification.json` |
+| M6-F Git Hygiene & Final Local Gate | NOT STARTED | `evidence/m6-gate.json` |
+
 ## Execution discipline
 
 Each milestone is implemented as a vertical slice and closes with test → repair →
