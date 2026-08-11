@@ -18,7 +18,7 @@ def test_percentile_is_derived_from_samples() -> None:
 def test_m6_benchmark_emits_raw_samples_and_scoped_recovery_evidence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(Path(__file__).resolve().parents[1])
     output = tmp_path / "m6"
-    performance, recovery = generate(output, sample_count=2)
+    performance, recovery = generate(output, sample_count=2, slo_path=tmp_path / "SLO.md")
     latency = performance["ingest_to_detection_latency_ms"]
     assert latency["samples"]
     assert latency["p50"] == pytest.approx(percentile(latency["samples"], 50))

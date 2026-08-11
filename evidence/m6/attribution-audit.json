@@ -1,0 +1,58 @@
+{
+  "audit_hash": "f7419963a0434c486304a06f2bb9cb9108fb885693df5c47b48934dd3802f132",
+  "generated_at": "2026-08-22T13:14:10.709457+00:00",
+  "inferred_provenance": "Detector, RCA, advisory and evaluation outputs are labeled inferred/evaluation rather than real observations.",
+  "license_audit": {
+    "copied_third_party_source_detected": false,
+    "node_direct_dependencies": {
+      "@playwright/test": "Apache-2.0",
+      "@testing-library/jest-dom": "MIT",
+      "@testing-library/react": "MIT",
+      "@types/node": "MIT",
+      "@types/react": "MIT",
+      "@types/react-dom": "MIT",
+      "@vitejs/plugin-react": "MIT",
+      "jsdom": "MIT",
+      "react": "MIT",
+      "react-dom": "MIT",
+      "typescript": "Apache-2.0",
+      "vite": "MIT",
+      "vitest": "MIT"
+    },
+    "obligation_scope": "Direct dependency metadata inspected; no third-party source files or public dataset bytes are vendored by this release.",
+    "python_direct_dependencies": {
+      "confluent-kafka": "OSI Approved :: Apache Software License",
+      "fastapi": "MIT",
+      "httpx": "BSD-3-Clause",
+      "jsonschema": "MIT",
+      "neo4j": "Apache-2.0 AND Python-2.0",
+      "psycopg": "LGPL-3.0-only",
+      "pytest": "MIT",
+      "ruff": "MIT",
+      "uvicorn": "BSD-3-Clause"
+    }
+  },
+  "palantir_foundry_reference": "Interaction grammar only; no Palantir/Foundry brand, pixel, source-code, or proprietary asset copy is claimed or included.",
+  "public_reality_anchors": [
+    {
+      "dataset_bytes_embedded": false,
+      "name": "UCI SECOM",
+      "usage": "reality/terminology anchor only"
+    },
+    {
+      "dataset_bytes_embedded": false,
+      "name": "WM-811K",
+      "usage": "wafer-pattern reality anchor only"
+    },
+    {
+      "dataset_bytes_embedded": false,
+      "name": "AI4I 2020",
+      "usage": "maintenance/failure reality anchor only"
+    }
+  ],
+  "samsung_or_internal_fab_data_used": false,
+  "schema_version": "m6-attribution-audit-v1",
+  "secom_feature_semantics_invented": false,
+  "synthetic_provenance": "FabTwin-Sim seed/config/generator version and artifact hashes identify synthetic artifacts.",
+  "wm811k_to_synthetic_sensor_lineage_claimed": false
+}

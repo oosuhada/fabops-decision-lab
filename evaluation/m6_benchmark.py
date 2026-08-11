@@ -178,7 +178,12 @@ For this bounded test profile, a target is considered exhausted when a measured 
     path.write_text(content, encoding="utf-8")
 
 
-def generate(output_dir: Path, sample_count: int = 5) -> tuple[dict[str, Any], dict[str, Any]]:
+def generate(
+    output_dir: Path,
+    sample_count: int = 5,
+    *,
+    slo_path: Path = Path("docs/operations/SLO.md"),
+) -> tuple[dict[str, Any], dict[str, Any]]:
     if sample_count < 2:
         raise ValueError("sample_count must be >= 2")
     config = load_config("test")
@@ -247,7 +252,7 @@ def generate(output_dir: Path, sample_count: int = 5) -> tuple[dict[str, Any], d
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "performance-summary.json").write_text(json.dumps(performance, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     (output_dir / "recovery-summary.json").write_text(json.dumps(recovery, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    _write_slo_doc(Path("docs/operations/SLO.md"), performance, recovery)
+    _write_slo_doc(slo_path, performance, recovery)
     return performance, recovery
 
 

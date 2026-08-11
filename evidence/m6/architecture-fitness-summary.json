@@ -1,0 +1,37 @@
+{
+  "checks": {
+    "advisory_tool_registry_max_five": true,
+    "agent_cannot_mutate_case_or_authorization_state": true,
+    "agent_does_not_own_anomaly_score": true,
+    "neo4j_is_rebuildable_projection": true,
+    "no_equipment_execution_route": true,
+    "no_production_sqlite_adapter": true,
+    "operational_ground_truth_import_free": true,
+    "postgres_is_production_repository": true,
+    "provenance_labels_explicit": true,
+    "release_ui_api_ground_truth_free": true
+  },
+  "generated_at": "2026-08-22T13:14:10.709442+00:00",
+  "passed": true,
+  "projection": "Neo4j is rebuildable and non-authoritative",
+  "provenance": {
+    "inspection_pattern_provenance_explicit": true,
+    "lot_release_provenance_explicit": true
+  },
+  "schema_version": "m6-architecture-fitness-v1",
+  "source_of_truth": "PostgreSQL in integration/production composition; local in-memory adapters are test-only",
+  "tool_registry": [
+    "get_excursion_summary",
+    "compare_chamber_baselines",
+    "trace_affected_lots",
+    "find_related_alarms_and_changes",
+    "retrieve_sop_and_past_cases"
+  ],
+  "violations": {
+    "advisory_state_mutations": [],
+    "equipment_control_routes": [],
+    "ground_truth_exposure_files": [],
+    "ground_truth_import_paths": [],
+    "sqlite_production": []
+  }
+}

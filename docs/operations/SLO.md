@@ -10,13 +10,13 @@ This SLO is a **local deterministic portfolio profile**, not a production fab SL
 
 | SLI | Definition | Proposed local SLO | Measured |
 |---|---|---:|---:|
-| Ingestion throughput | accepted synthetic events / wall-clock ingestion seconds | >= 1,000 events/s | 23095.71 events/s |
-| Ingest→detector p95 | wall-clock duration from ingest entry through deterministic detector callback | <= 5 ms | 0.0550 ms |
-| Ingest→detector p99 | same SLI, 99th percentile | <= 10 ms | 0.1123 ms |
+| Ingestion throughput | accepted synthetic events / wall-clock ingestion seconds | >= 1,000 events/s | 25104.28 events/s |
+| Ingest→detector p95 | wall-clock duration from ingest entry through deterministic detector callback | <= 5 ms | 0.0489 ms |
+| Ingest→detector p99 | same SLI, 99th percentile | <= 10 ms | 0.0525 ms |
 | Projection lag after rebuild | source checkpoint minus projection checkpoint | 0 events | 0 events |
 | Replay completeness | recovered projection checkpoint / source event count | 1.0 | 1.00000 |
 | Duplicate side-effect rate | observed state/outbox/audit growth / duplicate attempts | 0.0 | 0.00000 |
-| Local recovery RTO p95 | fresh Python process snapshot restore + projection rebuild | <= 2,000 ms | 96.993 ms |
+| Local recovery RTO p95 | fresh Python process snapshot restore + projection rebuild | <= 2,000 ms | 64.176 ms |
 | Local source-log RPO | persisted snapshot events missing after recovery | 0 events | 0 events |
 
 ## Error budget interpretation
@@ -26,7 +26,7 @@ For this bounded test profile, a target is considered exhausted when a measured 
 ## Capacity assumptions
 
 - Single local Python process, deterministic in-memory event/case adapters.
-- `373` events per sample, `2` measured samples after warmup.
+- `373` events per sample, `5` measured samples after warmup.
 - No external LLM is required.
 - The local benchmark is CPU/storage-cache sensitive and is intended for regression evidence, not capacity planning for a real fab.
 
