@@ -17,6 +17,12 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def expected_m5_evaluation_hash() -> str:
+    manifest_path = ROOT / "evidence/release/release-manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    return str(manifest["m5_evaluation_hash"])
+
+
 def _sanitize(text: str, extra_paths: list[Path] | None = None) -> str:
     sanitized = text
     replacements = [(str(ROOT), "<repo>"), (str(Path.home()), "<home>")]
@@ -167,15 +173,17 @@ def verify(output: Path) -> dict[str, Any]:
                 "reason": "Docker daemon or local server-only infra/.env unavailable; checked-in integration evidence remains separate and no pass is fabricated.",
             }
 
-        clean_setup = _clean_setup(uv, npm, temp_dir)
-        core_passed = all(step["exit_code"] == 0 for step in steps)
-        docker_gate_passed = docker_status["status"] in {"verified", "unverified"}
-        passed = core_passed and docker_gate_passed and clean_setup["passed"]
-
         eval_summary_path = temp_release / "evaluation-summary.json"
         evaluation_hash = None
         if eval_summary_path.exists():
             evaluation_hash = json.loads(eval_summary_path.read_text(encoding="utf-8")).get("canonical_hash")
+        expected_evaluation_hash = expected_m5_evaluation_hash()
+        evaluation_identity_passed = evaluation_hash == expected_evaluation_hash
+
+        clean_setup = _clean_setup(uv, npm, temp_dir)
+        core_passed = all(step["exit_code"] == 0 for step in steps)
+        docker_gate_passed = docker_status["status"] in {"verified", "unverified"}
+        passed = core_passed and docker_gate_passed and clean_setup["passed"] and evaluation_identity_passed
 
         result = {
             "schema_version": "m6-canonical-verification-v1",
@@ -186,6 +194,8 @@ def verify(output: Path) -> dict[str, Any]:
             "machine_architecture": platform.machine(),
             "platform_system": platform.system(),
             "evaluation_hash": evaluation_hash,
+            "expected_evaluation_hash": expected_evaluation_hash,
+            "evaluation_identity_passed": evaluation_identity_passed,
             "steps": steps,
             "docker_integration": docker_status,
             "clean_setup": clean_setup,
@@ -211,6 +221,8 @@ def main() -> None:
             failed.append("clean-setup")
         if result["docker_integration"]["status"] == "failed":
             failed.append("container-integration")
+        if not result["evaluation_identity_passed"]:
+            failed.append("accepted-m5-evaluation-identity")
         raise SystemExit("canonical verification failed: " + ", ".join(failed))
 
 
