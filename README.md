@@ -1,6 +1,6 @@
 # FabOps Decision Lab — Evidence-Grounded Yield Excursion Triage
 
-반도체 수율 이상 대응을 위한 evidence-grounded engineering decision platform.
+반도체 수율 이상 대응을 위한 evidence-grounded engineering decision platform입니다. 공개 데이터와 재현 가능한 합성 Fab 이벤트를 바탕으로 이상 탐지, 원인 분석, 엔지니어 승인, 조치 이력과 평가를 하나의 의사결정 흐름으로 연결합니다.
 
 ## Problem
 
@@ -11,13 +11,13 @@ Yield/Process Engineer가 excursion 발생 후 15~30분 안에 다음을 판단�
 - 원인 후보를 지지하거나 반박하는 근거는 무엇인가?
 - 어떤 대응을 승인해야 하는가?
 
-## Decision boundary
+## Architecture highlights
 
-M0에서는 deterministic foundation만 구현한다.
-
-- Simulator가 이벤트와 hidden ground truth를 생성한다.
-- Operational artifact는 ground truth를 읽지 않는다.
-- AI/Agent는 advisory layer이며 source of truth가 아니다.
+- Deterministic simulation and hidden ground-truth evaluation
+- SPC/EWMA-based detection and evidence-grounded RCA
+- Human approval-gated action workflow and audit trail
+- Contract-driven adapters for external data, models, and operational systems
+- AI advisory layer separated from authoritative engineering decisions
 
 ## Data provenance
 
@@ -34,10 +34,8 @@ uv run pytest
 uv run python -m simulator.generate --seed 42 --output evidence/sample
 ```
 
-## Non-goals
+## Documentation
 
-- 실제 Fab MES 복제
-- 자동 장비 제어
-- LLM 단독 원인 판정
-- synthetic data를 실제 fab lineage로 주장
-
+- [Roadmap](ROADMAP.md)
+- [Project charter](docs/PROJECT_CHARTER.md)
+- [System context map](docs/architecture/context-map.md)
