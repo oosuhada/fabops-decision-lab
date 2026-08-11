@@ -5,7 +5,7 @@
 FabOps Decision Lab is a portfolio-scale engineering decision platform for yield-excursion triage. It connects deterministic synthetic events, source-of-truth persistence, explainable RCA, human-governed workflow, replay, observability and release evidence without requiring an external LLM.
 
 <!-- RELEASE_IDENTITY_START -->
-> Release `0.6.0` · canonical release hash `99b2e59ae8994ad482925e2889cf99f0cfde9c6a97443a75e8bf3b60765aabd8` · source commit `2f57b7bc10cc`
+> Release `0.6.0` · canonical release hash `1c8f7f57b6b8658f2e5acc3325daf63cc5f023504b44c576032f6233d9eda4d8` · source commit `c02d445a30a4`
 > Generated from `evidence/release/release-manifest.json`; this block is updated by `python -m evaluation.release_manifest`.
 <!-- RELEASE_IDENTITY_END -->
 
