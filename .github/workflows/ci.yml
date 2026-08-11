@@ -1,0 +1,40 @@
+name: FabOps Release Gate
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.13'
+          enable-cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: systems/web/package-lock.json
+      - name: Sync Python environment
+        run: uv sync --locked --dev
+      - name: Python lint
+        run: uv run ruff check services systems/api adapters simulator evaluation tests
+      - name: Python regression
+        run: uv run pytest -q
+      - name: Held-out evaluation gate
+        run: uv run python -m evaluation.release_eval --output evidence/release --check
+      - name: Frontend install
+        working-directory: systems/web
+        run: npm ci
+      - name: Frontend component tests
+        working-directory: systems/web
+        run: npm run test
+      - name: Frontend build
+        working-directory: systems/web
+        run: npm run build
+      - name: Frontend dependency audit
+        working-directory: systems/web
+        run: npm audit --audit-level=high
