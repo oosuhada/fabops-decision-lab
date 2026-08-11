@@ -113,7 +113,12 @@ export default function App() {
     <header className="global-header">
       <div className="brand-mark">FDL</div>
       <div><strong>FabOps Decision Lab</strong><span>Evidence-Grounded Yield Excursion Triage</span></div>
-      <div className="header-status"><span>LOCAL PORTFOLIO</span><span>LLM OFF</span><span>NO EQUIPMENT CONTROL</span></div>
+      <div className="header-status">
+        <span>RELEASE {replay.release.release_version}</span>
+        <span>{replay.release.release_hash === "unreleased" ? "HASH PENDING" : replay.release.release_hash.slice(0, 12)}</span>
+        <span>LLM OFF</span>
+        <span>NO EQUIPMENT CONTROL</span>
+      </div>
     </header>
     <aside className="left-rail" aria-label="Primary navigation">
       <div className="nav-heading"><span>Workbench</span><strong>Engineering decision</strong></div>

@@ -10,8 +10,14 @@
 ## Verification
 
 ```bash
-uv run pytest
+bash scripts/verify.sh
 ```
+
+This is the canonical release gate. It runs Python sync/lint/regression, held-out
+evaluation, frontend install/test/build/audit, Chromium E2E, architecture fitness,
+release-manifest consistency, clean-source setup, and Docker integration when the
+daemon plus the local server-only `infra/.env` are available. Docker absence is
+reported as UNVERIFIED rather than passed.
 
 ## Change discipline
 

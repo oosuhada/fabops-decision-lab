@@ -139,5 +139,11 @@ export interface ReplayResponse {
     container_integration_verified: boolean;
     reason?: string | null;
   };
+  release: {
+    release_version: string;
+    release_hash: string;
+    source_git_commit: string | null;
+    manifest_available: boolean;
+  };
 }
 
