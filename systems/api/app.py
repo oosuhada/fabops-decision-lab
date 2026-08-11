@@ -60,7 +60,14 @@ def actor_headers(
 @contextmanager
 def case_telemetry(runtime: LocalRuntime, case_id: str) -> Iterator[None]:
     case = runtime.case_repository.get_case(case_id)
-    causal_trace_id = str((case or {}).get("causal_trace_id") or case_id)
+    causal_trace_id = case_id
+    if case is not None:
+        lot_id = str(case.get("lot_id") or "")
+        for stored in runtime.event_repository.all_events():
+            event = stored.event
+            if str(event.get("lot_id") or "") == lot_id and event.get("trace_id"):
+                causal_trace_id = str(event["trace_id"])
+                break
     with runtime.telemetry.bind_causal_trace(causal_trace_id):
         yield
 

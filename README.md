@@ -198,14 +198,14 @@ Latest checked local portfolio benchmark:
 
 | Measurement | Result | Scope |
 |---|---:|---|
-| Ingestion throughput | ~25,104 events/s | local deterministic in-memory profile |
-| ingest→detection p50 | ~0.0386 ms | local deterministic callback timing |
-| ingest→detection p95 | ~0.0489 ms | local deterministic callback timing |
-| ingest→detection p99 | ~0.0525 ms | local deterministic callback timing |
+| Ingestion throughput | ~23,755 events/s | local deterministic in-memory profile |
+| ingest→detection p50 | ~0.0391 ms | local deterministic callback timing |
+| ingest→detection p95 | ~0.0518 ms | local deterministic callback timing |
+| ingest→detection p99 | ~0.1037 ms | local deterministic callback timing |
 | Projection lag after rebuild | 0 events | local projection rebuild |
 | Replay completeness | 1.0 | local subprocess snapshot/replay |
 | Duplicate side-effect rate | 0.0 | measured duplicate attempts |
-| Local recovery RTO p95 | ~64.176 ms | fresh Python process + snapshot restore + projection rebuild |
+| Local recovery RTO p95 | ~69.537 ms | fresh Python process + snapshot restore + projection rebuild |
 | Local source-log RPO | 0 events | events already persisted in the measured snapshot |
 
 These numbers are **not** PostgreSQL/Neo4j/Redpanda production capacity claims. Detailed definitions and limits are in `docs/operations/SLO.md`.
