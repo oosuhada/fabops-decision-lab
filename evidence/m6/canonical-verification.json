@@ -1,0 +1,177 @@
+{
+  "clean_setup": {
+    "passed": true,
+    "steps": [
+      {
+        "command": "git archive --format=tar HEAD -o <temp>/source.tar",
+        "cwd": ".",
+        "duration_seconds": 0.057,
+        "exit_code": 0,
+        "name": "clean-archive",
+        "output_tail": ""
+      },
+      {
+        "command": "uv sync --locked --dev",
+        "cwd": "<temp>",
+        "duration_seconds": 0.108,
+        "exit_code": 0,
+        "name": "clean-python-sync",
+        "output_tail": " + h11==0.16.0\n + httpcore==1.0.9\n + httpx==0.28.1\n + idna==3.19\n + iniconfig==2.3.0\n + jsonschema==4.26.0\n + jsonschema-specifications==2025.9.1\n + neo4j==6.2.0\n + packaging==26.3\n + pluggy==1.6.0\n + psycopg==3.3.4\n + psycopg-binary==3.3.4\n + pydantic==2.13.4\n + pydantic-core==2.46.4\n + pygments==2.21.0\n + pytest==9.1.1\n + pytz==2026.3.post1\n + referencing==0.37.0\n + rpds-py==2026.6.3\n + ruff==0.16.4\n + starlette==1.6.0\n + typing-extensions==4.16.0\n + typing-inspection==0.4.4\n + uvicorn==0.52.4"
+      },
+      {
+        "command": "uv run pytest -q tests/test_foundation.py",
+        "cwd": "<temp>",
+        "duration_seconds": 1.267,
+        "exit_code": 0,
+        "name": "clean-foundation-test",
+        "output_tail": "......                                                                   [100%]\n6 passed in 0.20s\n\nwarning: `VIRTUAL_ENV=<repo>/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead"
+      },
+      {
+        "command": "uv run python -m evaluation.release_manifest --check",
+        "cwd": "<temp>",
+        "duration_seconds": 0.092,
+        "exit_code": 0,
+        "name": "clean-release-consistency",
+        "output_tail": "warning: `VIRTUAL_ENV=<repo>/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead"
+      },
+      {
+        "command": "npm ci",
+        "cwd": "<temp>",
+        "duration_seconds": 1.916,
+        "exit_code": 0,
+        "name": "clean-frontend-install",
+        "output_tail": "added 166 packages, and audited 167 packages in 2s\n\n27 packages are looking for funding\n  run `npm fund` for details\n\nfound 0 vulnerabilities"
+      },
+      {
+        "command": "npm run build",
+        "cwd": "<temp>",
+        "duration_seconds": 2.339,
+        "exit_code": 0,
+        "name": "clean-frontend-build",
+        "output_tail": "> fabops-decision-workbench@0.6.0 build\n> tsc -b && vite build\n\nvite v7.3.6 building client environment for production...\ntransforming...\n✓ 32 modules transformed.\nrendering chunks...\ncomputing gzip size...\ndist/index.html                   0.57 kB │ gzip:  0.34 kB\ndist/assets/index-CJHtiXfm.css   11.69 kB │ gzip:  3.39 kB\ndist/assets/index-C48NON8M.js   210.18 kB │ gzip: 65.01 kB\n✓ built in 499ms"
+      }
+    ]
+  },
+  "docker_integration": {
+    "container_integration_verified": true,
+    "docker_daemon_available": true,
+    "neo4j_runtime_verified": true,
+    "postgres_runtime_verified": true,
+    "redpanda_runtime_verified": true,
+    "server_env_available": true,
+    "status": "verified"
+  },
+  "evaluation_hash": "78f7e90d37fa144ea8e29fb5977c21f300f1dc7bd062969b1bb0ec4dbe96a005",
+  "evaluation_identity_passed": true,
+  "expected_evaluation_hash": "78f7e90d37fa144ea8e29fb5977c21f300f1dc7bd062969b1bb0ec4dbe96a005",
+  "generated_at": "2026-08-22T13:29:29.469922+00:00",
+  "git_sha": "04fcc558b1478e79f2ad4eb524c18cf460cec8a0",
+  "machine_architecture": "arm64",
+  "passed": true,
+  "platform_system": "Darwin",
+  "policy": {
+    "docker_unavailable_is_not_container_pass": true,
+    "equipment_control_enabled": false,
+    "external_llm_required": false
+  },
+  "python_version": "3.13.14",
+  "schema_version": "m6-canonical-verification-v1",
+  "steps": [
+    {
+      "command": "uv sync --locked --dev",
+      "cwd": ".",
+      "duration_seconds": 0.016,
+      "exit_code": 0,
+      "name": "python-sync",
+      "output_tail": "Resolved 35 packages in 3ms\nChecked 32 packages in 0.56ms"
+    },
+    {
+      "command": "uv run ruff check services systems/api adapters simulator evaluation tests",
+      "cwd": ".",
+      "duration_seconds": 0.027,
+      "exit_code": 0,
+      "name": "ruff",
+      "output_tail": "All checks passed!"
+    },
+    {
+      "command": "uv run pytest -q",
+      "cwd": ".",
+      "duration_seconds": 12.358,
+      "exit_code": 0,
+      "name": "python-regression",
+      "output_tail": ".........................................................ssss......      [100%]\n=============================== warnings summary ===============================\n.venv/lib/python3.13/site-packages/fastapi/testclient.py:1\n  <repo>/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.\n    from starlette.testclient import TestClient as TestClient  # noqa\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n63 passed, 4 skipped, 1 warning in 12.05s"
+    },
+    {
+      "command": "uv run python -m evaluation.release_eval --output <temp>/release-eval --check",
+      "cwd": ".",
+      "duration_seconds": 2.058,
+      "exit_code": 0,
+      "name": "held-out-release-evaluation",
+      "output_tail": "    \"agent\": {\n      \"abstention_appropriateness\": 1,\n      \"human_override_rate\": 0,\n      \"required_evidence_retrieval_rate\": 1,\n      \"tool_selection_accuracy\": 1,\n      \"unsafe_action_proposal_rate\": 0,\n      \"unsupported_claim_rate\": 0.0\n    },\n    \"detector\": {\n      \"affected_scope_precision\": 1.0,\n      \"affected_scope_recall\": 1.0,\n      \"false_alarms_per_simulated_day\": 0.0,\n      \"fault_recall\": 1.0\n    },\n    \"rca\": {\n      \"contradicting_evidence_coverage\": 0.42857,\n      \"false_causal_attribution_rate\": 0.0,\n      \"mrr\": 1.0,\n      \"top1_accuracy\": 1.0,\n      \"top3_accuracy\": 1.0\n    }\n  },\n  \"release_passed\": true\n}"
+    },
+    {
+      "command": "npm ci",
+      "cwd": "systems/web",
+      "duration_seconds": 2.414,
+      "exit_code": 0,
+      "name": "frontend-install",
+      "output_tail": "added 166 packages, and audited 167 packages in 2s\n\n27 packages are looking for funding\n  run `npm fund` for details\n\nfound 0 vulnerabilities"
+    },
+    {
+      "command": "npm run test",
+      "cwd": "systems/web",
+      "duration_seconds": 1.647,
+      "exit_code": 0,
+      "name": "frontend-component-tests",
+      "output_tail": "> fabops-decision-workbench@0.6.0 test\n> vitest run\n\n\n RUN  v3.2.7 <repo>/systems/web\n\n ✓ src/App.test.tsx (4 tests) 243ms\n\n Test Files  1 passed (1)\n      Tests  4 passed (4)\n   Start at  22:29:46\n   Duration  899ms (transform 78ms, setup 73ms, collect 76ms, tests 243ms, environment 216ms, prepare 48ms)"
+    },
+    {
+      "command": "npm run build",
+      "cwd": "systems/web",
+      "duration_seconds": 2.163,
+      "exit_code": 0,
+      "name": "frontend-build",
+      "output_tail": "> fabops-decision-workbench@0.6.0 build\n> tsc -b && vite build\n\nvite v7.3.6 building client environment for production...\ntransforming...\n✓ 32 modules transformed.\nrendering chunks...\ncomputing gzip size...\ndist/index.html                   0.57 kB │ gzip:  0.34 kB\ndist/assets/index-CJHtiXfm.css   11.69 kB │ gzip:  3.39 kB\ndist/assets/index-C48NON8M.js   210.18 kB │ gzip: 65.01 kB\n✓ built in 556ms"
+    },
+    {
+      "command": "npm audit --audit-level=high",
+      "cwd": "systems/web",
+      "duration_seconds": 0.592,
+      "exit_code": 0,
+      "name": "frontend-audit",
+      "output_tail": "found 0 vulnerabilities"
+    },
+    {
+      "command": "npm run test:e2e",
+      "cwd": "systems/web",
+      "duration_seconds": 4.028,
+      "exit_code": 0,
+      "name": "frontend-e2e",
+      "output_tail": "> fabops-decision-workbench@0.6.0 test:e2e\n> playwright test\n\n\n\n\n\nRunning 1 test using 1 worker\n\n\n\n[1/1] [chromium] › e2e/workbench.spec.ts:3:1 › API-backed engineering decision workbench stays consistent across overview, evidence and approval\n  1 passed (3.2s)\n\n[WebServer] INFO:     Started server process [67269]\n[WebServer] INFO:     Waiting for application startup.\n[WebServer] INFO:     Application startup complete.\n[WebServer] INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)\n[WebServer] (node:67296) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.\n[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)\n(node:67299) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.\n(Use `node --trace-warnings ...` to show where the warning was created)"
+    },
+    {
+      "command": "uv run python -m evaluation.m6_fitness --output-dir <temp>/fitness",
+      "cwd": ".",
+      "duration_seconds": 0.779,
+      "exit_code": 0,
+      "name": "architecture-fitness",
+      "output_tail": ""
+    },
+    {
+      "command": "uv run python -m evaluation.release_manifest --check",
+      "cwd": ".",
+      "duration_seconds": 0.105,
+      "exit_code": 0,
+      "name": "release-manifest-consistency",
+      "output_tail": ""
+    },
+    {
+      "command": "uv run python -m evaluation.m6_integration --output <temp>/integration-summary.json --check",
+      "cwd": ".",
+      "duration_seconds": 71.288,
+      "exit_code": 0,
+      "name": "container-integration",
+      "output_tail": ""
+    }
+  ]
+}
