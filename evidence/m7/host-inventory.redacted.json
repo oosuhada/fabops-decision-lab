@@ -1,0 +1,97 @@
+{
+  "schema_version": "m7-host-inventory-v1",
+  "captured_at": "2026-08-22T13:55:00Z",
+  "access": {
+    "transport": "Tailscale SSH via configured local alias",
+    "ssh_verified": true,
+    "host_address_redacted": true
+  },
+  "host": {
+    "operating_system": "macOS 26.5",
+    "architecture": "arm64",
+    "cpu": "Apple M1",
+    "memory_bytes": 17179869184,
+    "root_filesystem_available_gib_approx": 13
+  },
+  "runtime": {
+    "container_runtime": "OrbStack 2.1.1",
+    "docker_client_version": "29.4.0",
+    "docker_server_version": "29.4.0",
+    "docker_compose_version": "v5.1.2",
+    "existing_container_count": 12,
+    "existing_docker_networks": [
+      "askoosu-orbstack_default",
+      "codemate-orbstack_default",
+      "instagram-orbstack_default",
+      "ontology-dashboard-macmini_private"
+    ],
+    "docker_disk": {
+      "images_gb": 29.17,
+      "build_cache_gb": 21.08,
+      "build_cache_reclaimable_gb": 16.19,
+      "policy": "No unrelated Docker cache/image pruning was performed."
+    }
+  },
+  "existing_services_before": {
+    "critical_container_services": [
+      "ontology-dashboard-macmini-frontend-1",
+      "ontology-dashboard-macmini-live-ingestor-1",
+      "ontology-dashboard-macmini-backend-1",
+      "ontology-dashboard-macmini-redis-1",
+      "ontology-dashboard-macmini-postgres-1",
+      "askoosu-app",
+      "codemate-postgres-17",
+      "askoosu-postgres",
+      "instagram-orbstack-frontend-1",
+      "instagram-orbstack-backend-1",
+      "instagram-orbstack-postgres-1",
+      "instagram-orbstack-meilisearch-1"
+    ],
+    "ontology_dashboard_health": "healthy for services that declare health checks; live-ingestor up",
+    "dev_flow_dashboard_launchd_loaded": true,
+    "cloudflared_launchd_loaded": true
+  },
+  "port_preflight": {
+    "observed_existing_application_ports": [
+      3000,
+      3010,
+      3210,
+      4174,
+      4310,
+      5432,
+      5433,
+      5434,
+      7700,
+      8080,
+      8081,
+      8110,
+      8120,
+      8892
+    ],
+    "selected_api_port": 8210,
+    "selected_web_port": 8220,
+    "selected_ports_verified_free": true,
+    "binding_policy": "API and Web bind to 127.0.0.1 only; PostgreSQL, Redpanda and Neo4j have no host-published ports."
+  },
+  "fabops_resource_plan": {
+    "compose_project": "fabops-decision-lab-macmini",
+    "network": "fabops-decision-lab-macmini_private",
+    "persistent_data_root": "~/Services/fabops-decision-lab-data",
+    "release_root": "~/Services/fabops-decision-lab",
+    "unique_storage": [
+      "postgres",
+      "redpanda",
+      "neo4j",
+      "backups",
+      "restore-test",
+      "burnin"
+    ],
+    "resource_ceiling_policy": "Every service and one-shot job receives explicit CPU and memory limits; long-running FabOps containers remain below the host's full capacity and do not reuse unrelated project resources."
+  },
+  "boundaries": {
+    "ontology_dashboard_untouched": true,
+    "dev_flow_dashboard_untouched": true,
+    "public_ingress_modified": false,
+    "secrets_captured": false
+  }
+}
