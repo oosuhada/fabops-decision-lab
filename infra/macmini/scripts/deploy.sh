@@ -35,7 +35,16 @@ until curl -fsS "http://127.0.0.1:${API_PORT}/health/ready" >/dev/null 2>&1; do
   sleep 2
 done
 
-curl -fsS "http://127.0.0.1:${WEB_PORT}/health/live" >/dev/null
+attempt=0
+until curl -fsS "http://127.0.0.1:${WEB_PORT}/health/live" >/dev/null 2>&1; do
+  attempt=$((attempt + 1))
+  if [ "${attempt}" -ge 30 ]; then
+    echo "Web liveness did not become healthy" >&2
+    compose ps
+    exit 1
+  fi
+  sleep 2
+done
 
 EXPECTED_VERSION=$(python3 -c 'import json; print(json.load(open("evidence/release/release-manifest.json"))["release_version"])' < /dev/null)
 EXPECTED_HASH=$(python3 -c 'import json; print(json.load(open("evidence/release/release-manifest.json"))["release_hash"])' < /dev/null)
