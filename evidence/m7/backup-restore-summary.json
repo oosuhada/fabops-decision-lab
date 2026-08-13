@@ -1,0 +1,20 @@
+{
+  "schema_version": "m7-backup-restore-v1",
+  "captured_at": "2026-08-22T14:19:56Z",
+  "status": "passed",
+  "passed": true,
+  "backup": {
+    "type": "PostgreSQL custom-format dump",
+    "remote_path": "~/Services/fabops-decision-lab-data/backups/postgres/fabops-20260822T141936Z.dump",
+    "size_bytes": 80429,
+    "sha256": "48ee49955e5e7f831d9e787192034b68bb4fea010e96d4afcd6a2ee6bb87c22e"
+  },
+  "restore_test": {
+    "isolated_temporary_database": "fabops_restore_test_20260822141936",
+    "restored_events": 373,
+    "restored_cases": 7,
+    "restored_schema_migrations": 2,
+    "temporary_database_removed_after_validation": true,
+    "unrelated_database_modified": false
+  }
+}

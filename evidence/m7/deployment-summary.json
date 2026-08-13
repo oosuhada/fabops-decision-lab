@@ -1,0 +1,72 @@
+{
+  "schema_version": "m7-deployment-summary-v1",
+  "captured_at": "2026-08-22T14:19:56Z",
+  "status": "passed",
+  "passed": true,
+  "target": "Mac mini home server",
+  "access_transport": "Tailscale SSH via configured local alias",
+  "compose_project": "fabops-decision-lab-macmini",
+  "network": "fabops-decision-lab-macmini_private",
+  "release": {
+    "release_version": "0.6.0",
+    "release_hash": "ab8b20a696b9b1996495f23a3e413cc33a67b6861efa184c64742e0f310c6326",
+    "deployed_git_sha": "2a3df187294706afb397f0cf8072c0f3ddcc2f23",
+    "api_image_id": "sha256:6b73bab392ab618a17dc13a32a60201114417f103609e15dd983ca4e9355390f",
+    "web_image_id": "sha256:a9e53cf7d2fda6b12efd861574033bbbf972c7305cf0cae9884597edbd53c25c"
+  },
+  "ports": {
+    "api": "127.0.0.1:8210",
+    "web": "127.0.0.1:8220",
+    "postgres_host_published": false,
+    "redpanda_host_published": false,
+    "neo4j_host_published": false
+  },
+  "container_health": {
+    "api": "healthy",
+    "web": "healthy",
+    "postgres": "healthy",
+    "redpanda": "healthy",
+    "neo4j": "healthy"
+  },
+  "runtime": {
+    "api_ready": true,
+    "runtime_mode": "integration",
+    "postgres_runtime_verified": true,
+    "redpanda_runtime_verified": true,
+    "neo4j_runtime_verified": true,
+    "container_integration_verified": true,
+    "equipment_control_enabled": false,
+    "external_llm_required": false,
+    "projection_lag_events": 0
+  },
+  "authoritative_state": {
+    "events": 373,
+    "cases": 7,
+    "audit_records": 7,
+    "quarantine_records": 0,
+    "schema_migrations": 2
+  },
+  "resource_limits": {
+    "postgres": {"nano_cpus": 750000000, "memory_bytes": 671088640, "restart_policy": "unless-stopped", "restart_count": 0},
+    "redpanda": {"nano_cpus": 750000000, "memory_bytes": 805306368, "restart_policy": "unless-stopped", "restart_count": 0},
+    "neo4j": {"nano_cpus": 750000000, "memory_bytes": 805306368, "restart_policy": "unless-stopped", "restart_count": 0},
+    "api": {"nano_cpus": 750000000, "memory_bytes": 671088640, "restart_policy": "unless-stopped", "restart_count": 0},
+    "web": {"nano_cpus": 250000000, "memory_bytes": 134217728, "restart_policy": "unless-stopped", "restart_count": 0}
+  },
+  "disk": {
+    "root_available_gib_approx": 12,
+    "unrelated_docker_cache_pruned": false
+  },
+  "public_ingress": {
+    "status": "unverified",
+    "hostname_configured": false,
+    "ontology_oosu_dev_modified": false,
+    "reason": "No separate FabOps public hostname or Cloudflare authority was configured; localhost/Tailscale deployment is fully verified."
+  },
+  "boundaries": {
+    "synthetic_demo_data": true,
+    "real_fab_performance_claim": false,
+    "samsung_internal_claim": false,
+    "secrets_in_evidence": false
+  }
+}

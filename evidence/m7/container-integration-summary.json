@@ -1,0 +1,40 @@
+{
+  "schema_version": "m7-container-integration-v1",
+  "captured_at": "2026-08-22T14:19:56Z",
+  "status": "passed",
+  "passed": true,
+  "target": "actual Mac mini containers",
+  "pytest": {
+    "command": "docker compose --project-name fabops-decision-lab-macmini --env-file infra/macmini/.env -f infra/macmini/docker-compose.yml exec -T -e FABOPS_CONTAINER_INTEGRATION=1 api uv run pytest -q tests/test_m6_container_integration.py",
+    "passed": 4,
+    "failed": 0,
+    "duration_seconds": 12.51
+  },
+  "verified_behaviors": {
+    "postgres_authoritative_persistence": true,
+    "idempotent_duplicate_ingest": true,
+    "transactional_quarantine_rollback": true,
+    "redpanda_publish_consume": true,
+    "redpanda_reconsume_duplicate_handling": true,
+    "redpanda_dlq": true,
+    "neo4j_projection_rebuild": true,
+    "projection_lag_events": 0,
+    "main_topic_present": true,
+    "dlq_topic_present": true,
+    "consumer_lag": 0
+  },
+  "api_restart_survival": {
+    "verified": true,
+    "counts_before": {"events": 373, "cases": 7, "audit_records": 7},
+    "counts_after": {"events": 373, "cases": 7, "audit_records": 7},
+    "api_started_before": "2026-08-22T14:06:58.514324711Z",
+    "api_started_after": "2026-08-22T14:08:26.079540292Z"
+  },
+  "browser_contract": {
+    "transport": "SSH localhost forward to Mac mini Web/API",
+    "command": "FABOPS_M7_BASE_URL=http://127.0.0.1:18220 npx playwright test e2e/workbench.spec.ts --config=playwright.m7.config.ts",
+    "passed": 1,
+    "failed": 0,
+    "duration_seconds": 4.9
+  }
+}
