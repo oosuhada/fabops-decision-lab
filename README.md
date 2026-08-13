@@ -4,6 +4,9 @@
 
 FabOps Decision Lab is a portfolio-scale engineering decision platform for yield-excursion triage. It connects deterministic synthetic events, source-of-truth persistence, explainable RCA, human-governed workflow, replay, observability and release evidence without requiring an external LLM.
 
+> **Live Demo — READ-ONLY:** https://fabops-preview.oosu.dev  
+> This public portfolio preview serves the immutable deployed `0.6.0` UI and GET/HEAD API data only. Workflow mutation requests are blocked at ingress. The visible approval controls therefore do not form a public interactive demo; interactive-demo hardening is deferred until after the active M8 burn-in.
+
 <!-- RELEASE_IDENTITY_START -->
 > Release `0.6.0` · canonical release hash `ab8b20a696b9b1996495f23a3e413cc33a67b6861efa184c64742e0f310c6326` · source commit `6824ca11198a`
 > Generated from `evidence/release/release-manifest.json`; this block is updated by `python -m evaluation.release_manifest`.
@@ -68,7 +71,9 @@ The advisory agent cannot own anomaly score, authorization, case state or equipm
 | M3 Traceability, CQRS & RCA | PASSED |
 | M4 Governed Workflow & Workbench | PASSED |
 | M5 Evaluation & Release Gates | PASSED |
-| M6 Reliability & Portfolio Release | IN PROGRESS until final canonical gate is committed |
+| M6 Reliability & Portfolio Release | PASSED |
+| M7 Mac mini Deployment | PASSED |
+| M8 Burn-in & Recovery Proof | IN PROGRESS |
 
 The detailed execution ledger is in `ROADMAP.md`.
 
