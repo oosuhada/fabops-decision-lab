@@ -1,0 +1,80 @@
+{
+  "schema_version": "m8-soak-manifest-v1",
+  "status": "in_progress",
+  "m8_passed": false,
+  "setup_status": "passed",
+  "soak_state": "in_progress",
+  "soak_started_at": "2026-08-22T23:25:23.719448+09:00",
+  "soak_started_at_utc": "2026-08-22T14:25:23.719448+00:00",
+  "target_duration_hours": 24,
+  "next_audit_at": "2026-08-23T23:25:23.719448+09:00",
+  "next_audit_at_utc": "2026-08-23T14:25:23.719448+00:00",
+  "timezone": "Asia/Seoul",
+  "collector": {
+    "version": "m8-soak-v1",
+    "sha256": "aefdfb0b00d223dc74ee543a85e131e0438ee450aa2b6eda7e254939453c4c7c",
+    "collection_interval_seconds": 300,
+    "remote_installed_path": "~/Services/fabops-decision-lab-data/burnin/bin/soak_collector.py",
+    "launchd_label": "com.oosu.fabops-burnin",
+    "launchd_plist": "~/Library/LaunchAgents/com.oosu.fabops-burnin.plist",
+    "launchd_plist_mode": "0600",
+    "collector_file_mode": "0700",
+    "launchd_last_exit_code": 0,
+    "launchd_runs_observed": 2,
+    "run_at_load": true,
+    "start_interval_seconds": 300
+  },
+  "storage": {
+    "remote_evidence_location": "~/Services/fabops-decision-lab-data/burnin/samples/soak.jsonl",
+    "rotation_max_bytes": 5242880,
+    "retention_hours": 72,
+    "max_rotated_files": 12,
+    "compression": "gzip",
+    "launchd_stdout": "/dev/null",
+    "launchd_stderr": "/dev/null"
+  },
+  "release": {
+    "release_version": "0.6.0",
+    "release_hash": "ab8b20a696b9b1996495f23a3e413cc33a67b6861efa184c64742e0f310c6326",
+    "deployed_git_sha": "2a3df187294706afb397f0cf8072c0f3ddcc2f23",
+    "api_image_id": "sha256:6b73bab392ab618a17dc13a32a60201114417f103609e15dd983ca4e9355390f",
+    "web_image_id": "sha256:a9e53cf7d2fda6b12efd861574033bbbf972c7305cf0cae9884597edbd53c25c"
+  },
+  "initial_samples": {
+    "count": 3,
+    "first_captured_at": "2026-08-22T14:25:23.719448+00:00",
+    "latest_captured_at": "2026-08-22T14:25:28.399494+00:00",
+    "latest_collector_ok": true,
+    "latest_api_latency_ms": 62.265,
+    "latest_projection_lag_events": 0,
+    "latest_broker_lag": 0,
+    "latest_restart_counts": {
+      "api": 0,
+      "web": 0,
+      "postgres": 0,
+      "redpanda": 0,
+      "neo4j": 0
+    },
+    "sample_file_bytes_after_three_samples": 4707
+  },
+  "collected_fields": [
+    "API health/readiness and latency",
+    "Web liveness and latency",
+    "container health/state and restart counts",
+    "container CPU and memory usage",
+    "host load average and disk usage",
+    "Redpanda consumer lag",
+    "projection lag",
+    "recent error-line counters",
+    "deployed release identity"
+  ],
+  "privacy": {
+    "credentials_collected": false,
+    "tokens_collected": false,
+    "private_keys_collected": false,
+    "event_payloads_collected": false,
+    "container_log_text_persisted": false,
+    "sensitive_host_inventory_collected": false
+  },
+  "boundary": "This manifest proves M8-A collector setup only. M8 remains IN PROGRESS until the 24-hour window completes and the resulting evidence is audited."
+}

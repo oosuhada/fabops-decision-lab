@@ -39,8 +39,8 @@ milestone is marked `IN PROGRESS` while implementation is active.
 
 | Sub-gate | Status | Evidence |
 |---|---|---|
-| M8-A 24h Burn-in Collector Setup | IN PROGRESS | `evidence/m8/soak-manifest.json` |
-| M8-B 24h Burn-in Audit & Recovery Proof | NOT STARTED | future completed soak summary and recovery audit evidence |
+| M8-A 24h Burn-in Collector Setup | PASSED | `evidence/m8/soak-manifest.json`, `evidence/m8/setup-gate.json` |
+| M8-B 24h Burn-in Audit & Recovery Proof | IN PROGRESS | future completed soak summary and recovery audit evidence after 24 hours |
 
 ## Execution discipline
 
