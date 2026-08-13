@@ -31,8 +31,8 @@ milestone is marked `IN PROGRESS` while implementation is active.
 | Sub-gate | Status | Evidence |
 |---|---|---|
 | M7-A Mac mini Remote Preflight | PASSED | `evidence/m7/host-inventory.redacted.json` |
-| M7-B Deployment Package | IN PROGRESS | `docs/operations/MAC_MINI_DEPLOYMENT.md`, `infra/macmini/docker-compose.yml` |
-| M7-C Actual Deployment & Runtime Verification | NOT STARTED | `evidence/m7/deployment-summary.json`, `evidence/m7/container-integration-summary.json` |
+| M7-B Deployment Package | PASSED | `docs/operations/MAC_MINI_DEPLOYMENT.md`, `infra/macmini/docker-compose.yml` |
+| M7-C Actual Deployment & Runtime Verification | IN PROGRESS | `evidence/m7/deployment-summary.json`, `evidence/m7/container-integration-summary.json` |
 | M7-D Backup / Restore / Rollback | NOT STARTED | `evidence/m7/backup-restore-summary.json`, `evidence/m7/rollback-summary.json` |
 
 ## Execution discipline
