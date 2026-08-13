@@ -1,12 +1,12 @@
 import {expect, test} from "@playwright/test";
 
-test("API-backed engineering decision workbench stays consistent across overview, evidence and approval", async ({page}) => {
+test("decision cockpit connects priority, evidence, grounded brief and governed approval", async ({page}) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", {name: "Yield excursion triage queue"})).toBeVisible();
+  await expect(page.getByRole("heading", {name: "What needs an engineering decision now?"})).toBeVisible();
   await expect(page.getByText("RELEASE 0.6.0")).toBeVisible();
-  await expect(page.getByText("373", {exact: true}).first()).toBeVisible();
-  const firstCase = page.getByRole("button", {name: /^CASE-/}).first();
-  await firstCase.click();
+  await expect(page.getByText("Decision queue", {exact: true}).first()).toBeVisible();
+  await expect(page.getByText(/Recommended stance:/).first()).toBeVisible();
+  await page.getByRole("button", {name: "Inspect evidence"}).click();
   await expect(page.getByText("Advisory · LLM off", {exact: true})).toBeVisible();
 
   await page.getByRole("button", {name: /Evidence Graph/i}).click();
@@ -17,6 +17,11 @@ test("API-backed engineering decision workbench stays consistent across overview
   await page.getByRole("button", {name: /Decision & Approval/i}).click();
   await expect(page.getByText(/PROPOSAL ONLY · NO TOOL CONTROL/)).toBeVisible();
   await expect(page.getByRole("button", {name: /execute equipment/i})).toHaveCount(0);
+  await expect(page.getByText("Grounded decision brief", {exact: true})).toBeVisible();
+  await expect(page.getByText("deterministic_fallback", {exact: true})).toBeVisible();
+  await expect(page.getByText("deterministic", {exact: true})).toBeVisible();
+  await page.getByRole("button", {name: "Engineer"}).click();
+  await expect(page.getByRole("heading", {name: /Engineering evidence packet/})).toBeVisible();
   await page.getByRole("button", {name: "Propose diagnostic"}).click();
   await expect(page.getByRole("heading", {name: /Case state: proposed/i})).toBeVisible();
   await page.getByRole("button", {name: "Approve as yield lead"}).click();

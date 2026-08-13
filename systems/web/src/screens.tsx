@@ -1,6 +1,67 @@
 import {useMemo, useState} from "react";
 import {ClassificationBadge, MetricStrip, ProjectionBadge, ProvenanceBadge, WorkbenchState} from "./components";
-import type {AdvisoryResponse, CaseDetailResponse, EvaluationResponse, FabCase, OverviewResponse, ReplayResponse} from "./types";
+import type {AdvisoryResponse, CaseDetailResponse, DecisionBriefResponse, DecisionCockpitResponse, EvaluationResponse, FabCase, OverviewResponse, ReplayResponse} from "./types";
+
+function priorityClass(band: string) {
+  if (band === "HIGH") return "decision-priority is-high";
+  if (band === "VERIFY_DATA") return "decision-priority is-verify";
+  return "decision-priority is-medium";
+}
+
+export function DecisionCockpit({cockpit, onOpenCase, onOpenDecision}: {
+  cockpit: DecisionCockpitResponse;
+  onOpenCase: (caseId: string) => void;
+  onOpenDecision: (caseId: string) => void;
+}) {
+  const top = cockpit.queue[0];
+  return <div className="screen-stack decision-cockpit">
+    <section className="surface-header">
+      <div><span className="eyebrow">Decision cockpit</span><h1>What needs an engineering decision now?</h1><p className="surface-subtitle">Prioritized questions, tradeoffs and evidence — not another status dashboard.</p></div>
+      <ProvenanceBadge kind="inferred" />
+    </section>
+    <MetricStrip items={[
+      {label: "Decision queue", value: cockpit.summary.decision_count, detail: "open inferred cases"},
+      {label: "High priority", value: cockpit.summary.high_priority, detail: "physical excursion review"},
+      {label: "Needs verification", value: cockpit.summary.data_verification, detail: "data-first · no fab action"},
+    ]} />
+    {top ? <section className="decision-spotlight panel">
+      <div className="decision-spotlight__copy">
+        <span className={priorityClass(top.priority_band)}>{top.priority_band}</span>
+        <span className="eyebrow">Top decision · {top.lot_id}</span>
+        <h2>{top.decision_question}</h2>
+        <p>{top.options.find((option) => option.option_id === top.recommended_option_id)?.tradeoff}</p>
+        <div className="decision-impact-row">
+          <span><strong>{top.impact.affected_chamber_count}</strong> chambers</span>
+          <span><strong>{top.impact.affected_lot_count}</strong> lots</span>
+          <span><strong>{top.impact.synthetic_yield_gap_percentage_points ?? "—"}</strong> synthetic yield gap pp</span>
+        </div>
+      </div>
+      <div className="decision-spotlight__actions">
+        <button onClick={() => onOpenCase(top.case_id)}>Inspect evidence</button>
+        <button className="primary" onClick={() => onOpenDecision(top.case_id)}>Open decision packet</button>
+      </div>
+    </section> : null}
+    <section className="panel decision-queue-panel">
+      <header><div><span className="eyebrow">Prioritized work</span><h2>Decision queue</h2></div><small>Priority is deterministic and classification-aware; no LLM changes the ordering.</small></header>
+      <div className="decision-queue">{cockpit.queue.map((packet) => {
+        const recommended = packet.options.find((option) => option.option_id === packet.recommended_option_id);
+        return <article key={packet.case_id} className="decision-queue-item">
+          <div className="decision-queue-item__identity">
+            <span className={priorityClass(packet.priority_band)}>{packet.priority_band}</span>
+            <strong>{packet.lot_id}</strong>
+            <small>{packet.classification.replaceAll("_", " ")}</small>
+          </div>
+          <div className="decision-queue-item__question"><strong>{packet.decision_question}</strong><span>Recommended stance: {recommended?.label}</span></div>
+          <div className="decision-queue-item__evidence">
+            <span>RCA {packet.evidence.top_candidate?.candidate_id ?? "unranked"}</span>
+            <span>{packet.evidence.top_candidate?.supporting_evidence.length ?? 0} support / {packet.evidence.top_candidate?.contradicting_evidence.length ?? 0} contradict</span>
+          </div>
+          <button onClick={() => onOpenDecision(packet.case_id)}>Decide →</button>
+        </article>;
+      })}</div>
+    </section>
+  </div>;
+}
 
 export function OperationsOverview({overview, onSelectCase}: {overview: OverviewResponse; onSelectCase: (caseId: string) => void}) {
   return <div className="screen-stack">
@@ -116,11 +177,14 @@ export function EvidenceGraph({detail, selectedStep, onSelectStep}: {detail: Cas
   </div>;
 }
 
-export function DecisionApproval({detail, advisory, busy, feedback, onRequestEvidence, onPropose, onApprove, onReject}: {
+export function DecisionApproval({detail, advisory, busy, feedback, brief, briefAudience, onBriefAudience, onRequestEvidence, onPropose, onApprove, onReject}: {
   detail: CaseDetailResponse;
   advisory: AdvisoryResponse | null;
   busy: boolean;
   feedback: {kind: "ok" | "error" | "unauthorized"; message: string} | null;
+  brief: DecisionBriefResponse | null;
+  briefAudience: "manager" | "engineer";
+  onBriefAudience: (audience: "manager" | "engineer") => void;
   onRequestEvidence: (reason: string) => Promise<void>;
   onPropose: (target: string, rationale: string) => Promise<void>;
   onApprove: (reason: string) => Promise<void>;
@@ -130,6 +194,22 @@ export function DecisionApproval({detail, advisory, busy, feedback, onRequestEvi
   return <div className="screen-stack">
     <section className="surface-header"><div><span className="eyebrow">Decision & approval</span><h1>Governed action proposal</h1></div><span className="safety-chip">PROPOSAL ONLY · NO TOOL CONTROL</span></section>
     {feedback ? <WorkbenchState kind={feedback.kind === "unauthorized" ? "unauthorized" : feedback.kind === "error" ? "error" : "degraded"} title={feedback.kind === "ok" ? "Workflow updated" : "Workflow action not applied"} detail={feedback.message} /> : null}
+    <section className="panel grounded-brief">
+      <header>
+        <div><span className="eyebrow">Grounded decision brief</span><h2>{brief?.brief.headline ?? "Generating evidence-grounded wording…"}</h2></div>
+        <div className="brief-audience-toggle" aria-label="Decision brief audience">
+          <button className={briefAudience === "manager" ? "is-active" : ""} onClick={() => onBriefAudience("manager")}>Manager</button>
+          <button className={briefAudience === "engineer" ? "is-active" : ""} onClick={() => onBriefAudience("engineer")}>Engineer</button>
+        </div>
+      </header>
+      {brief ? <>
+        <p className="lead-copy">{brief.brief.summary}</p>
+        <div className="brief-sections">{brief.brief.sections.map((section) => <article key={section.section_id}>
+          <strong>{section.title}</strong><p>{section.body}</p><small>Evidence: {section.evidence_refs.join(" · ")}</small>
+        </article>)}</div>
+        <div className="brief-meta"><span>{brief.brief.mode}</span><span>{brief.brief.provider}</span>{brief.brief.cache_hit ? <span>cached</span> : <span>fresh</span>}{brief.brief.fallback_reason ? <span>fallback: {brief.brief.fallback_reason}</span> : null}</div>
+      </> : <WorkbenchState kind="loading" title="Building decision wording" detail="The deterministic packet is fixed first; an available LLM may only rewrite grounded wording." />}
+    </section>
     <div className="two-column">
       <section className="panel">
         <header><div><span className="eyebrow">Advisory provider</span><h2>Evidence-grounded recommendation</h2></div><ProvenanceBadge kind="inferred" /></header>
