@@ -1,4 +1,4 @@
-import {fireEvent, render, screen, waitFor} from "@testing-library/react";
+import {fireEvent, render, screen} from "@testing-library/react";
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
 import App from "./App";
 import {WorkbenchState} from "./components";
@@ -43,20 +43,24 @@ describe("FabOps workbench", () => {
 
   it("opens on an API-backed decision cockpit instead of a generic metric dashboard", async () => {
     render(<App />);
-    expect(await screen.findByRole("heading", {name: "What needs an engineering decision now?"})).toBeInTheDocument();
+    expect(await screen.findByRole("heading", {name: "What needs a decision now?"})).toBeInTheDocument();
     expect(screen.getAllByText("LOT-00002").length).toBeGreaterThan(0);
-    expect(screen.getByText("Collect confirming metrology", {exact: false})).toBeInTheDocument();
-    expect(screen.getByText("RELEASE 0.6.0")).toBeInTheDocument();
+    expect(screen.getAllByText("Collect confirming metrology", {exact: false}).length).toBeGreaterThan(1);
+    expect(screen.getByText("Prepare containment review", {exact: false})).toBeInTheDocument();
+    expect(screen.getByText("READ-ONLY PREVIEW")).toBeInTheDocument();
+    expect(screen.getByText("0.6.0", {exact: true})).toBeInTheDocument();
   });
 
   it("coordinates evidence graph selection and exposes no equipment execution control", async () => {
     render(<App />);
-    await screen.findByRole("heading", {name: "What needs an engineering decision now?"});
+    await screen.findByRole("heading", {name: "What needs a decision now?"});
     fireEvent.click(screen.getByRole("button", {name: /Evidence Graph/i}));
     expect(await screen.findByRole("heading", {name: /LOT-00002 lineage/})).toBeInTheDocument();
     expect(screen.getByRole("button", {name: /ETCH/i})).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(screen.getByRole("button", {name: /Decision & Approval/i}));
-    expect(await screen.findByText(/PROPOSAL ONLY/)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", {name: /Should the team collect confirming evidence first/i})).toBeInTheDocument();
+    expect(screen.getByText("Choose a stance, not an opaque AI answer")).toBeInTheDocument();
+    expect(screen.getAllByText("NO TOOL CONTROL").length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", {name: /execute equipment/i})).not.toBeInTheDocument();
   });
 
