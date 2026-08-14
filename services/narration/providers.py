@@ -70,6 +70,7 @@ class OpenAICompatibleNarrationProvider:
     model: str
     bearer_token: str | None = None
     timeout_seconds: float = 45.0
+    max_output_tokens: int = 900
     name: str = "local-openai-compatible"
 
     def generate_json(self, system_prompt: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -77,6 +78,7 @@ class OpenAICompatibleNarrationProvider:
             {
                 "model": self.model,
                 "temperature": 0.1,
+                "max_tokens": self.max_output_tokens,
                 "response_format": {
                     "type": "json_schema",
                     "json_schema": {
@@ -107,6 +109,7 @@ class VertexAINarrationProvider:
     location: str = "global"
     model: str = "gemini-2.5-flash-lite"
     timeout_seconds: float = 20.0
+    max_output_tokens: int = 700
     auth_mode: str = "adc"
     name: str = "vertex-ai-gemini"
 
@@ -143,6 +146,7 @@ class VertexAINarrationProvider:
             model=f"google/{self.model}",
             bearer_token=self._access_token(),
             timeout_seconds=self.timeout_seconds,
+            max_output_tokens=self.max_output_tokens,
             name=self.name,
         )
         return provider.generate_json(system_prompt, payload)
@@ -162,6 +166,7 @@ def providers_from_env() -> list[NarrationProviderPort]:
                 model=local_model,
                 bearer_token=os.getenv("FABOPS_LOCAL_LLM_TOKEN") or None,
                 timeout_seconds=float(os.getenv("FABOPS_LOCAL_LLM_TIMEOUT_SECONDS", "45")),
+                max_output_tokens=int(os.getenv("FABOPS_LOCAL_LLM_MAX_OUTPUT_TOKENS", "700")),
             )
         )
     vertex_project = os.getenv("FABOPS_VERTEX_PROJECT", "").strip()
@@ -171,6 +176,7 @@ def providers_from_env() -> list[NarrationProviderPort]:
                 project_id=vertex_project,
                 location=os.getenv("FABOPS_VERTEX_LOCATION", "global").strip() or "global",
                 model=os.getenv("FABOPS_VERTEX_MODEL", "gemini-2.5-flash-lite").strip() or "gemini-2.5-flash-lite",
+                max_output_tokens=int(os.getenv("FABOPS_VERTEX_MAX_OUTPUT_TOKENS", "600")),
                 auth_mode=os.getenv("FABOPS_VERTEX_AUTH_MODE", "adc").strip().lower() or "adc",
             )
         )
