@@ -1,0 +1,63 @@
+name: fabops-decision-lab-preview-v07
+
+x-candidate-labels: &candidate-labels
+  com.oosu.fabops.preview: "v0.7-candidate"
+  com.oosu.fabops.preview.source-revision: ${FABOPS_PREVIEW_GIT_SHA:?FABOPS_PREVIEW_GIT_SHA must be set}
+  com.oosu.fabops.preview.authoritative-release: "0.6.0"
+
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/macmini/Dockerfile.api
+      args:
+        FABOPS_RELEASE_VERSION: "0.6.0"
+        FABOPS_RELEASE_HASH: ${FABOPS_RELEASE_HASH:?FABOPS_RELEASE_HASH must be set}
+        FABOPS_DEPLOY_GIT_SHA: ${FABOPS_PREVIEW_GIT_SHA}
+    labels: *candidate-labels
+    restart: unless-stopped
+    cpus: 0.50
+    mem_limit: 512m
+    environment:
+      FABOPS_RUNTIME_MODE: local
+      FABOPS_NARRATION_PROVIDER_ORDER: deterministic
+    ports:
+      - "127.0.0.1:${FABOPS_PREVIEW_API_PORT:-8240}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import json,urllib.request; d=json.load(urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)); raise SystemExit(0 if d.get('ready') else 1)"]
+      interval: 5s
+      timeout: 4s
+      retries: 20
+      start_period: 10s
+    networks: [preview]
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/macmini/Dockerfile.web
+      args:
+        FABOPS_RELEASE_VERSION: "0.6.0"
+        FABOPS_RELEASE_HASH: ${FABOPS_RELEASE_HASH:?FABOPS_RELEASE_HASH must be set}
+        FABOPS_DEPLOY_GIT_SHA: ${FABOPS_PREVIEW_GIT_SHA}
+        VITE_API_URL: ""
+    labels: *candidate-labels
+    restart: unless-stopped
+    cpus: 0.25
+    mem_limit: 160m
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${FABOPS_PREVIEW_WEB_PORT:-8250}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 8s
+    networks: [preview]
+
+networks:
+  preview:
+    name: fabops-decision-lab-preview-v07_private
+    driver: bridge
