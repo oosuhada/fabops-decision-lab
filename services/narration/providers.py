@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -14,26 +15,28 @@ DECISION_BRIEF_RESPONSE_SCHEMA: dict[str, Any] = {
         "schema_version": {"type": "string", "const": "decision-brief-v1"},
         "case_id": {"type": "string"},
         "audience": {"type": "string", "enum": ["manager", "engineer"]},
-        "headline": {"type": "string"},
-        "summary": {"type": "string"},
+        "headline": {"type": "string", "maxLength": 80},
+        "summary": {"type": "string", "maxLength": 240},
         "recommended_option_id": {"type": "string"},
         "sections": {
             "type": "array",
+            "minItems": 1,
+            "maxItems": 2,
             "items": {
                 "type": "object",
                 "additionalProperties": False,
                 "properties": {
                     "section_id": {"type": "string"},
-                    "title": {"type": "string"},
-                    "body": {"type": "string"},
-                    "evidence_refs": {"type": "array", "items": {"type": "string"}},
+                    "title": {"type": "string", "maxLength": 60},
+                    "body": {"type": "string", "maxLength": 240},
+                    "evidence_refs": {"type": "array", "maxItems": 2, "items": {"type": "string"}},
                 },
                 "required": ["section_id", "title", "body", "evidence_refs"],
             },
         },
-        "citations": {"type": "array", "items": {"type": "string"}},
-        "uncertainties": {"type": "array", "items": {"type": "string"}},
-        "limitations": {"type": "array", "items": {"type": "string"}},
+        "citations": {"type": "array", "maxItems": 4, "items": {"type": "string"}},
+        "uncertainties": {"type": "array", "maxItems": 2, "items": {"type": "string", "maxLength": 240}},
+        "limitations": {"type": "array", "minItems": 1, "maxItems": 2, "items": {"type": "string", "maxLength": 240}},
     },
     "required": [
         "schema_version",
@@ -62,6 +65,33 @@ def _extract_json(content: str) -> dict[str, Any]:
         value = value.split("\n", 1)[1]
         value = value.rsplit("```", 1)[0]
     return json.loads(value)
+
+
+class _UrllibAuthResponse:
+    def __init__(self, response: Any) -> None:
+        self.status = int(response.status)
+        self.data = response.read()
+        self.headers = response.headers
+
+
+class _UrllibAuthRequest:
+    """google-auth transport backed only by Python's HTTPS-capable stdlib."""
+
+    def __call__(
+        self,
+        url: str,
+        method: str = "GET",
+        body: bytes | None = None,
+        headers: dict[str, str] | None = None,
+        timeout: float | None = None,
+        **_: Any,
+    ) -> _UrllibAuthResponse:
+        request = urllib.request.Request(url, data=body, headers=headers or {}, method=method)
+        try:
+            response = urllib.request.urlopen(request, timeout=timeout)
+        except urllib.error.HTTPError as exc:
+            response = exc
+        return _UrllibAuthResponse(response)
 
 
 @dataclass
@@ -99,7 +129,10 @@ class OpenAICompatibleNarrationProvider:
         request = urllib.request.Request(f"{self.base_url.rstrip('/')}/chat/completions", data=body, headers=headers, method="POST")
         with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
             result = json.load(response)
-        content = result["choices"][0]["message"]["content"]
+        choice = result["choices"][0]
+        if choice.get("finish_reason") == "length":
+            raise RuntimeError("provider output token limit reached")
+        content = choice["message"]["content"]
         return _extract_json(str(content))
 
 
@@ -127,11 +160,10 @@ class VertexAINarrationProvider:
             return completed.stdout.strip()
         try:
             import google.auth
-            from google.auth.transport import _http_client
         except ImportError as exc:  # pragma: no cover - exercised only when optional provider is configured
             raise RuntimeError("google-auth is required for Vertex AI narration") from exc
         credentials, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
-        credentials.refresh(_http_client.Request())
+        credentials.refresh(_UrllibAuthRequest())
         if not credentials.token:
             raise RuntimeError("Vertex AI ADC returned no access token")
         return str(credentials.token)

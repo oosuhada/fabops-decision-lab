@@ -194,7 +194,7 @@ export interface NarrationStatusResponse {
   public_get_mode: "cache_only" | string;
   provider_health: {
     local_llm: "healthy" | "degraded" | "offline" | "circuit_open" | string;
-    vertex: "healthy" | "disabled" | "budget_exhausted" | "unconfigured" | "circuit_open" | string;
+    vertex: "healthy" | "degraded" | "disabled" | "budget_exhausted" | "unconfigured" | "circuit_open" | string;
   };
   narration: {last_source: "cached" | "local" | "vertex" | "deterministic_fallback" | string};
   public_demo: {
