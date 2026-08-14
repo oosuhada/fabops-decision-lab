@@ -1,6 +1,6 @@
 import {useMemo, useState} from "react";
 import {ClassificationBadge, MetricStrip, ProjectionBadge, ProvenanceBadge, WorkbenchState} from "./components";
-import type {AdvisoryResponse, CaseDetailResponse, DecisionBriefResponse, DecisionCockpitResponse, DecisionPacket, EvaluationResponse, FabCase, OverviewResponse, ReplayResponse} from "./types";
+import type {AdvisoryResponse, CaseDetailResponse, DecisionBriefResponse, DecisionCockpitResponse, DecisionPacket, EvaluationResponse, FabCase, NarrationIntent, OverviewResponse, ReplayResponse} from "./types";
 
 function priorityClass(band: string) {
   if (band === "HIGH") return "decision-priority is-high";
@@ -273,7 +273,7 @@ export function EvidenceGraph({detail, selectedStep, onSelectStep}: {detail: Cas
   </div>;
 }
 
-export function DecisionApproval({detail, packet, advisory, busy, feedback, brief, briefAudience, onBriefAudience, onRequestEvidence, onPropose, onApprove, onReject}: {
+export function DecisionApproval({detail, packet, advisory, busy, feedback, brief, briefAudience, narrationBusy, narrationFeedback, onBriefAudience, onGenerateBrief, onRequestEvidence, onPropose, onApprove, onReject}: {
   detail: CaseDetailResponse;
   packet: DecisionPacket | null;
   advisory: AdvisoryResponse | null;
@@ -281,7 +281,10 @@ export function DecisionApproval({detail, packet, advisory, busy, feedback, brie
   feedback: {kind: "ok" | "error" | "unauthorized"; message: string} | null;
   brief: DecisionBriefResponse | null;
   briefAudience: "manager" | "engineer";
+  narrationBusy: boolean;
+  narrationFeedback: string | null;
   onBriefAudience: (audience: "manager" | "engineer") => void;
+  onGenerateBrief: (intent: NarrationIntent) => Promise<void>;
   onRequestEvidence: (reason: string) => Promise<void>;
   onPropose: (target: string, rationale: string) => Promise<void>;
   onApprove: (reason: string) => Promise<void>;
@@ -331,6 +334,20 @@ export function DecisionApproval({detail, packet, advisory, busy, feedback, brie
         </article>)}</div>
         <div className="brief-meta"><span>recommended option: {brief.brief.recommended_option_id}</span><span>{brief.brief.citations.length} evidence refs</span>{brief.brief.fallback_reason ? <span>fallback: {brief.brief.fallback_reason}</span> : null}</div>
       </> : <WorkbenchState kind="loading" title="Building decision wording" detail="The deterministic packet is fixed first; an available LLM may only rewrite grounded wording." />}
+      <div className="brief-live-controls">
+        <div>
+          <span className="eyebrow">Bounded AI demo</span>
+          <strong>Generate only on explicit intent</strong>
+          <small>No free-form prompt · server session + rate/budget gates · local Qwen → Vertex → deterministic</small>
+        </div>
+        <div className="brief-intent-actions">
+          <button disabled={narrationBusy} onClick={() => void onGenerateBrief("manager_summary")}>Manager summary</button>
+          <button disabled={narrationBusy} onClick={() => void onGenerateBrief("engineer_checklist")}>Engineer checklist</button>
+          <button disabled={narrationBusy} onClick={() => void onGenerateBrief("tradeoff_compare")}>Compare trade-offs</button>
+          <button disabled={narrationBusy} onClick={() => void onGenerateBrief("counter_evidence")}>Counter-evidence</button>
+        </div>
+        {narrationFeedback ? <p className="brief-live-feedback">{narrationFeedback}</p> : null}
+      </div>
     </section>
     <div className="decision-bottom-grid">
       <section className="panel decision-rationale-panel">

@@ -2,7 +2,7 @@ import {useCallback, useEffect, useMemo, useState} from "react";
 import {api} from "./api";
 import {EvidenceInspector, WorkbenchState} from "./components";
 import {DecisionApproval, DecisionCockpit, EvaluationLab, EvidenceGraph, ExcursionCase, OperationsOverview, ReplayOperations, caseById} from "./screens";
-import type {AdvisoryResponse, CaseDetailResponse, DecisionBriefResponse, DecisionCockpitResponse, EvaluationResponse, OverviewResponse, ReplayResponse, ScreenId} from "./types";
+import type {AdvisoryResponse, CaseDetailResponse, DecisionBriefResponse, DecisionCockpitResponse, EvaluationResponse, NarrationIntent, OverviewResponse, ReplayResponse, ScreenId} from "./types";
 
 const navigation: Array<{id: ScreenId; label: string; short: string; group: "Decide" | "Investigate" | "Trust"}> = [
   {id: "cockpit", label: "Decision Cockpit", short: "01", group: "Decide"},
@@ -25,6 +25,9 @@ export default function App() {
   const [advisory, setAdvisory] = useState<AdvisoryResponse | null>(null);
   const [decisionBrief, setDecisionBrief] = useState<DecisionBriefResponse | null>(null);
   const [briefAudience, setBriefAudience] = useState<"manager" | "engineer">("manager");
+  const [demoSessionToken, setDemoSessionToken] = useState<string | null>(null);
+  const [narrationBusy, setNarrationBusy] = useState(false);
+  const [narrationFeedback, setNarrationFeedback] = useState<string | null>(null);
   const [selectedStep, setSelectedStep] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -100,6 +103,38 @@ export default function App() {
     }
   }
 
+  async function generateDemoBrief(intent: NarrationIntent) {
+    if (!selectedCaseId) return;
+    setNarrationBusy(true);
+    setNarrationFeedback(null);
+    try {
+      let token = demoSessionToken;
+      if (!token) {
+        const session = await api.demoSession();
+        token = session.token;
+        setDemoSessionToken(token);
+      }
+      try {
+        const generated = await api.demoNarration(token, selectedCaseId, briefAudience, intent);
+        setDecisionBrief(generated);
+        setNarrationFeedback(`Bounded AI demo · ${generated.brief.provider} · ${generated.brief.mode}`);
+      } catch (reason) {
+        const status = typeof reason === "object" && reason !== null && "status" in reason ? Number((reason as {status: number}).status) : 0;
+        if (status !== 401) throw reason;
+        const session = await api.demoSession();
+        setDemoSessionToken(session.token);
+        const generated = await api.demoNarration(session.token, selectedCaseId, briefAudience, intent);
+        setDecisionBrief(generated);
+        setNarrationFeedback(`Bounded AI demo · ${generated.brief.provider} · ${generated.brief.mode}`);
+      }
+    } catch (reason) {
+      const status = typeof reason === "object" && reason !== null && "status" in reason ? Number((reason as {status: number}).status) : 0;
+      setNarrationFeedback(status === 429 ? "AI demo limit reached. Cached/deterministic wording remains available." : "Live AI demo is unavailable; grounded deterministic wording remains available.");
+    } finally {
+      setNarrationBusy(false);
+    }
+  }
+
   if (loading && !overview) {
     return <main className="boot-state"><WorkbenchState kind="loading" title="Loading FabOps workbench" detail="Resolving source events, deterministic cases and projection freshness." /></main>;
   }
@@ -124,7 +159,10 @@ export default function App() {
     feedback={feedback}
     brief={decisionBrief}
     briefAudience={briefAudience}
+    narrationBusy={narrationBusy}
+    narrationFeedback={narrationFeedback}
     onBriefAudience={setBriefAudience}
+    onGenerateBrief={generateDemoBrief}
     onRequestEvidence={(reason) => mutate(() => api.requestEvidence(detail.case.case_id, reason))}
     onPropose={(target, rationale) => mutate(() => api.propose(detail.case.case_id, target, rationale))}
     onApprove={(reason) => mutate(() => api.approve(detail.case.case_id, reason))}

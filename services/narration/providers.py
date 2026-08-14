@@ -124,11 +124,11 @@ class VertexAINarrationProvider:
             return completed.stdout.strip()
         try:
             import google.auth
-            import google.auth.transport.requests
+            from google.auth.transport import _http_client
         except ImportError as exc:  # pragma: no cover - exercised only when optional provider is configured
             raise RuntimeError("google-auth is required for Vertex AI narration") from exc
         credentials, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
-        credentials.refresh(google.auth.transport.requests.Request())
+        credentials.refresh(_http_client.Request())
         if not credentials.token:
             raise RuntimeError("Vertex AI ADC returned no access token")
         return str(credentials.token)

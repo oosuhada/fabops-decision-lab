@@ -166,6 +166,7 @@ export interface DecisionCockpitResponse {
 
 export interface DecisionBriefResponse {
   source: string;
+  session_id?: string;
   packet: DecisionPacket;
   brief: {
     schema_version: string;
@@ -183,7 +184,18 @@ export interface DecisionBriefResponse {
     uncertainties: string[];
     limitations: string[];
     generated_at: string;
+    intent?: string;
   };
+}
+
+export type NarrationIntent = "manager_summary" | "engineer_checklist" | "tradeoff_compare" | "counter_evidence";
+
+export interface DemoSessionResponse {
+  source: string;
+  token: string;
+  expires_at: string;
+  generation_limit: number;
+  allowed_intents: NarrationIntent[];
 }
 
 export interface EvaluationResponse {

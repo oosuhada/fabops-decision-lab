@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
+from .demo import DEMO_INTENTS
+from .governance import ProviderBlockedError, ProviderGovernor, governor_from_env
 from .providers import NarrationProviderPort, providers_from_env
 
 AUDIENCES = {"manager", "engineer"}
@@ -84,15 +86,23 @@ def _deterministic_brief(packet: dict[str, Any], audience: str, *, mode: str, pr
     }
 
 
-def _system_prompt(audience: str) -> str:
+def _system_prompt(audience: str, intent: str = "decision_brief") -> str:
     focus = (
         "Lead with operational impact, the human decision to make, tradeoffs, and uncertainty. Keep model detail secondary."
         if audience == "manager"
         else "Lead with RCA evidence, supporting/contradicting evidence, uncertainty, and the next engineering check."
     )
+    intent_focus = {
+        "decision_brief": "Produce a balanced decision brief.",
+        "manager_summary": "Produce a concise manager-facing decision summary with impact, recommendation, alternatives, and uncertainty.",
+        "engineer_checklist": "Produce an engineer-facing diagnostic checklist using only grounded evidence and next checks.",
+        "tradeoff_compare": "Emphasize comparison of the supplied decision options and their stated tradeoffs.",
+        "counter_evidence": "Emphasize contradicting evidence, missing evidence, and what would reduce uncertainty.",
+    }.get(intent, "Produce a balanced decision brief.")
     return f"""You generate grounded FabOps decision wording for a {audience}.
 
 {focus}
+{intent_focus}
 
 Rules:
 1. Use only the supplied decision_packet. Never invent a number, source, event, completion, root cause, or business cost.
@@ -110,16 +120,19 @@ Rules:
 class NarrationService:
     providers: list[NarrationProviderPort] | None = None
     cache_ttl_seconds: float = 300.0
+    governor: ProviderGovernor | None = None
 
     def __post_init__(self) -> None:
         if self.providers is None:
             self.providers = providers_from_env()
+        if self.governor is None:
+            self.governor = governor_from_env([provider.name for provider in self.providers or []])
         self._cache: dict[str, tuple[float, dict[str, Any]]] = {}
 
     @staticmethod
-    def _cache_key(packet: dict[str, Any], audience: str) -> str:
+    def _cache_key(packet: dict[str, Any], audience: str, intent: str = "decision_brief") -> str:
         payload = json.dumps(
-            {"packet": packet, "audience": audience},
+            {"packet": packet, "audience": audience, "intent": intent},
             sort_keys=True,
             separators=(",", ":"),
             ensure_ascii=False,
@@ -133,6 +146,7 @@ class NarrationService:
             "cache_ttl_seconds": self.cache_ttl_seconds,
             "cache_entries": len(self._cache),
             "authority": "wording-only",
+            "provider_governance": self.governor.status() if self.governor else {},
         }
 
     @staticmethod
@@ -169,18 +183,48 @@ class NarrationService:
                 raise ValueError("narration contains a forbidden operational claim")
         return payload
 
-    def generate(self, packet: dict[str, Any], audience: str) -> dict[str, Any]:
+    def cached_or_deterministic(self, packet: dict[str, Any], audience: str, *, intent: str = "decision_brief") -> dict[str, Any]:
         if audience not in AUDIENCES:
             raise ValueError(f"unsupported audience: {audience}")
-        cache_key = self._cache_key(packet, audience)
+        cache_key = self._cache_key(packet, audience, intent)
+        now = time.monotonic()
+        cached = self._cache.get(cache_key)
+        if cached is not None and now - cached[0] <= self.cache_ttl_seconds:
+            return {**cached[1], "cache_hit": True}
+        payload = _deterministic_brief(
+            packet,
+            audience,
+            mode="deterministic_fallback",
+            provider="deterministic",
+            fallback_reason="public_cache_miss",
+        )
+        payload["cache_hit"] = False
+        payload["intent"] = intent
+        return payload
+
+    def generate(self, packet: dict[str, Any], audience: str, *, intent: str = "decision_brief") -> dict[str, Any]:
+        if audience not in AUDIENCES:
+            raise ValueError(f"unsupported audience: {audience}")
+        if intent != "decision_brief" and intent not in DEMO_INTENTS:
+            raise ValueError(f"unsupported narration intent: {intent}")
+        cache_key = self._cache_key(packet, audience, intent)
         now = time.monotonic()
         cached = self._cache.get(cache_key)
         if cached is not None and now - cached[0] <= self.cache_ttl_seconds:
             return {**cached[1], "cache_hit": True}
         failures: list[str] = []
+        prompt_payload = {"decision_packet": packet, "audience": audience, "intent": intent}
+        estimated_input_tokens = self.governor.estimate_tokens(prompt_payload) if self.governor else 1
         for provider in self.providers or []:
             try:
-                raw = provider.generate_json(_system_prompt(audience), {"decision_packet": packet, "audience": audience})
+                if self.governor:
+                    raw = self.governor.run(
+                        provider.name,
+                        estimated_input_tokens,
+                        lambda provider=provider: provider.generate_json(_system_prompt(audience, intent), prompt_payload),
+                    )
+                else:
+                    raw = provider.generate_json(_system_prompt(audience, intent), prompt_payload)
                 payload = self._validate(packet, audience, raw)
                 payload.update(
                     {
@@ -189,14 +233,18 @@ class NarrationService:
                         "fallback_reason": None,
                         "generated_at": datetime.now(timezone.utc).isoformat(),
                         "cache_hit": False,
+                        "intent": intent,
                     }
                 )
                 self._cache[cache_key] = (now, payload)
                 return payload
+            except ProviderBlockedError as exc:
+                failures.append(f"{provider.name}:{exc.reason}")
             except Exception as exc:  # noqa: BLE001 - provider/schema/grounding failures fail closed to deterministic wording
                 failures.append(f"{provider.name}:{type(exc).__name__}")
         reason = ",".join(failures) if failures else "llm_not_configured"
         payload = _deterministic_brief(packet, audience, mode="deterministic_fallback", provider="deterministic", fallback_reason=reason)
         payload["cache_hit"] = False
+        payload["intent"] = intent
         self._cache[cache_key] = (now, payload)
         return payload

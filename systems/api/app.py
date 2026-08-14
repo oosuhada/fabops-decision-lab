@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import hmac
 import json
+import os
 import uuid
 from contextlib import contextmanager
 from dataclasses import asdict
 from pathlib import Path
-from typing import Annotated, Any, Iterator
+from typing import Annotated, Any, Iterator, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from services.decision import DecisionSupportService
 from services.narration import NarrationService
+from services.narration.demo import DemoPolicyError, DemoSessionPolicy, demo_policy_from_env
 from services.rca.cqrs import RankRootCausesQuery, TraceAffectedLotsQuery
 from services.release import RELEASE_VERSION, load_release_identity
 from services.workflow.state_machine import AuthorizationError, InvalidTransitionError
@@ -28,11 +31,21 @@ app.add_middleware(
     allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
     allow_credentials=False,
     allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "X-FabOps-Role", "X-FabOps-Actor", "X-Correlation-ID", "X-FabOps-Trace-ID", "traceparent"],
+    allow_headers=[
+        "Content-Type",
+        "X-FabOps-Role",
+        "X-FabOps-Actor",
+        "X-FabOps-Demo-Session",
+        "X-Correlation-ID",
+        "X-FabOps-Trace-ID",
+        "traceparent",
+    ],
     expose_headers=["X-Correlation-ID", "X-FabOps-Trace-ID"],
 )
 app.state.runtime = build_runtime()
 app.state.narration_service = None
+app.state.demo_policy = None
+app.state.demo_policy_loaded = False
 
 
 @app.middleware("http")
@@ -59,6 +72,13 @@ def get_narration_service() -> NarrationService:
         service = NarrationService()
         app.state.narration_service = service
     return service
+
+
+def get_demo_policy() -> DemoSessionPolicy | None:
+    if not getattr(app.state, "demo_policy_loaded", False):
+        app.state.demo_policy = demo_policy_from_env()
+        app.state.demo_policy_loaded = True
+    return app.state.demo_policy
 
 
 def actor_headers(
@@ -99,6 +119,17 @@ class DecisionRequest(BaseModel):
 
 class CloseRequest(BaseModel):
     outcome: str = Field(min_length=3, max_length=800)
+
+
+class DemoNarrationRequest(BaseModel):
+    case_id: str = Field(min_length=3, max_length=120)
+    audience: Literal["manager", "engineer"] = "manager"
+    intent: Literal["manager_summary", "engineer_checklist", "tradeoff_compare", "counter_evidence"] = "manager_summary"
+
+
+class NarrationPrecomputeRequest(BaseModel):
+    case_ids: list[str] | None = None
+    audiences: list[Literal["manager", "engineer"]] = Field(default_factory=lambda: ["manager", "engineer"], min_length=1, max_length=2)
 
 
 def _workflow_call(callable_: Any) -> dict[str, Any]:
@@ -201,7 +232,15 @@ def decision_cockpit(runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> 
 
 @app.get("/api/narration/status")
 def narration_status() -> dict[str, Any]:
-    return {"source": "runtime-configuration", **get_narration_service().status()}
+    demo_policy = get_demo_policy()
+    return {
+        "source": "runtime-configuration",
+        **get_narration_service().status(),
+        "public_get_mode": "cache_only"
+        if os.getenv("FABOPS_PUBLIC_NARRATION_CACHE_ONLY", "false").strip().lower() in {"1", "true", "yes"}
+        else "live_allowed",
+        "public_demo": demo_policy.status() if demo_policy is not None else {"enabled": False},
+    }
 
 
 @app.get("/api/cases/{case_id}/decision-brief")
@@ -218,8 +257,97 @@ def decision_brief(
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="case not found") from exc
         with runtime.telemetry.operation("decision.narrate", case_id=case_id, audience=audience):
-            brief = get_narration_service().generate(packet, audience)
+            service = get_narration_service()
+            cache_only = os.getenv("FABOPS_PUBLIC_NARRATION_CACHE_ONLY", "false").strip().lower() in {"1", "true", "yes"}
+            brief = service.cached_or_deterministic(packet, audience) if cache_only else service.generate(packet, audience)
     return {"source": "inferred-decision-support", "packet": packet, "brief": brief}
+
+
+def _public_client_id(request: Request) -> str:
+    cloudflare_ip = request.headers.get("CF-Connecting-IP", "").strip()
+    if cloudflare_ip:
+        return cloudflare_ip[:80]
+    forwarded = request.headers.get("X-Forwarded-For", "").split(",", 1)[0].strip()
+    if forwarded:
+        return forwarded[:80]
+    return (request.client.host if request.client else "unknown")[:80]
+
+
+@app.get("/api/demo/session")
+def create_demo_session() -> dict[str, Any]:
+    policy = get_demo_policy()
+    if policy is None:
+        raise HTTPException(status_code=404, detail="public AI demo is disabled")
+    return {"source": "server-owned-demo-policy", **policy.issue()}
+
+
+@app.post("/api/demo/narration")
+def demo_narration(
+    body: DemoNarrationRequest,
+    request: Request,
+    runtime: Annotated[LocalRuntime, Depends(get_runtime)],
+    demo_session: Annotated[str | None, Header(alias="X-FabOps-Demo-Session")] = None,
+) -> dict[str, Any]:
+    policy = get_demo_policy()
+    if policy is None:
+        raise HTTPException(status_code=404, detail="public AI demo is disabled")
+    if not demo_session:
+        raise HTTPException(status_code=401, detail="demo session required")
+    try:
+        session_id = policy.consume(demo_session, _public_client_id(request), body.intent)
+    except DemoPolicyError as exc:
+        status = 429 if exc.reason in {"session_generation_limit", "client_hourly_limit"} else 401
+        raise HTTPException(status_code=status, detail=exc.reason) from exc
+    with case_telemetry(runtime, body.case_id):
+        try:
+            packet = DecisionSupportService(runtime).packet(body.case_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="case not found") from exc
+        with runtime.telemetry.operation(
+            "decision.demo_narrate",
+            case_id=body.case_id,
+            audience=body.audience,
+            intent=body.intent,
+        ):
+            brief = get_narration_service().generate(packet, body.audience, intent=body.intent)
+    return {
+        "source": "bounded-public-demo-narration",
+        "session_id": session_id,
+        "packet": packet,
+        "brief": brief,
+    }
+
+
+@app.post("/api/internal/narration/precompute")
+def precompute_narration(
+    body: NarrationPrecomputeRequest,
+    runtime: Annotated[LocalRuntime, Depends(get_runtime)],
+    internal_token: Annotated[str | None, Header(alias="X-FabOps-Internal-Token")] = None,
+) -> dict[str, Any]:
+    expected = os.getenv("FABOPS_INTERNAL_NARRATION_TOKEN", "")
+    if len(expected) < 24:
+        raise HTTPException(status_code=404, detail="internal narration precompute is disabled")
+    if not internal_token or not hmac.compare_digest(internal_token, expected):
+        raise HTTPException(status_code=401, detail="invalid internal narration credential")
+    case_ids = body.case_ids or [case["case_id"] for case in runtime.case_repository.list_cases()]
+    generated: list[dict[str, Any]] = []
+    for case_id in case_ids:
+        try:
+            packet = DecisionSupportService(runtime).packet(case_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=f"case not found: {case_id}") from exc
+        for audience in body.audiences:
+            brief = get_narration_service().generate(packet, audience)
+            generated.append(
+                {
+                    "case_id": case_id,
+                    "audience": audience,
+                    "mode": brief["mode"],
+                    "provider": brief["provider"],
+                    "cache_hit": brief.get("cache_hit", False),
+                }
+            )
+    return {"source": "internal-precompute", "generated": generated, "count": len(generated)}
 
 
 @app.post("/api/cases/{case_id}/request-evidence")

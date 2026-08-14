@@ -24,7 +24,10 @@ test("decision cockpit connects priority, evidence, grounded brief and governed 
   await expect(page.getByRole("button", {name: /execute equipment/i})).toHaveCount(0);
   await expect(page.getByText("Grounded decision brief", {exact: true})).toBeVisible();
   await expect(page.getByText("Decision ID preserved", {exact: true})).toBeVisible();
-  await page.getByRole("button", {name: "Engineer"}).click();
+  await expect(page.getByText("Bounded AI demo", {exact: true})).toBeVisible();
+  await page.getByRole("button", {name: "Compare trade-offs"}).click();
+  await expect(page.getByText(/Bounded AI demo · deterministic · deterministic_fallback/)).toBeVisible();
+  await page.getByRole("button", {name: "Engineer", exact: true}).click();
   await expect(page.getByRole("heading", {name: /Engineering evidence packet/})).toBeVisible();
   await page.getByRole("button", {name: "Propose diagnostic"}).click();
   await expect(page.getByText(/case state proposed/i)).toBeVisible();
