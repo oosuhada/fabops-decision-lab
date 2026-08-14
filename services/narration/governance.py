@@ -39,6 +39,11 @@ class _ProviderState:
     circuit_open_until: float = 0.0
     last_block_reason: str | None = None
     last_failure: str | None = None
+    total_requests_started: int = 0
+    total_successes: int = 0
+    total_failures: int = 0
+    circuit_openings: int = 0
+    block_counts: dict[str, int] = field(default_factory=dict)
 
 
 class ProviderGovernor:
@@ -106,12 +111,14 @@ class ProviderGovernor:
 
             if reason is not None:
                 state.last_block_reason = reason
+                state.block_counts[reason] = state.block_counts.get(reason, 0) + 1
                 raise ProviderBlockedError(reason)
 
             state.active_requests += 1
             state.minute_requests.append(now)
             state.daily_requests += 1
             state.daily_estimated_tokens += estimated_total_tokens
+            state.total_requests_started += 1
             state.last_block_reason = None
 
         try:
@@ -120,8 +127,11 @@ class ProviderGovernor:
             with self._lock:
                 state = self._state(provider_name)
                 state.consecutive_failures += 1
+                state.total_failures += 1
                 state.last_failure = type(exc).__name__
                 if state.consecutive_failures >= policy.circuit_failure_threshold:
+                    if state.circuit_open_until <= time.monotonic():
+                        state.circuit_openings += 1
                     state.circuit_open_until = time.monotonic() + policy.circuit_cooldown_seconds
             raise
         else:
@@ -130,6 +140,7 @@ class ProviderGovernor:
                 state.consecutive_failures = 0
                 state.circuit_open_until = 0.0
                 state.last_failure = None
+                state.total_successes += 1
             return result
         finally:
             with self._lock:
@@ -147,8 +158,9 @@ class ProviderGovernor:
                 self._reset_day_if_needed(state)
                 while state.minute_requests and now - state.minute_requests[0] >= 60.0:
                     state.minute_requests.popleft()
+                provider_state = "circuit_open" if state.circuit_open_until > now else "degraded" if state.consecutive_failures else "available"
                 result[name] = {
-                    "state": "circuit_open" if state.circuit_open_until > now else "available",
+                    "state": provider_state,
                     "active_requests": state.active_requests,
                     "requests_last_minute": len(state.minute_requests),
                     "max_requests_per_minute": policy.max_requests_per_minute,
@@ -159,6 +171,11 @@ class ProviderGovernor:
                     "daily_estimated_token_limit": policy.daily_estimated_token_limit,
                     "last_block_reason": state.last_block_reason,
                     "last_failure": state.last_failure,
+                    "total_requests_started": state.total_requests_started,
+                    "total_successes": state.total_successes,
+                    "total_failures": state.total_failures,
+                    "circuit_openings": state.circuit_openings,
+                    "block_counts": dict(sorted(state.block_counts.items())),
                 }
             return result
 

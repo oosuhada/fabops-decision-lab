@@ -157,9 +157,10 @@ def providers_from_env() -> list[NarrationProviderPort]:
     if mode == "deterministic":
         return []
     providers: list[NarrationProviderPort] = []
+    local_enabled = os.getenv("FABOPS_LOCAL_LLM_ENABLED", "true").strip().lower() in {"1", "true", "yes"}
     local_url = os.getenv("FABOPS_LOCAL_LLM_BASE_URL", "").strip()
     local_model = os.getenv("FABOPS_LOCAL_LLM_MODEL", "local-review-qwen-next").strip()
-    if local_url and mode in {"auto", "local"}:
+    if local_enabled and local_url and mode in {"auto", "local"}:
         providers.append(
             OpenAICompatibleNarrationProvider(
                 base_url=local_url,
@@ -167,10 +168,12 @@ def providers_from_env() -> list[NarrationProviderPort]:
                 bearer_token=os.getenv("FABOPS_LOCAL_LLM_TOKEN") or None,
                 timeout_seconds=float(os.getenv("FABOPS_LOCAL_LLM_TIMEOUT_SECONDS", "45")),
                 max_output_tokens=int(os.getenv("FABOPS_LOCAL_LLM_MAX_OUTPUT_TOKENS", "700")),
+                name="local-qwen",
             )
         )
+    vertex_enabled = os.getenv("FABOPS_VERTEX_ENABLED", "true").strip().lower() in {"1", "true", "yes"}
     vertex_project = os.getenv("FABOPS_VERTEX_PROJECT", "").strip()
-    if vertex_project and mode in {"auto", "vertex"}:
+    if vertex_enabled and vertex_project and mode in {"auto", "vertex"}:
         providers.append(
             VertexAINarrationProvider(
                 project_id=vertex_project,

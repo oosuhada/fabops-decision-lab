@@ -11,15 +11,19 @@ from pathlib import Path
 from typing import Any, Literal, Optional
 
 from fastapi import FastAPI, Header, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class GatewayMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     role: Literal["system", "user", "assistant"]
     content: str = Field(min_length=1, max_length=40_000)
 
 
 class GatewayChatRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     model: str
     messages: list[GatewayMessage] = Field(min_length=1, max_length=12)
     temperature: float = Field(default=0.1, ge=0.0, le=0.5)
@@ -34,6 +38,7 @@ app = FastAPI(
     openapi_url=None,
 )
 _concurrency = asyncio.Semaphore(max(1, int(os.getenv("FABOPS_GATEWAY_MAX_CONCURRENCY", "2"))))
+_queue_timeout_seconds = max(0.05, float(os.getenv("FABOPS_GATEWAY_QUEUE_TIMEOUT_SECONDS", "1")))
 
 
 def _shared_secret() -> str:
@@ -167,12 +172,17 @@ async def chat_completions(
         raise HTTPException(status_code=413, detail="request exceeds gateway size limit")
     timeout = float(os.getenv("FABOPS_GATEWAY_UPSTREAM_TIMEOUT_SECONDS", "45"))
     try:
-        async with _concurrency:
-            await asyncio.to_thread(_ensure_model)
-            return await asyncio.wait_for(asyncio.to_thread(_upstream_json, "/chat/completions", body=encoded, timeout=timeout), timeout=timeout + 1)
+        await asyncio.wait_for(_concurrency.acquire(), timeout=_queue_timeout_seconds)
+    except TimeoutError as exc:
+        raise HTTPException(status_code=429, detail="gateway concurrency capacity reached") from exc
+    try:
+        await asyncio.to_thread(_ensure_model)
+        return await asyncio.wait_for(asyncio.to_thread(_upstream_json, "/chat/completions", body=encoded, timeout=timeout), timeout=timeout + 1)
     except TimeoutError as exc:
         raise HTTPException(status_code=504, detail="local model timeout") from exc
     except urllib.error.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"local model rejected request ({exc.code})") from exc
     except Exception as exc:  # noqa: BLE001 - do not leak upstream details
         raise HTTPException(status_code=502, detail="local model unavailable") from exc
+    finally:
+        _concurrency.release()

@@ -176,6 +176,7 @@ export interface DecisionBriefResponse {
     provider: string;
     fallback_reason?: string | null;
     cache_hit?: boolean;
+    latency_ms?: number;
     headline: string;
     summary: string;
     recommended_option_id: string;
@@ -185,6 +186,22 @@ export interface DecisionBriefResponse {
     limitations: string[];
     generated_at: string;
     intent?: string;
+  };
+}
+
+export interface NarrationStatusResponse {
+  source: string;
+  public_get_mode: "cache_only" | string;
+  provider_health: {
+    local_llm: "healthy" | "degraded" | "offline" | "circuit_open" | string;
+    vertex: "healthy" | "disabled" | "budget_exhausted" | "unconfigured" | "circuit_open" | string;
+  };
+  narration: {last_source: "cached" | "local" | "vertex" | "deterministic_fallback" | string};
+  public_demo: {
+    enabled: boolean;
+    session_ttl_seconds?: number;
+    max_generations_per_session?: number;
+    max_generations_per_ip_hour?: number;
   };
 }
 
