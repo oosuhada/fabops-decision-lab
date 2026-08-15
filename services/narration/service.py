@@ -12,6 +12,7 @@ from typing import Any
 
 from .demo import DEMO_INTENTS
 from .governance import ProviderBlockedError, ProviderGovernor, governor_from_env
+from .grounding import allowed_evidence_refs, reference_allowed
 from .providers import NarrationProviderPort, providers_from_env
 
 AUDIENCES = {"manager", "engineer"}
@@ -112,7 +113,7 @@ Rules:
 2. Copy case_id and recommended_option_id exactly; you may not change the accepted deterministic recommendation.
 3. Treat RCA as a ranked hypothesis. Never claim the root cause is confirmed unless the packet literally says so.
 4. Never claim equipment was held, stopped, changed, or controlled.
-5. Every section must cite only evidence_refs present in decision_packet.evidence_refs, plus these deterministic decision refs: decision.recommended_option_id and decision.options, case.affected_scope, case.mean_yield.
+5. Every citation and section evidence_ref must be copied exactly from allowed_evidence_refs supplied beside decision_packet. Never invent, rename, abbreviate, or extend an evidence path.
 6. Return one JSON object with keys: schema_version, case_id, audience, headline, summary, recommended_option_id, sections, citations, uncertainties, limitations.
 7. schema_version must be decision-brief-v1. sections must be objects with section_id, title, body, evidence_refs.
 8. Write human-readable wording in Korean while leaving IDs unchanged.
@@ -229,17 +230,6 @@ class NarrationService:
             self._last_narration_source = source
 
     @staticmethod
-    def _reference_allowed(packet: dict[str, Any], reference: str, allowed: set[str]) -> bool:
-        if reference in allowed:
-            return True
-        prefix = "decision.options["
-        if reference.startswith(prefix) and reference.endswith("]"):
-            index_text = reference[len(prefix) : -1]
-            if index_text.isdigit():
-                return int(index_text) < len(packet.get("options", []))
-        return False
-
-    @staticmethod
     def _validate(packet: dict[str, Any], audience: str, payload: dict[str, Any]) -> dict[str, Any]:
         if payload.get("schema_version") != "decision-brief-v1":
             raise ValueError("narration schema_version mismatch")
@@ -249,16 +239,10 @@ class NarrationService:
             raise ValueError("narration audience mismatch")
         if payload.get("recommended_option_id") != packet["recommended_option_id"]:
             raise ValueError("narration changed deterministic recommendation")
-        allowed = set(packet["evidence_refs"]) | {
-            "decision.recommended_option_id",
-            "decision.options",
-            "case.affected_scope",
-            "case.mean_yield",
-        }
         referenced = set(payload.get("citations", []))
         for section in payload.get("sections", []):
             referenced.update(section.get("evidence_refs", []))
-        unknown = {reference for reference in referenced if not NarrationService._reference_allowed(packet, reference, allowed)}
+        unknown = {reference for reference in referenced if not reference_allowed(packet, reference)}
         if unknown:
             raise ValueError(f"narration contains unknown evidence refs: {sorted(unknown)}")
         text = " ".join(
@@ -311,7 +295,12 @@ class NarrationService:
             self._record_live_result(payload, (time.perf_counter() - started) * 1000)
             return payload
         failures: list[str] = []
-        prompt_payload = {"decision_packet": packet, "audience": audience, "intent": intent}
+        prompt_payload = {
+            "decision_packet": packet,
+            "allowed_evidence_refs": allowed_evidence_refs(packet),
+            "audience": audience,
+            "intent": intent,
+        }
         estimated_input_tokens = self.governor.estimate_tokens(prompt_payload) if self.governor else 1
         for provider in self.providers or []:
             try:
