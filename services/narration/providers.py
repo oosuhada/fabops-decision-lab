@@ -54,6 +54,51 @@ DECISION_BRIEF_RESPONSE_SCHEMA: dict[str, Any] = {
 }
 
 
+def _vertex_response_schema(allowed_references: list[str]) -> dict[str, Any]:
+    evidence_ref_schema: dict[str, Any] = {"type": "STRING"}
+    if allowed_references:
+        evidence_ref_schema["enum"] = allowed_references
+    return {
+        "type": "OBJECT",
+        "properties": {
+            "schema_version": {"type": "STRING", "enum": ["decision-brief-v1"]},
+            "case_id": {"type": "STRING"},
+            "audience": {"type": "STRING", "enum": ["manager", "engineer"]},
+            "headline": {"type": "STRING"},
+            "summary": {"type": "STRING"},
+            "recommended_option_id": {"type": "STRING"},
+            "sections": {
+                "type": "ARRAY",
+                "items": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "section_id": {"type": "STRING"},
+                        "title": {"type": "STRING"},
+                        "body": {"type": "STRING"},
+                        "evidence_refs": {"type": "ARRAY", "items": evidence_ref_schema},
+                    },
+                    "required": ["section_id", "title", "body", "evidence_refs"],
+                },
+            },
+            "citations": {"type": "ARRAY", "items": evidence_ref_schema},
+            "uncertainties": {"type": "ARRAY", "items": {"type": "STRING"}},
+            "limitations": {"type": "ARRAY", "items": {"type": "STRING"}},
+        },
+        "required": [
+            "schema_version",
+            "case_id",
+            "audience",
+            "headline",
+            "summary",
+            "recommended_option_id",
+            "sections",
+            "citations",
+            "uncertainties",
+            "limitations",
+        ],
+    }
+
+
 class NarrationProviderPort(Protocol):
     name: str
 
@@ -193,6 +238,9 @@ class VertexAINarrationProvider:
                     "temperature": 0.1,
                     "maxOutputTokens": self.max_output_tokens,
                     "responseMimeType": "application/json",
+                    "responseSchema": _vertex_response_schema(
+                        [str(value) for value in payload.get("allowed_evidence_refs", []) if isinstance(value, str)]
+                    ),
                     "thinkingConfig": {"thinkingBudget": 0},
                 },
             },
