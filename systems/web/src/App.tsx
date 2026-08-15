@@ -14,8 +14,36 @@ const navigation: Array<{id: ScreenId; label: string; short: string; group: "Dec
   {id: "replay", label: "System Health", short: "07", group: "Trust"},
 ];
 
+const screenPaths: Record<ScreenId, string> = {
+  cockpit: "/DecisionCockpit",
+  decision: "/DecisionApproval",
+  case: "/CaseInvestigation",
+  graph: "/EvidenceGraph",
+  overview: "/OperationsQueue",
+  evaluation: "/ModelEvidence",
+  replay: "/SystemHealth",
+};
+
+function screenFromPath(pathname: string): ScreenId {
+  const normalized = pathname.replace(/\/+$/, "") || "/";
+  const match = (Object.entries(screenPaths) as Array<[ScreenId, string]>).find(([, path]) => path.toLowerCase() === normalized.toLowerCase());
+  return match?.[0] ?? "cockpit";
+}
+
+function InitialBoot() {
+  return <main className="boot-experience" aria-label="Loading FabOps workbench">
+    <div className="boot-orb" aria-hidden="true"><span /><span /><span /></div>
+    <div className="boot-lockup">
+      <div className="boot-logo">FO</div>
+      <div><span>FABOPS DECISION LAB</span><strong>Connecting evidence workspace</strong></div>
+    </div>
+    <div className="boot-progress" aria-hidden="true"><i /></div>
+    <div className="boot-steps"><span className="is-live">EVENT STREAM</span><span>CASE PROJECTION</span><span>DECISION EVIDENCE</span></div>
+  </main>;
+}
+
 export default function App() {
-  const [screen, setScreen] = useState<ScreenId>("cockpit");
+  const [screen, setScreen] = useState<ScreenId>(() => screenFromPath(window.location.pathname));
   const [cockpit, setCockpit] = useState<DecisionCockpitResponse | null>(null);
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [evaluation, setEvaluation] = useState<EvaluationResponse | null>(null);
@@ -64,6 +92,14 @@ export default function App() {
   }, []);
 
   useEffect(() => { void loadRoot(); }, [loadRoot]);
+  useEffect(() => {
+    if (window.location.pathname === "/" || !Object.values(screenPaths).some((path) => path.toLowerCase() === window.location.pathname.replace(/\/+$/, "").toLowerCase())) {
+      window.history.replaceState({screen}, "", screenPaths[screen]);
+    }
+    const handlePopState = () => setScreen(screenFromPath(window.location.pathname));
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
   useEffect(() => { void api.narrationStatus().then(setNarrationStatus).catch(() => setNarrationStatus(null)); }, []);
   useEffect(() => { if (selectedCaseId) void loadCase(selectedCaseId); }, [loadCase, selectedCaseId]);
   useEffect(() => {
@@ -79,14 +115,19 @@ export default function App() {
 
   function selectCase(caseId: string) {
     setSelectedCaseId(caseId);
-    setScreen("case");
+    navigate("case");
     setFeedback(null);
   }
 
   function openDecision(caseId: string) {
     setSelectedCaseId(caseId);
-    setScreen("decision");
+    navigate("decision");
     setFeedback(null);
+  }
+
+  function navigate(next: ScreenId) {
+    setScreen(next);
+    if (window.location.pathname !== screenPaths[next]) window.history.pushState({screen: next}, "", screenPaths[next]);
   }
 
   async function mutate(action: () => Promise<unknown>) {
@@ -140,7 +181,7 @@ export default function App() {
   }
 
   if (loading && !overview) {
-    return <main className="boot-state"><WorkbenchState kind="loading" title="Loading FabOps workbench" detail="Resolving source events, deterministic cases and projection freshness." /></main>;
+    return <InitialBoot />;
   }
   if (error && !overview) {
     return <main className="boot-state"><WorkbenchState kind="error" title="Workbench unavailable" detail={error} action={<button onClick={() => void loadRoot()}>Retry</button>} /></main>;
@@ -197,7 +238,7 @@ export default function App() {
       <div className="nav-heading"><span>Decision workspace</span><strong>From exception to governed action</strong></div>
       <nav>{navGroups.map((group) => <div className="nav-group" key={group}>
         <span className="nav-group__label">{group}</span>
-        {navigation.filter((item) => item.group === group).map((item) => <button key={item.id} className={screen === item.id ? "nav-item is-active" : "nav-item"} aria-current={screen === item.id ? "page" : undefined} onClick={() => setScreen(item.id)}>
+        {navigation.filter((item) => item.group === group).map((item) => <button key={item.id} className={screen === item.id ? "nav-item is-active" : "nav-item"} aria-current={screen === item.id ? "page" : undefined} onClick={() => navigate(item.id)}>
           <span>{item.short}</span><strong>{item.label}</strong>
         </button>)}
       </div>)}</nav>

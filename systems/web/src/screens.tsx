@@ -577,12 +577,12 @@ export function ReplayOperations({replay}: {replay: ReplayResponse}) {
         <div><dt>Manifest</dt><dd>{replay.release.manifest_available ? "generated" : "pending"}</dd></div>
       </dl>
     </section>
-    <div className="two-column">
-      <section className="panel"><header><div><span className="eyebrow">Delivery behavior</span><h2>Accepted event status</h2></div></header>
-        <dl className="property-list">{Object.entries(replay.delivery_status_counts).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl>
+    <div className="two-column system-health-grid">
+      <section className="panel health-card"><header><div><span className="eyebrow">Delivery behavior</span><h2>Accepted event status</h2></div></header>
+        <div className="health-stat-list">{Object.entries(replay.delivery_status_counts).map(([key, value]) => <div key={key}><span>{key.replaceAll("_", " ")}</span><strong>{value}</strong><i aria-hidden="true" /></div>)}</div>
       </section>
-      <section className="panel"><header><div><span className="eyebrow">External adapters</span><h2>Verification status</h2></div></header>
-        <dl className="property-list">{Object.entries(replay.external_services).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl>
+      <section className="panel health-card"><header><div><span className="eyebrow">External adapters</span><h2>Verification status</h2></div></header>
+        <div className="adapter-status-list">{Object.entries(replay.external_services).map(([key, value]) => <div key={key}><div><span className="adapter-dot" aria-hidden="true" /><strong>{key.replaceAll("_", " ")}</strong></div><span className="adapter-state">{String(value)}</span></div>)}</div>
         <WorkbenchState {...integrationState} />
       </section>
     </div>
