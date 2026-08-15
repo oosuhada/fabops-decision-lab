@@ -285,6 +285,33 @@ def test_invalid_or_ungrounded_provider_output_is_discarded(provider: FakeProvid
     assert brief["recommended_option_id"] == packet["recommended_option_id"]
 
 
+def test_grounding_accepts_only_existing_indexed_decision_option_references() -> None:
+    runtime = build_local_runtime()
+    packet = DecisionSupportService(runtime).packet(runtime.case_repository.list_cases()[0]["case_id"])
+
+    class IndexedOptionProvider(FakeProvider):
+        def __init__(self, reference: str) -> None:
+            super().__init__()
+            self.reference = reference
+
+        def generate_json(self, system_prompt: str, payload: dict[str, Any]) -> dict[str, Any]:
+            result = super().generate_json(system_prompt, payload)
+            result["sections"][0]["evidence_refs"] = [self.reference]
+            return result
+
+    accepted = NarrationService([IndexedOptionProvider("decision.options[0]")]).generate(packet, "manager", intent="tradeoff_compare")
+    rejected = NarrationService([IndexedOptionProvider(f"decision.options[{len(packet['options'])}]")]).generate(
+        packet,
+        "manager",
+        intent="tradeoff_compare",
+    )
+
+    assert accepted["mode"] == "llm"
+    assert accepted["recommended_option_id"] == packet["recommended_option_id"]
+    assert rejected["mode"] == "deterministic_fallback"
+    assert rejected["recommended_option_id"] == packet["recommended_option_id"]
+
+
 def test_provider_governor_rejects_concurrency_without_unbounded_queue() -> None:
     provider_name = "local-qwen"
     governor = ProviderGovernor(
