@@ -181,6 +181,33 @@ def test_provider_governance_enforces_daily_request_budget() -> None:
     assert provider.calls == 1
 
 
+def test_provider_governance_enforces_rpm_before_network_call() -> None:
+    provider_name = "local-qwen"
+    governor = ProviderGovernor(
+        {
+            provider_name: ProviderPolicy(
+                max_requests_per_minute=1,
+                max_concurrency=1,
+                daily_request_limit=10,
+                daily_estimated_token_limit=100_000,
+                max_output_tokens=100,
+            )
+        }
+    )
+    calls = 0
+
+    def provider_call() -> dict[str, Any]:
+        nonlocal calls
+        calls += 1
+        return {"ok": True}
+
+    assert governor.run(provider_name, 10, provider_call) == {"ok": True}
+    with pytest.raises(ProviderBlockedError, match="rate_limit_exhausted"):
+        governor.run(provider_name, 10, provider_call)
+
+    assert calls == 1
+
+
 def test_demo_session_policy_limits_generation_and_rejects_unknown_intent() -> None:
     policy = DemoSessionPolicy(
         secret="a-secret-long-enough-for-testing-only",

@@ -65,6 +65,10 @@ test("mobile decision cockpit keeps candidate, provenance and read-only identity
   await expect(ribbon).toContainText("synthetic");
   await expect(ribbon).toContainText("read-only");
   await expect(ribbon).toContainText("base 0.6.0");
+  const workspaceContext = page.getByLabel("Current workspace context");
+  await expect(workspaceContext).toBeVisible();
+  await expect(workspaceContext).toContainText("Decision Cockpit");
+  await expect(workspaceContext).toContainText(/LOT-\d{5}/);
   await expect(page.getByRole("button", {name: /Decision & Approval/i})).toBeVisible();
 });
 
@@ -84,6 +88,9 @@ test("Foundry Glass design grammar stays consistent across routes", async ({page
     await page.goto(route.path);
     await expect(page.locator(".app-shell")).toBeVisible();
     await expect(page.locator(route.ready)).toBeVisible();
+    const workspaceContext = page.getByLabel("Current workspace context");
+    await expect(workspaceContext).toBeVisible();
+    await expect(workspaceContext).toContainText("Decision Lab");
     const desktopAudit = await page.evaluate(() => {
       const visible = (element: Element) => {
         const rect = element.getBoundingClientRect();
@@ -120,6 +127,7 @@ test("Foundry Glass design grammar stays consistent across routes", async ({page
         .filter((item): item is {text: string | undefined; inset: number} => item !== null && Number.isFinite(item.inset));
       return {
         overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+        workspaceContextHeight: document.querySelector(".workspace-context")?.getBoundingClientRect().height ?? 0,
         minimumTextSize: Math.min(...textSizes, 100),
         undersized,
         headerPaddingLeft: panelHeaders.map((header) => Number.parseFloat(getComputedStyle(header).paddingLeft)),
@@ -128,6 +136,8 @@ test("Foundry Glass design grammar stays consistent across routes", async ({page
       };
     });
     expect(desktopAudit.overflow, `${route.path} has desktop page overflow`).toBe(false);
+    expect(desktopAudit.workspaceContextHeight, `${route.path} lost the compact workspace context bar`).toBeGreaterThanOrEqual(32);
+    expect(desktopAudit.workspaceContextHeight, `${route.path} workspace context bar became oversized`).toBeLessThanOrEqual(40);
     expect(desktopAudit.minimumTextSize, `${route.path} renders text below the 10px metadata floor: ${JSON.stringify(desktopAudit.undersized)}`).toBeGreaterThanOrEqual(10);
     expect(desktopAudit.headerPaddingLeft.every((value) => value >= 16), `${route.path} panel header inset drift`).toBe(true);
     expect(desktopAudit.panelRadii.every((value) => value >= 12), `${route.path} panel radius drift`).toBe(true);
