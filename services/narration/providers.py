@@ -187,6 +187,7 @@ class VertexAINarrationProvider:
                     "temperature": 0.1,
                     "maxOutputTokens": self.max_output_tokens,
                     "responseMimeType": "application/json",
+                    "thinkingConfig": {"thinkingBudget": 0},
                 },
             },
             ensure_ascii=False,
