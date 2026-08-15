@@ -1,6 +1,8 @@
 import {useCallback, useEffect, useMemo, useState} from "react";
 import {api} from "./api";
 import {EvidenceInspector, WorkbenchState} from "./components";
+import {WorkbenchResizeHandle} from "./platform/workbench/WorkbenchResizeHandle";
+import {useWorkbenchLayout} from "./platform/workbench/useWorkbenchLayout";
 import {DecisionApproval, DecisionCockpit, EvaluationLab, EvidenceGraph, ExcursionCase, OperationsOverview, ReplayOperations, caseById} from "./screens";
 import type {AdvisoryResponse, CaseDetailResponse, DecisionBriefResponse, DecisionCockpitResponse, EvaluationResponse, NarrationIntent, NarrationStatusResponse, OverviewResponse, ReplayResponse, ScreenId} from "./types";
 
@@ -53,6 +55,7 @@ function InitialBoot() {
 }
 
 export default function App() {
+  const workbench = useWorkbenchLayout();
   const [screen, setScreen] = useState<ScreenId>(() => screenFromPath(window.location.pathname));
   const [cockpit, setCockpit] = useState<DecisionCockpitResponse | null>(null);
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
@@ -230,7 +233,7 @@ export default function App() {
   const navGroups = ["Decide", "Investigate", "Trust"] as const;
   const activeNavigation = navigation.find((item) => item.id === screen) ?? navigation[0];
 
-  return <div className="app-shell">
+  return <div className="app-shell" style={workbench.shellStyle}>
     <header className="global-header">
       <div className="brand-mark">FO</div>
       <div className="brand-copy"><strong>FabOps</strong><span>Decision intelligence for yield excursions</span></div>
@@ -254,12 +257,16 @@ export default function App() {
         <span>Current object</span>
         <strong>{selectedPacket?.lot_id ?? selectedCase?.lot_id ?? "No case selected"}</strong>
         {selectedPacket ? <span className={`workspace-context__priority workspace-context__priority--${selectedPacket.priority_band.toLowerCase()}`}>{selectedPacket.priority_band}</span> : null}
+        <span className="workspace-context__layout-controls" aria-label="Workbench pane controls">
+          <button type="button" aria-pressed={workbench.layout.leftOpen} onClick={() => workbench.togglePane("left")}>Navigation</button>
+          <button type="button" aria-pressed={workbench.layout.rightOpen} onClick={() => workbench.togglePane("right")}>Inspector</button>
+        </span>
       </div>
     </div>
     <div className="mobile-status-ribbon" aria-label="Release and provenance status">
       <span>0.7 candidate</span><span>base {replay.release.release_version}</span><span>synthetic</span><span>read-only</span>
     </div>
-    <aside className="left-rail" aria-label="Primary navigation">
+    <aside className={workbench.layout.leftOpen ? "left-rail" : "left-rail is-collapsed"} aria-label="Primary navigation" aria-hidden={!workbench.layout.leftOpen}>
       <div className="nav-heading"><span>Decision workspace</span><strong>From exception to governed action</strong></div>
       <nav>{navGroups.map((group) => <div className="nav-group" key={group}>
         <span className="nav-group__label"><b>{String(navGroups.indexOf(group) + 1).padStart(2, "0")}</b>{group}</span>
@@ -275,8 +282,12 @@ export default function App() {
         </button>)}
       </div>
     </aside>
+    {workbench.layout.leftOpen ? <WorkbenchResizeHandle side="left" width={workbench.layout.leftWidth} onBegin={workbench.beginResize} onMove={workbench.moveResize} onEnd={workbench.endResize} onKeyboardResize={workbench.keyboardResize} onReset={workbench.resetWidth} /> : null}
     <main id="work-surface" className="work-surface" tabIndex={-1}>{workSurface}</main>
-    <EvidenceInspector selectedCase={detail?.case ?? selectedCase} selectedPacket={selectedPacket} projection={overview.projection} sourceTimestamp={overview.source_timestamp} selectedStep={selectedStep} />
+    {workbench.layout.rightOpen ? <WorkbenchResizeHandle side="right" width={workbench.layout.rightWidth} onBegin={workbench.beginResize} onMove={workbench.moveResize} onEnd={workbench.endResize} onKeyboardResize={workbench.keyboardResize} onReset={workbench.resetWidth} /> : null}
+    <div className={workbench.layout.rightOpen ? "evidence-inspector-slot" : "evidence-inspector-slot is-collapsed"} aria-hidden={!workbench.layout.rightOpen}>
+      {workbench.layout.rightOpen ? <EvidenceInspector selectedCase={detail?.case ?? selectedCase} selectedPacket={selectedPacket} projection={overview.projection} sourceTimestamp={overview.source_timestamp} selectedStep={selectedStep} /> : null}
+    </div>
   </div>;
 }
 
