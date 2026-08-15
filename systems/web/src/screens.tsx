@@ -1,5 +1,6 @@
 import {useMemo, useState} from "react";
 import {ClassificationBadge, MetricStrip, ProjectionBadge, ProvenanceBadge, WorkbenchState} from "./components";
+import {EvidenceGraphExplorer} from "./features/evidence/EvidenceGraphExplorer";
 import type {AdvisoryResponse, CaseDetailResponse, DecisionBriefResponse, DecisionCockpitResponse, DecisionPacket, EvaluationResponse, FabCase, MeasurementPoint, NarrationIntent, NarrationStatusResponse, OverviewResponse, ReplayResponse} from "./types";
 
 function priorityClass(band: string) {
@@ -404,6 +405,7 @@ export function EvidenceGraph({detail, selectedStep, onSelectStep}: {detail: Cas
     </section>
     <section className="panel graph-workspace graph-workspace--console">
       <header><div><span className="eyebrow">Process lineage</span><h2>Lot → run → chamber → evidence</h2></div><div className="graph-header-meta"><ProjectionBadge projection={detail.trace.projection} /><small>Select a step to coordinate every lens.</small></div></header>
+      <EvidenceGraphExplorer detail={detail} onSelectStep={onSelectStep} />
       <div className="lineage-row" aria-label="Process lineage">{detail.trace.process_path.map((item, index) => <div className="lineage-fragment" key={item.process_run_id}>
         <button className={item.step_id === step ? "lineage-node is-selected" : "lineage-node"} aria-pressed={item.step_id === step} onClick={() => onSelectStep(item.step_id)}>
           <span>{item.step_id}</span><strong>{item.chamber_id ?? "no chamber"}</strong><small>{item.equipment_id ?? "—"}</small>
