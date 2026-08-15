@@ -1,6 +1,7 @@
 import {useCallback, useEffect, useMemo, useState} from "react";
 import {api} from "./api";
 import {EvidenceInspector, WorkbenchState} from "./components";
+import {AnalysisWorkbench} from "./features/analysis/AnalysisWorkbench";
 import {WorkbenchResizeHandle} from "./platform/workbench/WorkbenchResizeHandle";
 import {useWorkbenchLayout} from "./platform/workbench/useWorkbenchLayout";
 import {DecisionApproval, DecisionCockpit, EvaluationLab, EvidenceGraph, ExcursionCase, OperationsOverview, ReplayOperations, caseById} from "./screens";
@@ -11,9 +12,10 @@ const navigation: Array<{id: ScreenId; label: string; short: string; group: "Dec
   {id: "decision", label: "Decision & Approval", short: "02", group: "Decide"},
   {id: "case", label: "Case Investigation", short: "03", group: "Investigate"},
   {id: "graph", label: "Evidence Graph", short: "04", group: "Investigate"},
-  {id: "overview", label: "Operations Queue", short: "05", group: "Investigate"},
-  {id: "evaluation", label: "Model & Evidence", short: "06", group: "Trust"},
-  {id: "replay", label: "System Health", short: "07", group: "Trust"},
+  {id: "analysis", label: "Analysis Workbench", short: "05", group: "Investigate"},
+  {id: "overview", label: "Operations Queue", short: "06", group: "Investigate"},
+  {id: "evaluation", label: "Model & Evidence", short: "07", group: "Trust"},
+  {id: "replay", label: "System Health", short: "08", group: "Trust"},
 ];
 
 const screenPaths: Record<ScreenId, string> = {
@@ -21,6 +23,7 @@ const screenPaths: Record<ScreenId, string> = {
   decision: "/DecisionApproval",
   case: "/CaseInvestigation",
   graph: "/EvidenceGraph",
+  analysis: "/AnalysisWorkbench",
   overview: "/OperationsQueue",
   evaluation: "/ModelEvidence",
   replay: "/SystemHealth",
@@ -206,9 +209,10 @@ export default function App() {
   let workSurface;
   if (screen === "cockpit") workSurface = <DecisionCockpit cockpit={cockpit} onOpenCase={selectCase} onOpenDecision={openDecision} />;
   else if (screen === "overview") workSurface = <OperationsOverview overview={overview} onSelectCase={selectCase} />;
-  else if ((screen === "case" || screen === "graph" || screen === "decision") && !detail) workSurface = <WorkbenchState kind="loading" title="Loading selected case" detail="Fetching source-linked evidence and deterministic RCA." />;
+  else if ((screen === "case" || screen === "graph" || screen === "analysis" || screen === "decision") && !detail) workSurface = <WorkbenchState kind="loading" title="Loading selected case" detail="Fetching source-linked evidence and deterministic RCA." />;
   else if (screen === "case" && detail) workSurface = <ExcursionCase detail={detail} advisory={advisory} />;
   else if (screen === "graph" && detail) workSurface = <EvidenceGraph detail={detail} selectedStep={selectedStep} onSelectStep={setSelectedStep} />;
+  else if (screen === "analysis" && detail) workSurface = <AnalysisWorkbench detail={detail} />;
   else if (screen === "decision" && detail) workSurface = <DecisionApproval
     detail={detail}
     packet={selectedPacket}
