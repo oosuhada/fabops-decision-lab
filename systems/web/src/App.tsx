@@ -32,13 +32,23 @@ function screenFromPath(pathname: string): ScreenId {
 
 function InitialBoot() {
   return <main className="boot-experience" aria-label="Loading FabOps workbench">
-    <div className="boot-orb" aria-hidden="true"><span /><span /><span /></div>
-    <div className="boot-lockup">
-      <div className="boot-logo">FO</div>
-      <div><span>FABOPS DECISION LAB</span><strong>Connecting evidence workspace</strong></div>
-    </div>
-    <div className="boot-progress" aria-hidden="true"><i /></div>
-    <div className="boot-steps"><span className="is-live">EVENT STREAM</span><span>CASE PROJECTION</span><span>DECISION EVIDENCE</span></div>
+    <section className="boot-panel">
+      <div className="boot-panel__topline"><span>FABOPS / DECISION LAB</span><b>READ-ONLY PREVIEW</b></div>
+      <div className="boot-panel__hero">
+        <div className="boot-orb" aria-hidden="true"><span /><span /><span /></div>
+        <div className="boot-lockup">
+          <div className="boot-logo">FO</div>
+          <div><span>INITIALIZING WORKSPACE</span><strong>Connecting operational evidence</strong><p>Synchronizing deterministic cases, source events, and projection freshness.</p></div>
+        </div>
+      </div>
+      <div className="boot-progress" aria-hidden="true"><i /></div>
+      <div className="boot-telemetry">
+        <div><span>EVENT STREAM</span><strong>LINKING</strong><small>source ledger</small></div>
+        <div><span>CASE PROJECTION</span><strong>SYNCING</strong><small>read model</small></div>
+        <div><span>DECISION EVIDENCE</span><strong>VERIFYING</strong><small>human authority</small></div>
+      </div>
+      <footer><span className="console-live-dot" /> No equipment command path · synthetic portfolio evidence</footer>
+    </section>
   </main>;
 }
 

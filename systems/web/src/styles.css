@@ -190,7 +190,6 @@ textarea { width: 100%; resize: vertical; border: 1px solid #acb8c3; border-radi
   display: grid;
   place-content: center;
   justify-items: center;
-  gap: 22px;
   overflow: hidden;
   color: #eaf8ff;
   background:
@@ -198,22 +197,41 @@ textarea { width: 100%; resize: vertical; border: 1px solid #acb8c3; border-radi
     radial-gradient(circle at 40% 55%, rgba(84, 113, 219, .11), transparent 32%),
     linear-gradient(145deg, #071018 0%, #0b1722 52%, #09131d 100%);
 }
+.boot-panel { width: min(720px, calc(100vw - 36px)); border: 1px solid rgba(120,184,202,.20); border-radius: 24px; padding: 24px 28px 22px; background: linear-gradient(145deg, rgba(18,39,53,.72), rgba(10,23,34,.52)); backdrop-filter: blur(24px) saturate(125%); box-shadow: 0 30px 90px rgba(0,0,0,.26), inset 0 1px rgba(255,255,255,.06); }
+.boot-panel__topline { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid rgba(133,179,196,.12); color: #6e91a5; font-size: 8px; font-weight: 850; letter-spacing: .15em; }
+.boot-panel__topline b { border: 1px solid rgba(111,196,183,.20); border-radius: 999px; padding: 5px 8px; color: #74c8b9; background: rgba(71,159,136,.07); font-size: 7px; }
+.boot-panel__hero { display: grid; grid-template-columns: 148px minmax(0,1fr); gap: 18px; align-items: center; padding: 28px 0 24px; }
 .boot-orb { position: relative; width: 112px; height: 112px; display: grid; place-items: center; }
 .boot-orb::before { content: ""; width: 48px; height: 48px; border-radius: 18px; background: linear-gradient(145deg, rgba(120,236,230,.95), rgba(74,140,211,.6)); box-shadow: 0 0 42px rgba(92,211,220,.28), inset 0 1px rgba(255,255,255,.45); transform: rotate(18deg); }
 .boot-orb span { position: absolute; inset: 8px; border: 1px solid rgba(116,211,220,.18); border-radius: 42%; animation: boot-orbit 2.8s linear infinite; }
 .boot-orb span:nth-child(2) { inset: 18px 2px; border-color: rgba(122,157,226,.16); animation-direction: reverse; animation-duration: 3.6s; }
 .boot-orb span:nth-child(3) { inset: 28px -8px; border-color: rgba(255,255,255,.08); animation-duration: 4.4s; }
-.boot-lockup { display: flex; align-items: center; gap: 13px; min-width: 310px; }
+.boot-lockup { display: flex; align-items: flex-start; gap: 13px; min-width: 0; }
 .boot-logo { width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid rgba(125,222,220,.35); border-radius: 12px; background: rgba(114,211,213,.08); color: #a7f0ec; font-size: 11px; font-weight: 900; letter-spacing: .06em; }
 .boot-lockup > div:last-child { display: grid; gap: 3px; }
 .boot-lockup span { color: #6f91a5; font-size: 8px; font-weight: 850; letter-spacing: .16em; }
-.boot-lockup strong { font-size: 16px; letter-spacing: -.015em; }
-.boot-progress { width: min(310px, 72vw); height: 2px; overflow: hidden; border-radius: 99px; background: rgba(140,174,194,.12); }
+.boot-lockup strong { margin-top: 2px; font-size: 25px; letter-spacing: -.035em; line-height: 1.1; }
+.boot-lockup p { max-width: 440px; margin: 8px 0 0; color: #7d9aab; font-size: 10px; line-height: 1.55; }
+.boot-progress { width: 100%; height: 3px; overflow: hidden; border-radius: 99px; background: rgba(140,174,194,.12); }
 .boot-progress i { display: block; width: 42%; height: 100%; background: linear-gradient(90deg, transparent, #7adbd7, transparent); animation: boot-progress 1.45s ease-in-out infinite; }
-.boot-steps { width: min(310px, 72vw); display: flex; justify-content: space-between; gap: 8px; color: #496577; font-size: 7px; font-weight: 800; letter-spacing: .11em; }
-.boot-steps .is-live { color: #74c8c6; }
+.boot-telemetry { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin-top: 14px; }
+.boot-telemetry > div { display: grid; gap: 3px; min-height: 72px; border: 1px solid rgba(115,157,177,.12); border-radius: 11px; padding: 10px 11px; background: rgba(255,255,255,.025); }
+.boot-telemetry span { color: #5f7d91; font-size: 7px; font-weight: 850; letter-spacing: .11em; }
+.boot-telemetry strong { color: #90d8d4; font-size: 10px; letter-spacing: .08em; }
+.boot-telemetry small { color: #526b7a; font-size: 8px; }
+.boot-panel footer { display: flex; align-items: center; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(133,179,196,.10); color: #5f7c8e; font-size: 8px; }
 @keyframes boot-orbit { to { transform: rotate(360deg); } }
 @keyframes boot-progress { from { transform: translateX(-115%); } to { transform: translateX(260%); } }
+
+@media (max-width: 560px) {
+  .boot-panel { padding: 18px; border-radius: 18px; }
+  .boot-panel__hero { grid-template-columns: 1fr; justify-items: center; padding: 22px 0; }
+  .boot-lockup { width: 100%; }
+  .boot-lockup strong { font-size: 20px; }
+  .boot-telemetry { grid-template-columns: 1fr; }
+  .boot-telemetry > div { min-height: 56px; grid-template-columns: 1fr auto; align-items: center; }
+  .boot-telemetry small { grid-column: 1 / -1; }
+}
 
 .system-health-grid { align-items: start; }
 .health-card { overflow: hidden; }
