@@ -1,0 +1,47 @@
+{
+  "schema_version": "fabops-public-ai-governance-v1",
+  "observed_at": "2026-08-23T14:00:14+09:00",
+  "tested_runtime_sha": "0168cd96fee08a6454e79426c4bf41f527f2f246",
+  "get_decision_brief_regression": {
+    "repeated_requests": 100,
+    "provider_call_delta": 0,
+    "live_generation_delta": 0,
+    "cache_only_read_delta": 100
+  },
+  "session_policy": {
+    "ttl_seconds": 1800,
+    "generations_per_session": 5,
+    "requests_per_ip_hour": 15,
+    "missing_session_http": 401,
+    "bad_session_http": 401,
+    "invalid_intent_http": 422,
+    "session_exhausted_http": 429,
+    "ip_hour_exhausted_http": 429
+  },
+  "provider_policy": {
+    "local_max_concurrency": 2,
+    "local_max_rpm": 20,
+    "local_daily_request_limit": 500,
+    "local_daily_estimated_token_limit": 1000000,
+    "vertex_max_concurrency": 1,
+    "vertex_max_rpm": 6,
+    "vertex_daily_request_limit": 50,
+    "vertex_daily_estimated_token_limit": 120000,
+    "vertex_max_output_tokens": 900,
+    "circuit_breakers": true,
+    "unbounded_queue": false
+  },
+  "request_contract": {
+    "allowed_intents": [
+      "manager_summary",
+      "engineer_checklist",
+      "tradeoff_compare",
+      "counter_evidence"
+    ],
+    "free_form_prompt": false,
+    "browser_provider_selection": false,
+    "browser_model_selection": false,
+    "workflow_authority": false,
+    "equipment_control": false
+  }
+}

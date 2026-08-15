@@ -1,0 +1,33 @@
+{
+  "schema_version": "fabops-provider-routing-v1",
+  "observed_at": "2026-08-23T14:00:14+09:00",
+  "tested_runtime_sha": "0168cd96fee08a6454e79426c4bf41f527f2f246",
+  "routing_order": [
+    "precomputed_or_cache",
+    "local_qwen",
+    "vertex_ai_gemini",
+    "deterministic_fallback"
+  ],
+  "verified_results": {
+    "normal_public_generation": {
+      "provider": "local-qwen",
+      "mode": "llm",
+      "recommendation_preserved": true
+    },
+    "controlled_local_failure": {
+      "provider": "vertex-ai-gemini",
+      "model": "gemini-2.5-flash-lite",
+      "mode": "llm",
+      "latency_ms": 2408.873,
+      "grounding_validation": true,
+      "recommendation_preserved": true
+    },
+    "controlled_all_provider_unavailable": {
+      "provider": "deterministic",
+      "mode": "deterministic_fallback",
+      "latency_ms": 0.103,
+      "recommendation_preserved": true
+    }
+  },
+  "recommendation_invariant": "confirm_evidence"
+}
