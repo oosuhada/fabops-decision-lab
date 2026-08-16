@@ -1403,6 +1403,9 @@ body::before {
 .presentation-evidence-table strong { font-size: 8px; }
 .presentation-evidence-table small { color: #8796a0; font-size: 7px; }
 .presentation-block--unsupported { opacity: .7; }
+.counter-evidence-toggle { min-height: 28px; border: 1px solid #d5af96; border-radius: 7px; padding: 4px 8px; background: #fff8f3; color: #8b563e; font-size: 8px; font-weight: 750; }
+.counter-evidence-toggle[aria-pressed="false"] { border-color: #cad9e0; background: #f8fbfc; color: #667e8b; }
+.counter-evidence-note { margin: 0; border-top: 1px solid #e2e8ec; padding: 8px 12px 10px; color: #7a8d98; font-size: 8px; line-height: 1.45; }
 .console-ledger-head { display: flex; justify-content: space-between; gap: 12px; align-items: end; padding: 14px 15px 10px; }
 .console-ledger-head > div { display: grid; gap: 4px; }
 .console-ledger-head strong { font-size: 12px; }
