@@ -1,4 +1,4 @@
-import type {AdvisoryResponse, CaseDetailResponse, DecisionBriefResponse, DecisionCockpitResponse, DemoSessionResponse, EvaluationResponse, NarrationIntent, NarrationStatusResponse, OverviewResponse, ReplayResponse} from "./types";
+import type {AdvisoryResponse, CaseDetailResponse, CaseReplayTraceResponse, DecisionBriefResponse, DecisionCockpitResponse, DemoSessionResponse, EvaluationResponse, NarrationIntent, NarrationStatusResponse, OverviewResponse, ReplayResponse} from "./types";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
 
@@ -25,6 +25,7 @@ export const api = {
   }),
   overview: () => request<OverviewResponse>("/api/overview"),
   caseDetail: (caseId: string) => request<CaseDetailResponse>(`/api/cases/${caseId}`),
+  caseReplayTrace: (caseId: string) => request<CaseReplayTraceResponse>(`/api/cases/${caseId}/replay-trace`),
   advisory: (caseId: string) => request<AdvisoryResponse>(`/api/cases/${caseId}/advisory`),
   evaluation: () => request<EvaluationResponse>("/api/evaluation"),
   replay: () => request<ReplayResponse>("/api/replay"),

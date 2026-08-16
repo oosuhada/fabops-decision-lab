@@ -218,6 +218,134 @@ def get_case(case_id: str, runtime: Annotated[LocalRuntime, Depends(get_runtime)
         }
 
 
+@app.get("/api/cases/{case_id}/replay-trace")
+def get_case_replay_trace(case_id: str, runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dict[str, Any]:
+    case = runtime.case_repository.get_case(case_id)
+    if case is None:
+        raise HTTPException(status_code=404, detail="case not found")
+
+    lot_id = str(case["lot_id"])
+    source_events = [item for item in runtime.event_repository.all_events() if item.event.get("lot_id") == lot_id]
+    source_by_id = {str(item.event.get("event_id")): item for item in source_events}
+
+    def _phase(event_type: str) -> str:
+        if event_type == "lot.released.v1":
+            return "baseline"
+        if event_type in {"process.started.v1", "process.completed.v1"}:
+            return "process"
+        if event_type == "process.measurement.recorded.v1":
+            return "signal"
+        if event_type == "equipment.alarm.raised.v1":
+            return "anomaly"
+        if event_type == "inspection.completed.v1":
+            return "inspection"
+        if event_type == "data.quality.incident.v1":
+            return "data_quality"
+        return "event"
+
+    timeline: list[dict[str, Any]] = []
+    for stored in source_events:
+        event = stored.event
+        timeline.append(
+            {
+                "timeline_id": f"source:{event['event_id']}",
+                "kind": "source_event",
+                "phase": _phase(str(event["event_type"])),
+                "sequence": stored.sequence,
+                "event_time": event.get("event_time"),
+                "time_semantics": "source_event_time",
+                "event_type": event["event_type"],
+                "event_id": event["event_id"],
+                "delivery_status": stored.delivery_status,
+                "source": "postgresql-event-model" if runtime.runtime_mode != "local" else "local-event-adapter",
+                "payload": dict(event.get("payload", {})),
+            }
+        )
+
+    trigger_times = [
+        source_by_id[event_id].event.get("event_time")
+        for event_id in case.get("evidence_event_ids", [])
+        if event_id in source_by_id
+    ]
+    detection_time = max((value for value in trigger_times if value), default=None)
+    audit_records = [record for record in runtime.case_repository.audit_log() if record.get("case_id") == case_id]
+    for record in audit_records:
+        event_name = str(record.get("event", "workflow.audit"))
+        inferred_time = detection_time if event_name == "case.detected" else None
+        timeline.append(
+            {
+                "timeline_id": f"audit:{record.get('audit_sequence')}",
+                "kind": "audit_event",
+                "phase": "detection" if event_name == "case.detected" else "human_governance",
+                "sequence": int(record.get("audit_sequence", 0)),
+                "event_time": inferred_time,
+                "time_semantics": "trigger_event_time" if inferred_time else "audit_sequence_only",
+                "event_type": event_name,
+                "event_id": None,
+                "delivery_status": None,
+                "source": "decision-audit",
+                "payload": {key: value for key, value in record.items() if key not in {"case_id", "audit_sequence", "event"}},
+            }
+        )
+
+    ranking = runtime.queries.execute(RankRootCausesQuery(case_id))
+    projection_status = ranking["projection"]
+    timeline.append(
+        {
+            "timeline_id": "projection:rca-current",
+            "kind": "projection_snapshot",
+            "phase": "rca",
+            "sequence": projection_status["projection_checkpoint"],
+            "event_time": None,
+            "time_semantics": "current_rebuildable_snapshot",
+            "event_type": "rca.projection.snapshot",
+            "event_id": None,
+            "delivery_status": None,
+            "source": "neo4j-rebuildable-projection",
+            "payload": {
+                "projection_version": projection_status["projection_version"],
+                "projection_checkpoint": projection_status["projection_checkpoint"],
+                "source_checkpoint": projection_status["source_checkpoint"],
+                "stale": projection_status["stale"],
+                "candidate_count": len(ranking["candidates"]),
+                "top_candidate_id": ranking["candidates"][0]["candidate_id"] if ranking["candidates"] else None,
+            },
+        }
+    )
+
+    source_timeline = sorted(
+        (item for item in timeline if item["kind"] == "source_event"),
+        key=lambda item: (str(item["event_time"]), int(item["sequence"])),
+    )
+    audit_timeline = sorted(
+        (item for item in timeline if item["kind"] == "audit_event"),
+        key=lambda item: (item["event_time"] is None, str(item["event_time"] or ""), int(item["sequence"])),
+    )
+    projection_timeline = [item for item in timeline if item["kind"] == "projection_snapshot"]
+    ordered = source_timeline + audit_timeline + projection_timeline
+
+    return {
+        "source": "source-event-and-audit-replay",
+        "case_id": case_id,
+        "lot_id": lot_id,
+        "source_of_truth": "postgresql" if runtime.runtime_mode != "local" else "local adapter shaped as the PostgreSQL event contract",
+        "projection_role": "rebuildable RCA/read projection",
+        "timeline": ordered,
+        "summary": {
+            "source_event_count": len(source_timeline),
+            "audit_event_count": len(audit_timeline),
+            "projection_snapshot_count": len(projection_timeline),
+            "out_of_order_count": sum(item["delivery_status"] == "out_of_order" for item in source_timeline),
+            "late_count": sum(item["delivery_status"] == "late" for item in source_timeline),
+        },
+        "limitations": [
+            "Workflow audit rows without persisted timestamps are ordered by audit_sequence and are not assigned fabricated wall-clock times.",
+            "The RCA entry is the current rebuildable projection snapshot, not a fabricated historical Neo4j event.",
+            "All simulator-originated process evidence is synthetic and is not a real-fab performance claim.",
+        ],
+    }
+
+
 @app.get("/api/cases/{case_id}/advisory")
 def advisory(case_id: str, runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dict[str, Any]:
     with case_telemetry(runtime, case_id):

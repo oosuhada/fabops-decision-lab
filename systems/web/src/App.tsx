@@ -5,7 +5,7 @@ import {AnalysisWorkbench} from "./features/analysis/AnalysisWorkbench";
 import {WorkbenchResizeHandle} from "./platform/workbench/WorkbenchResizeHandle";
 import {useWorkbenchLayout} from "./platform/workbench/useWorkbenchLayout";
 import {DecisionApproval, DecisionCockpit, EvaluationLab, EvidenceGraph, ExcursionCase, OperationsOverview, ReplayOperations, caseById} from "./screens";
-import type {AdvisoryResponse, CaseDetailResponse, DecisionBriefResponse, DecisionCockpitResponse, EvaluationResponse, NarrationIntent, NarrationStatusResponse, OverviewResponse, ReplayResponse, ScreenId} from "./types";
+import type {AdvisoryResponse, CaseDetailResponse, CaseReplayTraceResponse, DecisionBriefResponse, DecisionCockpitResponse, EvaluationResponse, NarrationIntent, NarrationStatusResponse, OverviewResponse, ReplayResponse, ScreenId} from "./types";
 
 const navigation: Array<{id: ScreenId; label: string; short: string; group: "Decide" | "Investigate" | "Trust"}> = [
   {id: "cockpit", label: "Decision Cockpit", short: "01", group: "Decide"},
@@ -64,6 +64,7 @@ export default function App() {
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [evaluation, setEvaluation] = useState<EvaluationResponse | null>(null);
   const [replay, setReplay] = useState<ReplayResponse | null>(null);
+  const [caseReplayTrace, setCaseReplayTrace] = useState<CaseReplayTraceResponse | null>(null);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [detail, setDetail] = useState<CaseDetailResponse | null>(null);
   const [advisory, setAdvisory] = useState<AdvisoryResponse | null>(null);
@@ -98,9 +99,10 @@ export default function App() {
 
   const loadCase = useCallback(async (caseId: string) => {
     try {
-      const [nextDetail, nextAdvisory] = await Promise.all([api.caseDetail(caseId), api.advisory(caseId)]);
+      const [nextDetail, nextAdvisory, nextReplayTrace] = await Promise.all([api.caseDetail(caseId), api.advisory(caseId), api.caseReplayTrace(caseId)]);
       setDetail(nextDetail);
       setAdvisory(nextAdvisory);
+      setCaseReplayTrace(nextReplayTrace);
       setSelectedStep((current) => current && nextDetail.trace.process_path.some((item) => item.step_id === current) ? current : nextDetail.trace.process_path[0]?.step_id ?? null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to load selected case");
@@ -232,7 +234,7 @@ export default function App() {
     onReject={(reason) => mutate(() => api.reject(detail.case.case_id, reason))}
   />;
   else if (screen === "evaluation") workSurface = <EvaluationLab evaluation={evaluation} />;
-  else workSurface = <ReplayOperations replay={replay} />;
+  else workSurface = <ReplayOperations replay={replay} trace={caseReplayTrace} />;
 
   const navGroups = ["Decide", "Investigate", "Trust"] as const;
   const activeNavigation = navigation.find((item) => item.id === screen) ?? navigation[0];

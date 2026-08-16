@@ -310,3 +310,32 @@ export interface ReplayResponse {
   };
 }
 
+export interface CaseReplayTraceResponse {
+  source: string;
+  case_id: string;
+  lot_id: string;
+  source_of_truth: string;
+  projection_role: string;
+  timeline: Array<{
+    timeline_id: string;
+    kind: "source_event" | "audit_event" | "projection_snapshot";
+    phase: string;
+    sequence: number;
+    event_time: string | null;
+    time_semantics: "source_event_time" | "trigger_event_time" | "audit_sequence_only" | "current_rebuildable_snapshot" | string;
+    event_type: string;
+    event_id: string | null;
+    delivery_status: string | null;
+    source: string;
+    payload: Record<string, unknown>;
+  }>;
+  summary: {
+    source_event_count: number;
+    audit_event_count: number;
+    projection_snapshot_count: number;
+    out_of_order_count: number;
+    late_count: number;
+  };
+  limitations: string[];
+}
+

@@ -1,8 +1,8 @@
-import {useMemo, useState} from "react";
+import {useEffect, useMemo, useState} from "react";
 import {ClassificationBadge, MetricStrip, ProjectionBadge, ProvenanceBadge, WorkbenchState} from "./components";
 import {EvidenceGraphExplorer} from "./features/evidence/EvidenceGraphExplorer";
 import {DecisionBoundaryPanel, RcaExplainability} from "./features/explainability/RcaExplainability";
-import type {AdvisoryResponse, CaseDetailResponse, DecisionBriefResponse, DecisionCockpitResponse, DecisionPacket, EvaluationResponse, FabCase, MeasurementPoint, NarrationIntent, NarrationStatusResponse, OverviewResponse, ReplayResponse} from "./types";
+import type {AdvisoryResponse, CaseDetailResponse, CaseReplayTraceResponse, DecisionBriefResponse, DecisionCockpitResponse, DecisionPacket, EvaluationResponse, FabCase, MeasurementPoint, NarrationIntent, NarrationStatusResponse, OverviewResponse, ReplayResponse} from "./types";
 
 function priorityClass(band: string) {
   if (band === "HIGH") return "decision-priority is-high";
@@ -597,15 +597,35 @@ export function EvaluationLab({evaluation}: {evaluation: EvaluationResponse}) {
   </div>;
 }
 
-export function ReplayOperations({replay}: {replay: ReplayResponse}) {
+export function ReplayOperations({replay, trace = null}: {replay: ReplayResponse; trace?: CaseReplayTraceResponse | null}) {
   const integration = replay.integration;
+  const [replayIndex, setReplayIndex] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const replayItem = trace?.timeline[Math.min(replayIndex, Math.max(0, trace.timeline.length - 1))] ?? null;
+  useEffect(() => {
+    setReplayIndex(0);
+    setPlaying(false);
+  }, [trace?.case_id]);
+  useEffect(() => {
+    if (!playing || !trace?.timeline.length) return;
+    const timer = window.setInterval(() => {
+      setReplayIndex((current) => {
+        if (current >= trace.timeline.length - 1) {
+          setPlaying(false);
+          return current;
+        }
+        return current + 1;
+      });
+    }, 700);
+    return () => window.clearInterval(timer);
+  }, [playing, trace?.timeline.length]);
   const integrationState = integration.container_integration_verified
     ? {kind: "ok" as const, title: "Container integration verified", detail: "M6 evidence verifies PostgreSQL, Redpanda and Neo4j runtime integration. This is verification state, not a claim that Docker is currently running."}
     : integration.status === "degraded"
       ? {kind: "degraded" as const, title: "Container integration degraded", detail: integration.reason ?? "One or more configured integration dependencies are unavailable."}
       : {kind: "degraded" as const, title: "Container integration unverified", detail: integration.reason ?? "No successful container-backed verification evidence is available yet."};
   return <div className="screen-stack">
-    <section className="surface-header"><div><span className="eyebrow">Replay & operations</span><h1>Deterministic pipeline state</h1></div><ProjectionBadge projection={replay.projection} /></section>
+    <section className="surface-header"><div><span className="eyebrow">Replay & decision trace</span><h1>Deterministic pipeline state</h1><p>Replay source events, workflow audit order and the current rebuildable RCA snapshot without inventing missing timestamps.</p></div><ProjectionBadge projection={replay.projection} /></section>
     <MetricStrip items={[
       {label: "Event log", value: replay.event_count},
       {label: "Detection checkpoint", value: replay.detection_checkpoint},
@@ -613,6 +633,38 @@ export function ReplayOperations({replay}: {replay: ReplayResponse}) {
       {label: "Outbox", value: replay.outbox_count},
       {label: "Quarantine", value: replay.quarantine_count},
     ]} />
+    {trace ? <section className="panel replay-trace-panel">
+      <header><div><span className="eyebrow">Case replay · {trace.lot_id}</span><h2>Event-backed decision trace</h2></div><div className="replay-trace-authority"><span>{trace.source_of_truth}</span><strong>{trace.projection_role}</strong></div></header>
+      <div className="replay-controls">
+        <button type="button" disabled={replayIndex === 0} onClick={() => setReplayIndex((current) => Math.max(0, current - 1))}>Previous</button>
+        <button type="button" aria-pressed={playing} disabled={!trace.timeline.length} onClick={() => setPlaying((current) => !current)}>{playing ? "Pause" : "Play"}</button>
+        <input aria-label="Replay scrubber" type="range" min="0" max={Math.max(0, trace.timeline.length - 1)} value={Math.min(replayIndex, Math.max(0, trace.timeline.length - 1))} onChange={(event) => {setPlaying(false); setReplayIndex(Number(event.target.value));}} />
+        <span>{trace.timeline.length ? replayIndex + 1 : 0} / {trace.timeline.length}</span>
+        <button type="button" disabled={replayIndex >= trace.timeline.length - 1} onClick={() => setReplayIndex((current) => Math.min(trace.timeline.length - 1, current + 1))}>Next</button>
+      </div>
+      <div className="replay-trace-layout">
+        <ol className="replay-event-strip" aria-label="Case replay event timeline">{trace.timeline.map((item, index) => <li key={item.timeline_id} className={`${index === replayIndex ? "is-current" : ""} replay-event-strip__${item.kind}`}>
+          <button type="button" onClick={() => {setPlaying(false); setReplayIndex(index);}} aria-current={index === replayIndex ? "step" : undefined}>
+            <span>{item.phase.replaceAll("_", " ")}</span><strong>{item.event_type.replaceAll(".v1", "")}</strong><small>{item.event_time ? item.event_time.slice(11, 19) : `#${item.sequence} order`}</small>
+          </button>
+        </li>)}</ol>
+        <article className="replay-event-inspector">
+          {replayItem ? <>
+            <div className="replay-event-inspector__title"><span>{replayItem.kind.replaceAll("_", " ")}</span><h3>{replayItem.event_type}</h3><small>{replayItem.event_time ?? "No persisted wall-clock timestamp"}</small></div>
+            <dl>
+              <div><dt>Phase</dt><dd>{replayItem.phase}</dd></div>
+              <div><dt>Source</dt><dd>{replayItem.source}</dd></div>
+              <div><dt>Time semantics</dt><dd>{replayItem.time_semantics.replaceAll("_", " ")}</dd></div>
+              <div><dt>Delivery</dt><dd>{replayItem.delivery_status ?? "not applicable"}</dd></div>
+              <div><dt>Event ID</dt><dd>{replayItem.event_id ?? "not an authoritative source event"}</dd></div>
+            </dl>
+            <div className="replay-payload"><span>Recorded payload</span><pre>{JSON.stringify(replayItem.payload, null, 2)}</pre></div>
+          </> : <p>No replay item is available for the selected case.</p>}
+        </article>
+      </div>
+      <div className="replay-summary-strip"><div><span>Source events</span><strong>{trace.summary.source_event_count}</strong></div><div><span>Audit events</span><strong>{trace.summary.audit_event_count}</strong></div><div><span>Out-of-order</span><strong>{trace.summary.out_of_order_count}</strong></div><div><span>Late</span><strong>{trace.summary.late_count}</strong></div></div>
+      <footer className="replay-limitations"><strong>Replay semantics</strong><ul>{trace.limitations.map((item) => <li key={item}>{item}</li>)}</ul></footer>
+    </section> : null}
     <section className="panel release-identity-panel">
       <header><div><span className="eyebrow">Release identity</span><h2>Portfolio release {replay.release.release_version}</h2></div></header>
       <dl className="property-list release-identity-list">
