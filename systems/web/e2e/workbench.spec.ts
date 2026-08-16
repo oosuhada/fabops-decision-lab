@@ -17,7 +17,15 @@ test("decision cockpit connects priority, evidence, grounded brief and governed 
   await expect(page).toHaveURL(/\/EvidenceGraph$/);
   await expect(page.getByRole("heading", {name: /lineage/i})).toBeVisible();
   await page.getByRole("button", {name: /ETCH/i}).first().click();
-  await expect(page.getByRole("img", {name: /ETCH normalized measurement series/i})).toBeVisible();
+  await expect(page.getByRole("img", {name: /ETCH selected within case-normalized sensor trajectories/i})).toBeVisible();
+  await expect(page.getByText("Within-case range position", {exact: true})).toBeVisible();
+  const signalLegend = page.locator(".signal-legend");
+  await expect(signalLegend).toContainText("pressure");
+  await expect(signalLegend).toContainText("rf power");
+  await expect(signalLegend).toContainText("temperature");
+  await expect(signalLegend).toContainText("particle count");
+  await expect(page.locator(".signal-series .signal-path")).toHaveCount(4);
+  await expect(page.locator(".range-profile__row")).toHaveCount(4);
 
   await page.getByRole("button", {name: /Decision & Approval/i}).click();
   await expect(page.getByRole("heading", {name: /Should the team/i})).toBeVisible();
