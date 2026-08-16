@@ -78,6 +78,18 @@ describe("FabOps workbench", () => {
     expect(screen.queryByRole("button", {name: /execute equipment/i})).not.toBeInTheDocument();
   });
 
+  it("keeps the synthetic yield label outside the yield ring", async () => {
+    const {container} = render(<App />);
+    await screen.findByRole("heading", {name: "What needs a decision now?"});
+    fireEvent.click(screen.getByRole("button", {name: /Operations Queue/i}));
+    expect(await screen.findByText("Yield health", {exact: true})).toBeInTheDocument();
+    const ring = container.querySelector(".yield-health-ring");
+    const caption = container.querySelector(".yield-health-ring__caption");
+    expect(ring).not.toBeNull();
+    expect(caption).not.toBeNull();
+    expect(ring?.contains(caption)).toBe(false);
+  });
+
   it("starts bounded AI narration only after an explicit intent click", async () => {
     const fetchMock = vi.mocked(fetch);
     render(<App />);

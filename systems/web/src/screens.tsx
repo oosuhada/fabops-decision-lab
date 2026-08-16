@@ -68,12 +68,15 @@ function YieldHealthRing({yieldValue}: {yieldValue: number | null}) {
   const percent = boundedPercent((yieldValue ?? 0) * 100);
   const circumference = 2 * Math.PI * 42;
   const offset = circumference * (1 - percent / 100);
-  return <div className="yield-health-ring" aria-label={yieldValue == null ? "Yield unavailable" : `Yield ${percent.toFixed(1)} percent`}>
-    <svg viewBox="0 0 108 108" role="img">
-      <circle cx="54" cy="54" r="42" className="yield-health-ring__track" />
-      <circle cx="54" cy="54" r="42" className="yield-health-ring__value" strokeDasharray={circumference} strokeDashoffset={offset} />
-    </svg>
-    <div><strong>{yieldValue == null ? "—" : `${percent.toFixed(1)}%`}</strong><span>synthetic yield</span></div>
+  return <div className="yield-health-meter" aria-label={yieldValue == null ? "Yield unavailable" : `Yield ${percent.toFixed(1)} percent`}>
+    <div className="yield-health-ring">
+      <svg viewBox="0 0 108 108" role="img" aria-hidden="true">
+        <circle cx="54" cy="54" r="42" className="yield-health-ring__track" />
+        <circle cx="54" cy="54" r="42" className="yield-health-ring__value" strokeDasharray={circumference} strokeDashoffset={offset} />
+      </svg>
+      <strong>{yieldValue == null ? "—" : `${percent.toFixed(1)}%`}</strong>
+    </div>
+    <span className="yield-health-ring__caption">synthetic yield</span>
   </div>;
 }
 
