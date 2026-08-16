@@ -140,6 +140,16 @@ export interface DecisionPacket {
       candidate_id: string;
       candidate_type: string;
       score: number;
+      score_components: Record<string, number>;
+      score_explanation?: {
+        contract_version: string;
+        formula: string;
+        components: Array<{component_id: string; direction: "support" | "contradict" | "neutral"; raw_value: number; signed_value: number}>;
+        reconstructed_score: number;
+        reported_score: number;
+        faithful: boolean;
+        probability: false;
+      } | null;
       supporting_evidence: Array<Record<string, unknown>>;
       contradicting_evidence: Array<Record<string, unknown>>;
     };
@@ -148,6 +158,21 @@ export interface DecisionPacket {
     data_quality_incidents: string[];
   };
   uncertainties: string[];
+  decision_boundary?: {
+    contract_version: string;
+    confidence_semantics: string;
+    target_option_id: string;
+    all_conditions_met: boolean;
+    conditions: Array<{
+      condition_id: string;
+      label: string;
+      status: "met" | "unmet" | "unknown";
+      current_value: string | number | null;
+      required: string;
+      evidence_refs: string[];
+    }>;
+    policy_statement: string;
+  };
   evidence_refs: string[];
   provenance: Record<string, string | boolean>;
 }

@@ -83,6 +83,33 @@ def test_decision_cockpit_prioritizes_decision_questions_without_equipment_contr
         assert packet["recommended_option_id"] in {option["option_id"] for option in packet["options"]}
         assert packet["provenance"]["equipment_control"] is False
         assert packet["impact"]["basis"].startswith("synthetic")
+        assert packet["decision_boundary"]["confidence_semantics"] == "evidence conditions, not probability"
+
+
+def test_rca_score_explanation_reconstructs_the_actual_deterministic_ranker_score() -> None:
+    runtime = build_local_runtime()
+    packets = [DecisionSupportService(runtime).packet(case["case_id"]) for case in runtime.case_repository.list_cases()]
+    explanations = [packet["evidence"]["top_candidate"]["score_explanation"] for packet in packets if packet["evidence"]["top_candidate"]]
+
+    assert explanations
+    for explanation in explanations:
+        assert explanation["faithful"] is True
+        assert explanation["probability"] is False
+        assert explanation["reconstructed_score"] == explanation["reported_score"]
+        assert any(item["component_id"] == "contradicting_evidence" and item["signed_value"] <= 0 for item in explanation["components"])
+
+
+def test_decision_boundary_changes_recommendation_only_when_all_policy_conditions_are_met() -> None:
+    runtime = build_local_runtime()
+    packets = [DecisionSupportService(runtime).packet(case["case_id"]) for case in runtime.case_repository.list_cases()]
+    eligible = [packet for packet in packets if packet["classification"] == "physical_excursion" and packet["decision_boundary"]["all_conditions_met"]]
+    ineligible = [packet for packet in packets if packet["classification"] == "physical_excursion" and not packet["decision_boundary"]["all_conditions_met"]]
+
+    assert eligible
+    assert ineligible
+    assert all(packet["recommended_option_id"] == "containment_review" for packet in eligible)
+    assert all(packet["recommended_option_id"] == "confirm_evidence" for packet in ineligible)
+    assert all(packet["provenance"]["equipment_control"] is False for packet in eligible)
 
 
 def test_grounded_narration_can_reword_but_cannot_change_recommendation() -> None:
