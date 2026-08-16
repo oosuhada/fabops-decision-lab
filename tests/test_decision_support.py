@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from services.decision import DecisionSupportService
+from services.narration.presentation import PRESENTATION_BLOCK_TYPES, build_presentation_spec, validate_presentation_spec
 from services.narration.demo import DemoSessionPolicy
 from services.narration.governance import ProviderBlockedError, ProviderGovernor, ProviderPolicy
 from services.narration.grounding import allowed_evidence_refs
@@ -84,6 +85,31 @@ def test_decision_cockpit_prioritizes_decision_questions_without_equipment_contr
         assert packet["provenance"]["equipment_control"] is False
         assert packet["impact"]["basis"].startswith("synthetic")
         assert packet["decision_boundary"]["confidence_semantics"] == "evidence conditions, not probability"
+
+
+def test_presentation_spec_is_known_component_only_and_has_zero_execution_capabilities() -> None:
+    runtime = build_local_runtime()
+    packet = DecisionSupportService(runtime).packet(runtime.case_repository.list_cases()[0]["case_id"])
+    brief = NarrationService([]).generate(packet, "engineer", intent="counter_evidence")
+    spec = brief["presentation"]
+    assert spec["schema_version"] == "presentation-spec-v1"
+    assert spec["renderer_contract"] == "known-components-only"
+    assert spec["execution_capabilities"] == []
+    assert {block["type"] for block in spec["blocks"]} <= PRESENTATION_BLOCK_TYPES
+    assert spec["blocks"][0]["type"] == "EvidenceTable"
+
+
+def test_presentation_spec_rejects_executable_fields_and_unknown_blocks() -> None:
+    runtime = build_local_runtime()
+    packet = DecisionSupportService(runtime).packet(runtime.case_repository.list_cases()[0]["case_id"])
+    brief = NarrationService([]).generate(packet, "manager", intent="manager_summary")
+    spec = build_presentation_spec(packet, brief, "manager_summary")
+    spec["blocks"][0]["html"] = "<script>alert(1)</script>"
+    try:
+        validate_presentation_spec(packet, spec)
+        raise AssertionError("executable presentation field was accepted")
+    except ValueError as exc:
+        assert "forbidden executable field" in str(exc)
 
 
 def test_rca_score_explanation_reconstructs_the_actual_deterministic_ranker_score() -> None:

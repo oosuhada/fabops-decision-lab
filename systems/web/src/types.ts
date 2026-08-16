@@ -211,6 +211,24 @@ export interface DecisionBriefResponse {
     limitations: string[];
     generated_at: string;
     intent?: string;
+    presentation?: {
+      schema_version: "presentation-spec-v1";
+      renderer_contract: "known-components-only";
+      case_id: string;
+      intent: string;
+      execution_capabilities: [];
+      blocks: Array<{
+        type: "SummaryCard" | "Checklist" | "ComparisonCard" | "EvidenceTable" | "Timeline" | "RiskMatrix" | "MiniGraph" | "ChartSpec";
+        title: string;
+        body?: string;
+        evidence_refs: string[];
+        recommended_option_id?: string;
+        options?: Array<{option_id: string; label: string; stance: string; tradeoff: string; requires_human_approval: boolean}>;
+        items?: Array<{label: string; detail: string; evidence_refs: string[]}>;
+        candidate_id?: string | null;
+        rows?: Array<{kind: "support" | "contradict"; record_index: number; summary: string}>;
+      }>;
+    };
   };
 }
 
