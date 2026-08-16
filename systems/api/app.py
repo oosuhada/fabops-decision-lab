@@ -420,6 +420,48 @@ def evaluation(runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dict[s
     release_path = Path("evidence/release/evaluation-summary.json")
     if release_path.exists():
         release = json.loads(release_path.read_text(encoding="utf-8"))
+        held_out = list(release.get("seed_results", {}).get("held_out", []))
+        family_names = sorted({family for result in held_out for family in result.get("stratified", {})})
+        fault_family_slices = []
+        for family in family_names:
+            rows = [result["stratified"][family] for result in held_out if family in result.get("stratified", {})]
+            if not rows:
+                continue
+            fault_family_slices.append(
+                {
+                    "family": family,
+                    "seed_count": len(rows),
+                    "mean_case_count": round(sum(float(row.get("case_count", 0)) for row in rows) / len(rows), 5),
+                    "rca_top1": round(sum(float(row.get("rca_top1", 0)) for row in rows) / len(rows), 5),
+                    "agent_ready_rate": round(sum(float(row.get("agent_ready_rate", 0)) for row in rows) / len(rows), 5),
+                }
+            )
+        held_out_seed_metrics = [
+            {
+                "seed": result.get("seed"),
+                "fault_recall": result.get("detector", {}).get("fault_recall"),
+                "false_alarms_per_simulated_day": result.get("detector", {}).get("false_alarms_per_simulated_day"),
+                "rca_top1": result.get("rca", {}).get("top1_accuracy"),
+                "rca_top3": result.get("rca", {}).get("top3_accuracy"),
+                "contradicting_evidence_coverage": result.get("rca", {}).get("contradicting_evidence_coverage"),
+            }
+            for result in held_out
+        ]
+
+        def _seed_range(metric_group: str, metric_name: str) -> dict[str, float] | None:
+            values = [
+                float(result.get(metric_group, {}).get(metric_name))
+                for result in held_out
+                if result.get(metric_group, {}).get(metric_name) is not None
+            ]
+            if not values:
+                return None
+            return {
+                "mean": round(sum(values) / len(values), 5),
+                "minimum": round(min(values), 5),
+                "maximum": round(max(values), 5),
+            }
+
         return {
             "source": "generated-evaluation-evidence",
             "evidence_hash": release["canonical_hash"],
@@ -428,6 +470,26 @@ def evaluation(runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dict[s
             "negative_results": release["negative_results"],
             "release_gate": release["release_gate"],
             "release_passed": release["release_passed"],
+            "validation_console": {
+                "evidence_schema_version": release.get("evidence_schema_version"),
+                "held_out_seed_metrics": held_out_seed_metrics,
+                "seed_ranges": {
+                    "fault_recall": _seed_range("detector", "fault_recall"),
+                    "rca_top1": _seed_range("rca", "top1_accuracy"),
+                    "rca_top3": _seed_range("rca", "top3_accuracy"),
+                    "contradicting_evidence_coverage": _seed_range("rca", "contradicting_evidence_coverage"),
+                },
+                "fault_family_slices": fault_family_slices,
+                "unseen_family_results": release.get("unseen_family_results", []),
+                "common_random_number_comparison": release.get("common_random_number_comparison", {}),
+                "claims_boundary": release.get("claims_boundary", {}),
+                "evidence_gaps": [
+                    "Case-level false-positive/false-negative rows are not persisted in evaluation-summary.json; only aggregate detector metrics are available.",
+                    "A statistical confidence interval is not persisted in this release evidence; seed min/max is shown instead and must not be described as a confidence interval.",
+                    "Public narration provider grounded-response acceptance rate is not part of the historical 0.6 evaluation evidence and is not backfilled here.",
+                    "Deterministic-versus-LLM wording consistency is not part of the historical 0.6 release evidence and requires a separate v0.7 evaluation artifact.",
+                ],
+            },
             "limitations": [
                 "synthetic held-out test profile only",
                 "U1 evaluates safe abstention under an unseen evidence gap; it is not a real-fab fault benchmark",

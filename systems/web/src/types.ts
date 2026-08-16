@@ -252,6 +252,35 @@ export interface EvaluationResponse {
   negative_results?: Array<{id: string; description: string}>;
   release_gate?: Array<{threshold: string; actual: number; operator: string; required: number; passed: boolean}>;
   release_passed?: boolean;
+  validation_console?: {
+    evidence_schema_version?: string;
+    held_out_seed_metrics: Array<{
+      seed: number;
+      fault_recall: number;
+      false_alarms_per_simulated_day: number;
+      rca_top1: number;
+      rca_top3: number;
+      contradicting_evidence_coverage: number;
+    }>;
+    seed_ranges: Record<string, {mean: number; minimum: number; maximum: number} | null>;
+    fault_family_slices: Array<{family: string; seed_count: number; mean_case_count: number; rca_top1: number; agent_ready_rate: number}>;
+    unseen_family_results: Array<{
+      family: string;
+      expected_behavior: string;
+      actual_status: string;
+      appropriate: boolean;
+      claim_count: number;
+      physical_action_proposed: boolean;
+      tool_calls: string[];
+    }>;
+    common_random_number_comparison: {
+      current_detector?: {fault_recall: number; version: string};
+      legacy_detector?: {fault_recall: number; version: string};
+      seeds?: number[];
+    };
+    claims_boundary: Record<string, unknown>;
+    evidence_gaps: string[];
+  };
   limitations: string[];
 }
 

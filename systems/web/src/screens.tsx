@@ -538,21 +538,60 @@ export function EvaluationLab({evaluation}: {evaluation: EvaluationResponse}) {
   const detector = evaluation.metrics.detector;
   const rca = evaluation.metrics.rca;
   const agent = evaluation.metrics.agent ?? {};
+  const console = evaluation.validation_console;
+  const comparison = console?.common_random_number_comparison;
   return <div className="screen-stack">
-    <section className="surface-header"><div><span className="eyebrow">Evaluation lab</span><h1>Checked-in release evidence</h1></div><ProvenanceBadge kind="evaluation" /></section>
+    <section className="surface-header"><div><span className="eyebrow">Evaluation Lab 2.0</span><h1>Checked-in release evidence</h1><p>Inspect held-out slices, seed stability, release gates and known failures without rewriting historical evidence.</p></div><ProvenanceBadge kind="evaluation" /></section>
     <MetricStrip items={[
       {label: "Fault recall", value: `${((detector.fault_recall ?? 0) * 100).toFixed(0)}%`, detail: "synthetic test profile"},
       {label: "False alarms/day", value: detector.false_alarms_per_simulated_day ?? "—"},
       {label: "RCA Top-1", value: `${((rca.top1_accuracy ?? 0) * 100).toFixed(0)}%`, detail: evaluation.versions.projection},
       {label: "Tool selection", value: `${((agent.tool_selection_accuracy ?? 0) * 100).toFixed(0)}%`, detail: evaluation.versions.agent},
-      {label: "Unsupported claims", value: `${((agent.unsupported_claim_rate ?? 0) * 100).toFixed(0)}%`},
+      {label: "Contradict coverage", value: `${((rca.contradicting_evidence_coverage ?? 0) * 100).toFixed(1)}%`, detail: "known negative preserved"},
     ]} />
+    {console ? <>
+      <section className="evaluation-grid">
+        <article className="panel evaluation-slices">
+          <header><div><span className="eyebrow">Fault-family slices</span><h2>Held-out F1–F6 performance</h2></div><small>{console.held_out_seed_metrics.length} held-out seeds</small></header>
+          <div className="evaluation-family-grid">{console.fault_family_slices.map((slice) => <div key={slice.family}>
+            <span>{slice.family}</span><strong>{(slice.rca_top1 * 100).toFixed(0)}%</strong><small>RCA Top-1</small><b>{slice.mean_case_count.toFixed(1)} cases/seed</b><i>agent ready {(slice.agent_ready_rate * 100).toFixed(0)}%</i>
+          </div>)}</div>
+        </article>
+        <article className="panel evaluation-baseline">
+          <header><div><span className="eyebrow">Common-random-number baseline</span><h2>Current vs retained weaker detector</h2></div></header>
+          <div className="baseline-comparison">
+            <div><span>Current</span><strong>{comparison?.current_detector ? `${(comparison.current_detector.fault_recall * 100).toFixed(1)}%` : "—"}</strong><small>{comparison?.current_detector?.version ?? "not recorded"}</small></div>
+            <div className="is-legacy"><span>Legacy baseline</span><strong>{comparison?.legacy_detector ? `${(comparison.legacy_detector.fault_recall * 100).toFixed(1)}%` : "—"}</strong><small>{comparison?.legacy_detector?.version ?? "not recorded"}</small></div>
+          </div>
+          <p>Same held-out random streams: {(comparison?.seeds ?? []).join(" · ") || "not recorded"}. The weaker baseline remains visible by design.</p>
+        </article>
+      </section>
+      <section className="panel evaluation-seeds">
+        <header><div><span className="eyebrow">Seed stability</span><h2>Held-out metric rows</h2></div><small>min/max shown below are seed ranges, not confidence intervals</small></header>
+        <div className="table-scroll"><table><thead><tr><th>Seed</th><th>Fault recall</th><th>False alarms/day</th><th>RCA Top-1</th><th>RCA Top-3</th><th>Contradict coverage</th></tr></thead><tbody>{console.held_out_seed_metrics.map((row) => <tr key={row.seed}><td>{row.seed}</td><td>{(row.fault_recall * 100).toFixed(1)}%</td><td>{row.false_alarms_per_simulated_day.toFixed(2)}</td><td>{(row.rca_top1 * 100).toFixed(1)}%</td><td>{(row.rca_top3 * 100).toFixed(1)}%</td><td className="evaluation-negative-cell">{(row.contradicting_evidence_coverage * 100).toFixed(2)}%</td></tr>)}</tbody></table></div>
+        <div className="seed-range-strip">{Object.entries(console.seed_ranges).map(([key, range]) => range ? <div key={key}><span>{key.replaceAll("_", " ")}</span><strong>{range.mean.toFixed(5)}</strong><small>{range.minimum.toFixed(5)} → {range.maximum.toFixed(5)}</small></div> : null)}</div>
+      </section>
+      <section className="evaluation-grid evaluation-grid--lower">
+        <article className="panel evaluation-gates">
+          <header><div><span className="eyebrow">Release gates</span><h2>{evaluation.release_passed ? "Historical gate passed" : "Historical gate not passed"}</h2></div></header>
+          <div className="evaluation-gate-list">{(evaluation.release_gate ?? []).map((gate) => <div key={gate.threshold} className={gate.passed ? "is-pass" : "is-fail"}><span>{gate.passed ? "PASS" : "FAIL"}</span><strong>{gate.threshold.replaceAll("_", " ")}</strong><small>{gate.actual} {gate.operator} {gate.required}</small></div>)}</div>
+        </article>
+        <article className="panel evaluation-unseen">
+          <header><div><span className="eyebrow">Unseen evidence gap</span><h2>Safe abstention U1</h2></div></header>
+          <div className="evaluation-unseen-list">{console.unseen_family_results.map((item, index) => <div key={`${item.family}-${index}`}><span>{item.family}</span><strong>{item.actual_status.toUpperCase()}</strong><small>{item.appropriate ? "appropriate" : "review"} · {item.claim_count} claims · physical action {item.physical_action_proposed ? "proposed" : "none"}</small></div>)}</div>
+        </article>
+      </section>
+      <section className="panel evaluation-gaps">
+        <header><div><span className="eyebrow">Evidence schema gaps</span><h2>What this release evidence cannot prove</h2></div></header>
+        <ul>{console.evidence_gaps.map((gap) => <li key={gap}>{gap}</li>)}</ul>
+      </section>
+    </> : null}
     <section className="panel">
       <header><div><span className="eyebrow">Version registry</span><h2>Evidence contract</h2></div></header>
       <div className="version-grid">{Object.entries(evaluation.versions).map(([key, value]) => <div key={key}><span>{key}</span><strong>{value}</strong></div>)}</div>
       <h3>Limitations</h3>
       <ul>{evaluation.limitations.map((item) => <li key={item}>{item}</li>)}</ul>
-      {evaluation.negative_results?.length ? <><h3>Negative results</h3><ul>{evaluation.negative_results.map((item) => <li key={item.id}><strong>{item.id}</strong> · {item.description}</li>)}</ul></> : null}
+      {evaluation.negative_results?.length ? <><h3>Negative results — preserved</h3><ul className="negative-result-list">{evaluation.negative_results.map((item) => <li key={item.id}><strong>{item.id}</strong><span>{item.description}</span></li>)}</ul></> : null}
       {evaluation.evidence_hash ? <p className="muted">Evidence hash: <code>{evaluation.evidence_hash}</code></p> : null}
     </section>
   </div>;
