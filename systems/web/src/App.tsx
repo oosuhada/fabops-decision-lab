@@ -218,6 +218,7 @@ export default function App() {
   else if (screen === "decision" && detail) workSurface = <DecisionApproval
     detail={detail}
     packet={selectedPacket}
+    replayTrace={caseReplayTrace}
     advisory={advisory}
     busy={busy}
     feedback={feedback}
