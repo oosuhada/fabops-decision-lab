@@ -218,7 +218,7 @@ export interface DecisionBriefResponse {
       intent: string;
       execution_capabilities: [];
       blocks: Array<{
-        type: "SummaryCard" | "Checklist" | "ComparisonCard" | "EvidenceTable" | "Timeline" | "RiskMatrix" | "MiniGraph" | "ChartSpec";
+        type: "SummaryCard" | "Checklist" | "ComparisonCard" | "EvidenceTable";
         title: string;
         body?: string;
         evidence_refs: string[];
