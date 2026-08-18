@@ -4,12 +4,22 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from services.advisory.provider import DeterministicAdvisoryProvider
 from services.workflow.state_machine import ApprovalTokenIssuer, AuthorizationError, CaseWorkflowService, InvalidTransitionError
-from systems.api.app import app
+from systems.api.app import _cors_origins_from_env, app
 from systems.api.runtime import build_local_runtime
+
+
+def test_cors_origins_keep_safe_defaults_and_allow_explicit_isolated_web_origin(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("FABOPS_CORS_ORIGINS", "http://127.0.0.1:35173")
+    origins = _cors_origins_from_env()
+
+    assert "http://127.0.0.1:5173" in origins
+    assert "http://localhost:5173" in origins
+    assert "http://127.0.0.1:35173" in origins
 
 
 def test_tool_registry_is_capped_at_exact_required_five_tools():
@@ -146,6 +156,33 @@ def test_api_visible_metrics_match_case_and_replay_state():
     assert replay["event_count"] == replay["detection_checkpoint"] == replay["projection"]["projection_checkpoint"]
 
 
+def test_case_replay_trace_is_source_backed_and_never_fabricates_missing_audit_timestamps():
+    runtime = build_local_runtime()
+    app.state.runtime = runtime
+    client = TestClient(app)
+    case = runtime.case_repository.list_cases()[0]
+    response = client.get(f"/api/cases/{case['case_id']}/replay-trace")
+    assert response.status_code == 200
+    body = response.json()
+    source_rows = [item for item in body["timeline"] if item["kind"] == "source_event"]
+    audit_rows = [item for item in body["timeline"] if item["kind"] == "audit_event"]
+    projection_rows = [item for item in body["timeline"] if item["kind"] == "projection_snapshot"]
+    expected_event_ids = {
+        stored.event["event_id"]
+        for stored in runtime.event_repository.all_events()
+        if stored.event.get("lot_id") == case["lot_id"]
+    }
+    assert {item["event_id"] for item in source_rows} == expected_event_ids
+    assert all("ground_truth" not in item["payload"] for item in source_rows)
+    assert projection_rows[0]["source"] == "neo4j-rebuildable-projection"
+    assert body["projection_role"] == "rebuildable RCA/read projection"
+    assert audit_rows
+    assert all(
+        item["event_time"] is not None or item["time_semantics"] == "audit_sequence_only"
+        for item in audit_rows
+    )
+
+
 def test_evaluation_api_reads_checked_in_release_evidence_when_present():
     app.state.runtime = build_local_runtime()
     client = TestClient(app)
@@ -156,6 +193,17 @@ def test_evaluation_api_reads_checked_in_release_evidence_when_present():
         release = json.loads(Path("evidence/release/evaluation-summary.json").read_text(encoding="utf-8"))
         assert body["evidence_hash"] == release["canonical_hash"]
         assert body["metrics"] == release["held_out_metrics"]
+        assert body["negative_results"] == release["negative_results"]
+        console = body["validation_console"]
+        assert [row["family"] for row in console["fault_family_slices"]] == ["F1", "F2", "F3", "F4", "F5", "F6"]
+        assert console["seed_ranges"]["contradicting_evidence_coverage"] == {
+            "mean": 0.42857,
+            "minimum": 0.42857,
+            "maximum": 0.42857,
+        }
+        assert console["common_random_number_comparison"] == release["common_random_number_comparison"]
+        assert all(item["appropriate"] for item in console["unseen_family_results"])
+        assert any("not persisted" in gap for gap in console["evidence_gaps"])
 
 
 def test_rejection_and_request_evidence_transitions_are_explicit():

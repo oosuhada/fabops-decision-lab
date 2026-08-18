@@ -5,6 +5,7 @@ requires-python = ">=3.11"
 dependencies = [
     "confluent-kafka>=2.8.0",
     "fastapi>=0.116.0",
+    "google-auth>=2.40.0",
     "jsonschema>=4.0",
     "neo4j>=5.28.0",
     "psycopg[binary]>=3.2.0",

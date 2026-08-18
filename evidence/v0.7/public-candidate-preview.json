@@ -1,0 +1,29 @@
+{
+  "schema_version": "fabops-public-candidate-preview-v2",
+  "observed_at": "2026-08-23T14:00:14+09:00",
+  "public_url": "https://fabops-preview.oosu.dev",
+  "candidate_label": "0.7 CANDIDATE",
+  "tested_runtime_sha": "0168cd96fee08a6454e79426c4bf41f527f2f246",
+  "authoritative_base": {
+    "release_version": "0.6.0",
+    "release_hash": "ab8b20a696b9b1996495f23a3e413cc33a67b6861efa184c64742e0f310c6326"
+  },
+  "public_verification": {
+    "root_http_status": 200,
+    "preview_mode_header": "read-only-with-bounded-ai",
+    "preview_candidate_header": "v0.7",
+    "desktop_chromium_verified": true,
+    "mobile_390x844_verified": true,
+    "initial_page_load_narration_posts": 0,
+    "audience_switch_narration_posts": 0,
+    "workflow_mutation_blocked": true,
+    "arbitrary_provider_or_model_rejected": true
+  },
+  "claim_boundaries": [
+    "v0.7 remains a candidate and is not an official release.",
+    "Portfolio process evidence is synthetic.",
+    "AI wording cannot change the deterministic recommendation.",
+    "The public demo exposes no equipment or tool control.",
+    "Operational hostnames, private addresses, credentials and deployment paths are intentionally excluded from public evidence."
+  ]
+}

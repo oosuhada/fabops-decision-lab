@@ -1,26 +1,85 @@
 import {useCallback, useEffect, useMemo, useState} from "react";
 import {api} from "./api";
 import {EvidenceInspector, WorkbenchState} from "./components";
-import {DecisionApproval, EvaluationLab, EvidenceGraph, ExcursionCase, OperationsOverview, ReplayOperations, caseById} from "./screens";
-import type {AdvisoryResponse, CaseDetailResponse, EvaluationResponse, OverviewResponse, ReplayResponse, ScreenId} from "./types";
+import {AnalysisWorkbench} from "./features/analysis/AnalysisWorkbench";
+import {CaseComparisonWorkbench} from "./features/comparison/CaseComparisonWorkbench";
+import {ShiftHandoffBrief} from "./features/handoff/ShiftHandoffBrief";
+import {WorkbenchResizeHandle} from "./platform/workbench/WorkbenchResizeHandle";
+import {useWorkbenchLayout} from "./platform/workbench/useWorkbenchLayout";
+import {DecisionApproval, DecisionCockpit, EvaluationLab, EvidenceGraph, ExcursionCase, OperationsOverview, ReplayOperations, caseById} from "./screens";
+import type {AdvisoryResponse, CaseDetailResponse, CaseReplayTraceResponse, DecisionBriefResponse, DecisionCockpitResponse, EvaluationResponse, NarrationIntent, NarrationStatusResponse, OverviewResponse, ReplayResponse, ScreenId} from "./types";
 
-const navigation: Array<{id: ScreenId; label: string; short: string}> = [
-  {id: "overview", label: "Operations Overview", short: "OV"},
-  {id: "case", label: "Excursion Case", short: "EC"},
-  {id: "graph", label: "Evidence Graph", short: "EG"},
-  {id: "decision", label: "Decision & Approval", short: "DA"},
-  {id: "evaluation", label: "Evaluation Lab", short: "EL"},
-  {id: "replay", label: "Replay & Operations", short: "RO"},
+const navigation: Array<{id: ScreenId; label: string; short: string; group: "Decide" | "Investigate" | "Trust"}> = [
+  {id: "cockpit", label: "Decision Cockpit", short: "01", group: "Decide"},
+  {id: "decision", label: "Decision & Approval", short: "02", group: "Decide"},
+  {id: "handoff", label: "Shift Handoff", short: "03", group: "Decide"},
+  {id: "case", label: "Case Investigation", short: "04", group: "Investigate"},
+  {id: "graph", label: "Evidence Graph", short: "05", group: "Investigate"},
+  {id: "analysis", label: "Analysis Workbench", short: "06", group: "Investigate"},
+  {id: "compare", label: "Case Comparison", short: "07", group: "Investigate"},
+  {id: "overview", label: "Operations Queue", short: "08", group: "Investigate"},
+  {id: "evaluation", label: "Model & Evidence", short: "09", group: "Trust"},
+  {id: "replay", label: "System Health", short: "10", group: "Trust"},
 ];
 
+const screenPaths: Record<ScreenId, string> = {
+  cockpit: "/DecisionCockpit",
+  decision: "/DecisionApproval",
+  handoff: "/ShiftHandoff",
+  case: "/CaseInvestigation",
+  graph: "/EvidenceGraph",
+  analysis: "/AnalysisWorkbench",
+  compare: "/CaseComparison",
+  overview: "/OperationsQueue",
+  evaluation: "/ModelEvidence",
+  replay: "/SystemHealth",
+};
+
+function screenFromPath(pathname: string): ScreenId {
+  const normalized = pathname.replace(/\/+$/, "") || "/";
+  const match = (Object.entries(screenPaths) as Array<[ScreenId, string]>).find(([, path]) => path.toLowerCase() === normalized.toLowerCase());
+  return match?.[0] ?? "cockpit";
+}
+
+function InitialBoot() {
+  return <main className="boot-experience" aria-label="Loading FabOps workbench">
+    <section className="boot-panel">
+      <div className="boot-panel__topline"><span>FABOPS / DECISION LAB</span><b>READ-ONLY PREVIEW</b></div>
+      <div className="boot-panel__hero">
+        <div className="boot-orb" aria-hidden="true"><span /><span /><span /></div>
+        <div className="boot-lockup">
+          <div className="boot-logo">FO</div>
+          <div><span>INITIALIZING WORKSPACE</span><strong>Connecting operational evidence</strong><p>Synchronizing deterministic cases, source events, and projection freshness.</p></div>
+        </div>
+      </div>
+      <div className="boot-progress" aria-hidden="true"><i /></div>
+      <div className="boot-telemetry">
+        <div><span>EVENT STREAM</span><strong>LINKING</strong><small>source ledger</small></div>
+        <div><span>CASE PROJECTION</span><strong>SYNCING</strong><small>read model</small></div>
+        <div><span>DECISION EVIDENCE</span><strong>VERIFYING</strong><small>human authority</small></div>
+      </div>
+      <footer><span className="console-live-dot" /> No equipment command path · synthetic portfolio evidence</footer>
+    </section>
+  </main>;
+}
+
 export default function App() {
-  const [screen, setScreen] = useState<ScreenId>("overview");
+  const workbench = useWorkbenchLayout();
+  const [screen, setScreen] = useState<ScreenId>(() => screenFromPath(window.location.pathname));
+  const [cockpit, setCockpit] = useState<DecisionCockpitResponse | null>(null);
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [evaluation, setEvaluation] = useState<EvaluationResponse | null>(null);
   const [replay, setReplay] = useState<ReplayResponse | null>(null);
+  const [caseReplayTrace, setCaseReplayTrace] = useState<CaseReplayTraceResponse | null>(null);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [detail, setDetail] = useState<CaseDetailResponse | null>(null);
   const [advisory, setAdvisory] = useState<AdvisoryResponse | null>(null);
+  const [decisionBrief, setDecisionBrief] = useState<DecisionBriefResponse | null>(null);
+  const [briefAudience, setBriefAudience] = useState<"manager" | "engineer">("manager");
+  const [demoSessionToken, setDemoSessionToken] = useState<string | null>(null);
+  const [narrationBusy, setNarrationBusy] = useState(false);
+  const [narrationFeedback, setNarrationFeedback] = useState<string | null>(null);
+  const [narrationStatus, setNarrationStatus] = useState<NarrationStatusResponse | null>(null);
   const [selectedStep, setSelectedStep] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -31,11 +90,12 @@ export default function App() {
     setLoading(true);
     setError("");
     try {
-      const [nextOverview, nextEvaluation, nextReplay] = await Promise.all([api.overview(), api.evaluation(), api.replay()]);
+      const [nextCockpit, nextOverview, nextEvaluation, nextReplay] = await Promise.all([api.decisionCockpit(), api.overview(), api.evaluation(), api.replay()]);
+      setCockpit(nextCockpit);
       setOverview(nextOverview);
       setEvaluation(nextEvaluation);
       setReplay(nextReplay);
-      setSelectedCaseId((current) => current ?? nextOverview.cases[0]?.case_id ?? null);
+      setSelectedCaseId((current) => current ?? nextCockpit.queue[0]?.case_id ?? nextOverview.cases[0]?.case_id ?? null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to load workbench data");
     } finally {
@@ -45,9 +105,10 @@ export default function App() {
 
   const loadCase = useCallback(async (caseId: string) => {
     try {
-      const [nextDetail, nextAdvisory] = await Promise.all([api.caseDetail(caseId), api.advisory(caseId)]);
+      const [nextDetail, nextAdvisory, nextReplayTrace] = await Promise.all([api.caseDetail(caseId), api.advisory(caseId), api.caseReplayTrace(caseId)]);
       setDetail(nextDetail);
       setAdvisory(nextAdvisory);
+      setCaseReplayTrace(nextReplayTrace);
       setSelectedStep((current) => current && nextDetail.trace.process_path.some((item) => item.step_id === current) ? current : nextDetail.trace.process_path[0]?.step_id ?? null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to load selected case");
@@ -55,14 +116,42 @@ export default function App() {
   }, []);
 
   useEffect(() => { void loadRoot(); }, [loadRoot]);
+  useEffect(() => {
+    if (window.location.pathname === "/" || !Object.values(screenPaths).some((path) => path.toLowerCase() === window.location.pathname.replace(/\/+$/, "").toLowerCase())) {
+      window.history.replaceState({screen}, "", screenPaths[screen]);
+    }
+    const handlePopState = () => setScreen(screenFromPath(window.location.pathname));
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+  useEffect(() => { void api.narrationStatus().then(setNarrationStatus).catch(() => setNarrationStatus(null)); }, []);
   useEffect(() => { if (selectedCaseId) void loadCase(selectedCaseId); }, [loadCase, selectedCaseId]);
+  useEffect(() => {
+    if (!selectedCaseId || screen !== "decision") return;
+    setDecisionBrief(null);
+    void api.decisionBrief(selectedCaseId, briefAudience).then(setDecisionBrief).catch((reason) => {
+      setError(reason instanceof Error ? reason.message : "Unable to load grounded decision brief");
+    });
+  }, [briefAudience, screen, selectedCaseId]);
 
   const selectedCase = useMemo(() => overview ? caseById(overview.cases, selectedCaseId) : null, [overview, selectedCaseId]);
+  const selectedPacket = useMemo(() => cockpit?.queue.find((packet) => packet.case_id === selectedCaseId) ?? cockpit?.queue[0] ?? null, [cockpit, selectedCaseId]);
 
   function selectCase(caseId: string) {
     setSelectedCaseId(caseId);
-    setScreen("case");
+    navigate("case");
     setFeedback(null);
+  }
+
+  function openDecision(caseId: string) {
+    setSelectedCaseId(caseId);
+    navigate("decision");
+    setFeedback(null);
+  }
+
+  function navigate(next: ScreenId) {
+    setScreen(next);
+    if (window.location.pathname !== screenPaths[next]) window.history.pushState({screen: next}, "", screenPaths[next]);
   }
 
   async function mutate(action: () => Promise<unknown>) {
@@ -81,59 +170,139 @@ export default function App() {
     }
   }
 
+  async function generateDemoBrief(intent: NarrationIntent) {
+    if (!selectedCaseId) return;
+    setNarrationBusy(true);
+    setNarrationFeedback(null);
+    try {
+      let token = demoSessionToken;
+      if (!token) {
+        const session = await api.demoSession();
+        token = session.token;
+        setDemoSessionToken(token);
+      }
+      try {
+        const generated = await api.demoNarration(token, selectedCaseId, briefAudience, intent);
+        setDecisionBrief(generated);
+        setNarrationFeedback(`Bounded AI demo · ${generated.brief.provider} · ${generated.brief.mode}`);
+        void api.narrationStatus().then(setNarrationStatus).catch(() => undefined);
+      } catch (reason) {
+        const status = typeof reason === "object" && reason !== null && "status" in reason ? Number((reason as {status: number}).status) : 0;
+        if (status !== 401) throw reason;
+        const session = await api.demoSession();
+        setDemoSessionToken(session.token);
+        const generated = await api.demoNarration(session.token, selectedCaseId, briefAudience, intent);
+        setDecisionBrief(generated);
+        setNarrationFeedback(`Bounded AI demo · ${generated.brief.provider} · ${generated.brief.mode}`);
+        void api.narrationStatus().then(setNarrationStatus).catch(() => undefined);
+      }
+    } catch (reason) {
+      const status = typeof reason === "object" && reason !== null && "status" in reason ? Number((reason as {status: number}).status) : 0;
+      setNarrationFeedback(status === 429 ? "AI demo limit reached. Cached/deterministic wording remains available." : "Live AI demo is unavailable; grounded deterministic wording remains available.");
+    } finally {
+      setNarrationBusy(false);
+    }
+  }
+
   if (loading && !overview) {
-    return <main className="boot-state"><WorkbenchState kind="loading" title="Loading FabOps workbench" detail="Resolving source events, deterministic cases and projection freshness." /></main>;
+    return <InitialBoot />;
   }
   if (error && !overview) {
     return <main className="boot-state"><WorkbenchState kind="error" title="Workbench unavailable" detail={error} action={<button onClick={() => void loadRoot()}>Retry</button>} /></main>;
   }
-  if (!overview || !evaluation || !replay) {
+  if (!cockpit || !overview || !evaluation || !replay) {
     return <main className="boot-state"><WorkbenchState kind="empty" title="No operational evidence" detail="The API returned no source state." /></main>;
   }
 
   let workSurface;
-  if (screen === "overview") workSurface = <OperationsOverview overview={overview} onSelectCase={selectCase} />;
-  else if ((screen === "case" || screen === "graph" || screen === "decision") && !detail) workSurface = <WorkbenchState kind="loading" title="Loading selected case" detail="Fetching source-linked evidence and deterministic RCA." />;
+  if (screen === "cockpit") workSurface = <DecisionCockpit cockpit={cockpit} onOpenCase={selectCase} onOpenDecision={openDecision} />;
+  else if (screen === "overview") workSurface = <OperationsOverview overview={overview} onSelectCase={selectCase} />;
+  else if ((screen === "case" || screen === "graph" || screen === "analysis" || screen === "decision") && !detail) workSurface = <WorkbenchState kind="loading" title="Loading selected case" detail="Fetching source-linked evidence and deterministic RCA." />;
   else if (screen === "case" && detail) workSurface = <ExcursionCase detail={detail} advisory={advisory} />;
   else if (screen === "graph" && detail) workSurface = <EvidenceGraph detail={detail} selectedStep={selectedStep} onSelectStep={setSelectedStep} />;
+  else if (screen === "analysis" && detail) workSurface = <AnalysisWorkbench detail={detail} />;
+  else if (screen === "compare") workSurface = <CaseComparisonWorkbench packets={cockpit.queue} />;
+  else if (screen === "handoff") workSurface = <ShiftHandoffBrief cockpit={cockpit} overview={overview} replay={replay} />;
   else if (screen === "decision" && detail) workSurface = <DecisionApproval
     detail={detail}
+    packet={selectedPacket}
+    replayTrace={caseReplayTrace}
     advisory={advisory}
     busy={busy}
     feedback={feedback}
+    brief={decisionBrief}
+    briefAudience={briefAudience}
+    narrationBusy={narrationBusy}
+    narrationFeedback={narrationFeedback}
+    narrationStatus={narrationStatus}
+    onBriefAudience={setBriefAudience}
+    onGenerateBrief={generateDemoBrief}
     onRequestEvidence={(reason) => mutate(() => api.requestEvidence(detail.case.case_id, reason))}
     onPropose={(target, rationale) => mutate(() => api.propose(detail.case.case_id, target, rationale))}
     onApprove={(reason) => mutate(() => api.approve(detail.case.case_id, reason))}
     onReject={(reason) => mutate(() => api.reject(detail.case.case_id, reason))}
   />;
   else if (screen === "evaluation") workSurface = <EvaluationLab evaluation={evaluation} />;
-  else workSurface = <ReplayOperations replay={replay} />;
+  else workSurface = <ReplayOperations replay={replay} trace={caseReplayTrace} />;
 
-  return <div className="app-shell">
+  const navGroups = ["Decide", "Investigate", "Trust"] as const;
+  const activeNavigation = navigation.find((item) => item.id === screen) ?? navigation[0];
+
+  return <div className="app-shell" style={workbench.shellStyle}>
     <header className="global-header">
-      <div className="brand-mark">FDL</div>
-      <div><strong>FabOps Decision Lab</strong><span>Evidence-Grounded Yield Excursion Triage</span></div>
+      <div className="brand-mark">FO</div>
+      <div className="brand-copy"><strong>FabOps</strong><span>Decision intelligence for yield excursions</span></div>
       <div className="header-status">
-        <span>RELEASE {replay.release.release_version}</span>
-        <span>{replay.release.release_hash === "unreleased" ? "HASH PENDING" : replay.release.release_hash.slice(0, 12)}</span>
-        <span>LLM OFF</span>
-        <span>NO EQUIPMENT CONTROL</span>
+        <span className="status-chip status-chip--candidate">0.7 CANDIDATE</span>
+        <span className="status-chip">BASE {replay.release.release_version}</span>
+        <span className="status-chip">SYNTHETIC</span>
+        <span className="status-chip">READ-ONLY PREVIEW</span>
+        <span className="status-chip status-chip--safe">NO TOOL CONTROL</span>
       </div>
     </header>
-    <aside className="left-rail" aria-label="Primary navigation">
-      <div className="nav-heading"><span>Workbench</span><strong>Engineering decision</strong></div>
-      <nav>{navigation.map((item) => <button key={item.id} className={screen === item.id ? "nav-item is-active" : "nav-item"} aria-current={screen === item.id ? "page" : undefined} onClick={() => setScreen(item.id)}>
-        <span>{item.short}</span><strong>{item.label}</strong>
-      </button>)}</nav>
+    <div className="workspace-context" aria-label="Current workspace context">
+      <div className="workspace-context__route">
+        <span>Decision Lab</span>
+        <i aria-hidden="true">/</i>
+        <span>{activeNavigation.group}</span>
+        <i aria-hidden="true">/</i>
+        <strong>{activeNavigation.label}</strong>
+      </div>
+      <div className="workspace-context__object">
+        <span>Current object</span>
+        <strong>{selectedPacket?.lot_id ?? selectedCase?.lot_id ?? "No case selected"}</strong>
+        {selectedPacket ? <span className={`workspace-context__priority workspace-context__priority--${selectedPacket.priority_band.toLowerCase()}`}>{selectedPacket.priority_band}</span> : null}
+        <span className="workspace-context__layout-controls" aria-label="Workbench pane controls">
+          <button type="button" aria-pressed={workbench.layout.leftOpen} onClick={() => workbench.togglePane("left")}>Navigation</button>
+          <button type="button" aria-pressed={workbench.layout.rightOpen} onClick={() => workbench.togglePane("right")}>Inspector</button>
+        </span>
+      </div>
+    </div>
+    <div className="mobile-status-ribbon" aria-label="Release and provenance status">
+      <span>0.7 candidate</span><span>base {replay.release.release_version}</span><span>synthetic</span><span>read-only</span>
+    </div>
+    <aside className={workbench.layout.leftOpen ? "left-rail" : "left-rail is-collapsed"} aria-label="Primary navigation" aria-hidden={!workbench.layout.leftOpen}>
+      <div className="nav-heading"><span>Decision workspace</span><strong>From exception to governed action</strong></div>
+      <nav>{navGroups.map((group) => <div className="nav-group" key={group}>
+        <span className="nav-group__label"><b>{String(navGroups.indexOf(group) + 1).padStart(2, "0")}</b>{group}</span>
+        {navigation.filter((item) => item.group === group).map((item) => <button key={item.id} className={screen === item.id ? "nav-item is-active" : "nav-item"} aria-current={screen === item.id ? "page" : undefined} onClick={() => navigate(item.id)}>
+          <span>{item.short}</span><strong>{item.label}</strong>
+        </button>)}
+      </div>)}</nav>
       <div className="case-object-list">
-        <span className="section-label">Case objects</span>
-        {overview.cases.slice(0, 7).map((item) => <button key={item.case_id} className={item.case_id === selectedCaseId ? "case-object is-active" : "case-object"} onClick={() => selectCase(item.case_id)}>
-          <span>{item.lot_id}</span><small>{item.classification.replaceAll("_", " ")}</small>
+        <span className="section-label">Open decisions</span>
+        {cockpit.queue.slice(0, 7).map((item) => <button key={item.case_id} className={item.case_id === selectedCaseId ? "case-object is-active" : "case-object"} onClick={() => openDecision(item.case_id)}>
+          <span><b className={`case-priority-dot case-priority-dot--${item.priority_band.toLowerCase()}`} />{item.lot_id}</span>
+          <small>{item.options.find((option) => option.option_id === item.recommended_option_id)?.label ?? item.classification.replaceAll("_", " ")}</small>
         </button>)}
       </div>
     </aside>
+    {workbench.layout.leftOpen ? <WorkbenchResizeHandle side="left" width={workbench.layout.leftWidth} onBegin={workbench.beginResize} onMove={workbench.moveResize} onEnd={workbench.endResize} onKeyboardResize={workbench.keyboardResize} onReset={workbench.resetWidth} /> : null}
     <main id="work-surface" className="work-surface" tabIndex={-1}>{workSurface}</main>
-    <EvidenceInspector selectedCase={detail?.case ?? selectedCase} projection={overview.projection} sourceTimestamp={overview.source_timestamp} selectedStep={selectedStep} />
+    {workbench.layout.rightOpen ? <WorkbenchResizeHandle side="right" width={workbench.layout.rightWidth} onBegin={workbench.beginResize} onMove={workbench.moveResize} onEnd={workbench.endResize} onKeyboardResize={workbench.keyboardResize} onReset={workbench.resetWidth} /> : null}
+    <div className={workbench.layout.rightOpen ? "evidence-inspector-slot" : "evidence-inspector-slot is-collapsed"} aria-hidden={!workbench.layout.rightOpen}>
+      {workbench.layout.rightOpen ? <EvidenceInspector selectedCase={detail?.case ?? selectedCase} selectedPacket={selectedPacket} projection={overview.projection} sourceTimestamp={overview.source_timestamp} selectedStep={selectedStep} /> : null}
+    </div>
   </div>;
 }
 

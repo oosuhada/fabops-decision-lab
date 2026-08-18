@@ -37,7 +37,7 @@ Recommended pattern from the MacBook Air:
 
 ```bash
 git archive --format=tar HEAD -o /tmp/fabops-release.tar
-scp /tmp/fabops-release.tar mac-mini:~/Services/fabops-decision-lab/releases/<git-sha>.tar
+scp /tmp/fabops-release.tar <server-ssh-alias>:<server-release-root>/<git-sha>.tar
 ```
 
 Extract the archive into a release-specific directory and point `current` at that directory. The release manifest remains the canonical application identity; the deployment Git SHA identifies the packaging/deployment commit.
@@ -99,7 +99,7 @@ docker compose --project-name fabops-decision-lab-macmini --env-file infra/macmi
 Then verify API restart survival and the browser contract. For the browser smoke, create an SSH local forward from the MacBook Air and run the remote Playwright configuration:
 
 ```bash
-ssh -N -L 18220:127.0.0.1:8220 mac-mini
+ssh -N -L <local-port>:127.0.0.1:<server-web-port> <server-ssh-alias>
 cd systems/web
 FABOPS_M7_BASE_URL=http://127.0.0.1:18220 npm exec playwright test e2e/workbench.spec.ts -- --config=playwright.m7.config.ts
 ```
