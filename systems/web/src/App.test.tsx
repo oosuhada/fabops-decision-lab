@@ -55,6 +55,9 @@ describe("FabOps workbench", () => {
     expect(screen.getByText("Prepare containment review", {exact: false})).toBeInTheDocument();
     expect(screen.getByText("READ-ONLY PREVIEW")).toBeInTheDocument();
     expect(screen.getAllByText("BASE 0.6.0", {exact: true}).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("NO EQUIPMENT CONTROL").length).toBeGreaterThan(0);
+    expect(screen.getByText("Resolve before acting")).toBeInTheDocument();
+    expect(screen.getAllByText("Evidence sufficiency", {exact: true}).length).toBeGreaterThan(0);
     expect(screen.getByLabelText("Current workspace context")).toHaveTextContent("Decision Lab/Decide/Decision Cockpit");
     expect(screen.getByLabelText("Current workspace context")).toHaveTextContent("LOT-00002");
   });
@@ -69,6 +72,11 @@ describe("FabOps workbench", () => {
     expect(screen.getByText("Case-normalized process trend")).toBeInTheDocument();
     expect(screen.getByText("Within-case range position")).toBeInTheDocument();
     expect(screen.getByText("Relative sensor level by chamber")).toBeInTheDocument();
+    expect(screen.getByText("Spatial die coordinates unavailable in current API")).toBeInTheDocument();
+    expect(screen.getByText("Accessible relationship fallback")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("treeitem", {name: /Measurement temperature/i}));
+    expect(screen.getByLabelText("Evidence inspector")).toHaveTextContent("Observed fact");
+    expect(screen.getByLabelText("Evidence inspector")).toHaveTextContent("evt-1");
     expect(screen.getByRole("button", {name: "All signals"})).toHaveClass("is-active");
     expect(screen.getByRole("button", {name: /ETCH/i})).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(screen.getByRole("button", {name: /Decision & Approval/i}));

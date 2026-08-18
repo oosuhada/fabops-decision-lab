@@ -1,4 +1,5 @@
 import {useMemo, useRef, useState, type PointerEvent, type WheelEvent} from "react";
+import {scalePoint} from "d3";
 import type {CaseDetailResponse} from "../../types";
 import {buildEvidenceGraph, graphNeighbors, type EvidenceGraphNode, type EvidenceGraphNodeType} from "./evidenceGraphModel";
 
@@ -9,22 +10,23 @@ function layoutNodes(nodes: EvidenceGraphNode[]) {
   const grouped = new Map<EvidenceGraphNodeType, EvidenceGraphNode[]>();
   for (const node of nodes) grouped.set(node.type, [...(grouped.get(node.type) ?? []), node]);
   const positions = new Map<string, {x: number; y: number}>();
+  const columnScale = scalePoint<number>().domain([0, 1, 2, 3, 4, 5, 6, 7, 8]).range([110, 1630]);
   for (const [type, items] of grouped) {
     const lane = typeIndex.get(type) ?? 0;
     items.forEach((node, index) => {
       const column = lane < 6 ? lane : lane === 9 || lane === 10 ? 2 + (lane - 9) : 6 + (lane - 6);
       const baseY = lane === 9 || lane === 10 ? 440 : 110;
-      positions.set(node.id, {x: 110 + column * 190, y: baseY + index * 92});
+      positions.set(node.id, {x: columnScale(column) ?? 110, y: baseY + index * 92});
     });
   }
   return positions;
 }
 
 function nodeClass(node: EvidenceGraphNode, selected: boolean) {
-  return ["typed-graph-node", `typed-graph-node--${node.type.toLowerCase()}`, node.emphasis ? `is-${node.emphasis}` : "", selected ? "is-selected" : ""].filter(Boolean).join(" ");
+  return ["typed-graph-node", `typed-graph-node--${node.type.toLowerCase()}`, `is-provenance-${node.provenance}`, node.emphasis ? `is-${node.emphasis}` : "", selected ? "is-selected" : ""].filter(Boolean).join(" ");
 }
 
-export function EvidenceGraphExplorer({detail, onSelectStep}: {detail: CaseDetailResponse; onSelectStep: (step: string) => void}) {
+export function EvidenceGraphExplorer({detail, onSelectStep, onSelectNode}: {detail: CaseDetailResponse; onSelectStep: (step: string) => void; onSelectNode?: (node: EvidenceGraphNode) => void}) {
   const model = useMemo(() => buildEvidenceGraph(detail), [detail]);
   const positions = useMemo(() => layoutNodes(model.nodes), [model.nodes]);
   const [selectedNodeId, setSelectedNodeId] = useState(`case:${detail.case.case_id}`);
@@ -48,6 +50,7 @@ export function EvidenceGraphExplorer({detail, onSelectStep}: {detail: CaseDetai
 
   function selectNode(node: EvidenceGraphNode) {
     setSelectedNodeId(node.id);
+    onSelectNode?.(node);
     const step = node.properties.step_id;
     if (typeof step === "string") onSelectStep(step);
   }
@@ -94,16 +97,22 @@ export function EvidenceGraphExplorer({detail, onSelectStep}: {detail: CaseDetai
       </div>
     </header>
     <div className="typed-graph-type-filter" aria-label="Node type filter">{TYPE_ORDER.map((type) => <button key={type} type="button" aria-pressed={!hiddenTypes.has(type)} onClick={() => toggleType(type)}>{type}</button>)}</div>
+    <div className="typed-graph-layer-legend" aria-label="Evidence graph authority layers">
+      <span><i className="is-source" />Authoritative source record</span>
+      <span><i className="is-projection" />Rebuildable projection</span>
+      <span><i className="is-inference" />Deterministic system inference</span>
+      <span><i className="is-contradict" />Contradicting evidence</span>
+    </div>
     <div className="typed-graph-body">
-      <svg className="typed-graph-canvas" viewBox="0 0 1260 650" role="img" aria-label={`${nodes.length} typed nodes and ${edges.length} visible relationships`} onWheel={wheel} onPointerDown={beginPan} onPointerMove={movePan} onPointerUp={endPan} onPointerCancel={endPan}>
+      <svg className="typed-graph-canvas" viewBox="0 0 1760 650" role="img" aria-label={`${nodes.length} typed nodes and ${edges.length} visible relationships`} onWheel={wheel} onPointerDown={beginPan} onPointerMove={movePan} onPointerUp={endPan} onPointerCancel={endPan}>
         <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
           {edges.map((edge) => {
             const source = positions.get(edge.source);
             const target = positions.get(edge.target);
             if (!source || !target) return null;
-            return <g key={edge.id} className={`typed-graph-edge ${edge.emphasis ? `is-${edge.emphasis}` : ""}`}>
+            return <g key={edge.id} className={`typed-graph-edge typed-graph-edge--${edge.provenance} ${edge.emphasis ? `is-${edge.emphasis}` : ""}`}>
               <line x1={source.x + 60} y1={source.y} x2={target.x - 60} y2={target.y} />
-              <text x={(source.x + target.x) / 2} y={(source.y + target.y) / 2 - 5}>{edge.type}</text>
+              <text x={(source.x + target.x) / 2} y={(source.y + target.y) / 2 - 5}>{edge.type} →</text>
             </g>;
           })}
           {nodes.map((node) => {
@@ -121,12 +130,18 @@ export function EvidenceGraphExplorer({detail, onSelectStep}: {detail: CaseDetai
         {selectedNode ? <>
           <span className="eyebrow">Selected object</span>
           <h3>{selectedNode.label}</h3>
-          <div className="typed-graph-inspector__meta"><span>{selectedNode.type}</span><span>{selectedNode.provenance}</span>{selectedNode.emphasis ? <span>{selectedNode.emphasis}</span> : null}</div>
+          <div className="typed-graph-inspector__meta"><span>{selectedNode.type}</span><span>{selectedNode.provenance === "source" ? "authoritative source record" : selectedNode.provenance === "projection" ? "rebuildable projection" : "deterministic inference"}</span>{selectedNode.emphasis ? <span>{selectedNode.emphasis}</span> : null}</div>
           <dl>{Object.entries(selectedNode.properties).map(([key, value]) => <div key={key}><dt>{key.replaceAll("_", " ")}</dt><dd>{String(value ?? "—")}</dd></div>)}</dl>
-          <p>{model.edges.filter((edge) => edge.source === selectedNode.id || edge.target === selectedNode.id).length} linked relationships in the current projection payload.</p>
+          <div className="typed-graph-linked-edges">{model.edges.filter((edge) => edge.source === selectedNode.id || edge.target === selectedNode.id).map((edge) => <div key={edge.id}><strong>{edge.source === selectedNode.id ? "OUT" : "IN"} · {edge.type}</strong><span>{edge.provenance.replaceAll("-", " ")}</span><code>{edge.sourceIdentity ?? "projection relationship"}</code></div>)}</div>
+          <p>{model.edges.filter((edge) => edge.source === selectedNode.id || edge.target === selectedNode.id).length} linked relationships in the current rebuildable graph payload.</p>
         </> : <p>No graph object selected.</p>}
       </aside>
     </div>
+    <details className="typed-graph-fallback">
+      <summary>Accessible relationship fallback</summary>
+      <p>The same visible graph relationships are available below without pan, zoom, pointer input, or SVG interpretation.</p>
+      <div className="table-scroll"><table><thead><tr><th>From</th><th>Relationship</th><th>To</th><th>Layer</th><th>Source identity</th></tr></thead><tbody>{edges.map((edge) => <tr key={`fallback-${edge.id}`}><td>{model.nodes.find((node) => node.id === edge.source)?.label ?? edge.source}</td><td>{edge.type}</td><td>{model.nodes.find((node) => node.id === edge.target)?.label ?? edge.target}</td><td>{edge.provenance.replaceAll("-", " ")}</td><td>{edge.sourceIdentity ?? "—"}</td></tr>)}</tbody></table></div>
+    </details>
   </section>;
 }
 

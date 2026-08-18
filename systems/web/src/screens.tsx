@@ -2,10 +2,13 @@ import {useEffect, useMemo, useState} from "react";
 import {ClassificationBadge, MetricStrip, ProjectionBadge, ProvenanceBadge, WorkbenchState} from "./components";
 import {EvidenceDiff} from "./features/evidence/EvidenceDiff";
 import {EvidenceGraphExplorer} from "./features/evidence/EvidenceGraphExplorer";
+import type {EvidenceGraphNode} from "./features/evidence/evidenceGraphModel";
 import {DecisionBoundaryPanel, RcaExplainability} from "./features/explainability/RcaExplainability";
+import {AuthorityChain} from "./features/governance/AuthorityChain";
+import {WaferInspectionContext} from "./features/inspection/WaferInspectionContext";
 import {PresentationRenderer} from "./features/narration/PresentationRenderer";
 import {DecisionProvenanceGraph} from "./features/provenance/DecisionProvenanceGraph";
-import type {AdvisoryResponse, CaseDetailResponse, CaseReplayTraceResponse, DecisionBriefResponse, DecisionCockpitResponse, DecisionPacket, EvaluationResponse, FabCase, MeasurementPoint, NarrationIntent, NarrationStatusResponse, OverviewResponse, ReplayResponse} from "./types";
+import type {AdvisoryResponse, CaseDetailResponse, CaseReplayTraceResponse, DecisionBriefResponse, DecisionCockpitResponse, DecisionPacket, EvaluationResponse, FabCase, MeasurementPoint, NarrationIntent, NarrationStatusResponse, OverviewResponse, ProjectionStatus, ReplayResponse} from "./types";
 
 function priorityClass(band: string) {
   if (band === "HIGH") return "decision-priority is-high";
@@ -28,6 +31,13 @@ function evidenceBalance(packet: DecisionPacket) {
   const supportRatio = total ? Math.round((support / total) * 100) : 0;
   const label = contradict > 0 ? "CONTESTED" : support >= 3 ? "SUPPORTED" : support > 0 ? "PARTIAL" : "THIN";
   return {support, contradict, supportRatio, label};
+}
+
+function classificationInterpretation(classification: string) {
+  if (classification === "physical_excursion") return {label: "PHYSICAL PROCESS EXCURSION", detail: "Process evidence supports a physical excursion path; containment still requires human authority."};
+  if (classification === "data_quality_incident") return {label: "DATA QUALITY INCIDENT", detail: "Treat as a data-path problem. Do not infer physical fab impact from this classification."};
+  if (classification === "sensor_bias_suspected") return {label: "SENSOR BIAS SUSPECTED", detail: "Validate sensing / calibration evidence before interpreting the signal as a physical excursion."};
+  return {label: classification.replaceAll("_", " ").toUpperCase(), detail: "Classification is shown exactly as returned by the deterministic case engine."};
 }
 
 function DecisionOptionCards({packet, compact = false}: {packet: DecisionPacket; compact?: boolean}) {
@@ -220,25 +230,39 @@ function SignalKpis({casePoints, stepPoints, sensor, step}: {casePoints: Measure
   </div>;
 }
 
-export function DecisionCockpit({cockpit, onOpenCase, onOpenDecision}: {
+export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, selectedCaseId, onOpenCase, onOpenDecision}: {
   cockpit: DecisionCockpitResponse;
+  detail: CaseDetailResponse | null;
+  projection: ProjectionStatus;
+  sourceTimestamp: string;
+  selectedCaseId: string | null;
   onOpenCase: (caseId: string) => void;
   onOpenDecision: (caseId: string) => void;
 }) {
-  const top = cockpit.queue[0];
+  const top = cockpit.queue.find((packet) => packet.case_id === selectedCaseId) ?? cockpit.queue[0];
   const topEvidence = top ? evidenceBalance(top) : null;
+  const matchingDetail = top && detail?.case.case_id === top.case_id ? detail : null;
+  const classification = top ? classificationInterpretation(top.classification) : null;
+  const unresolved = top ? [
+    ...(projection.stale ? [`Projection stale by ${projection.lag_events} events`] : []),
+    ...top.evidence.data_quality_incidents.map((item) => `Data quality · ${item}`),
+    ...(top.decision_boundary?.conditions.filter((condition) => condition.status !== "met").map((condition) => `${condition.status.toUpperCase()} · ${condition.label}`) ?? []),
+    ...top.uncertainties,
+  ].filter((value, index, values) => values.indexOf(value) === index) : [];
+  const topInspection = matchingDetail?.evidence_series.inspections[0] ?? null;
+  const topProcess = matchingDetail?.trace.process_path[0] ?? null;
   return <div className="screen-stack decision-cockpit">
     <section className="cockpit-hero">
       <div className="cockpit-hero__intro">
-        <span className="eyebrow">Decision cockpit · shift view</span>
+        <span className="eyebrow">Semiconductor forensics · current decision packet</span>
         <h1>What needs a decision now?</h1>
-        <p>FabOps turns excursion signals into a ranked human decision queue: what happened, why it matters, what the evidence says, and which next step is safest.</p>
+        <p>Resolve whether the excursion is physical, data-quality related, or still under-evidenced before a human chooses the next governed diagnostic stance.</p>
       </div>
       <div className="cockpit-hero__status">
-        <div><span>Decision packets</span><strong>{cockpit.summary.decision_count}</strong><small>open inferred cases</small></div>
-        <div><span>High priority</span><strong>{cockpit.summary.high_priority}</strong><small>review first</small></div>
-        <div><span>Verify data</span><strong>{cockpit.summary.data_verification}</strong><small>no fab action</small></div>
-        <div className="cockpit-trust"><span>Decision authority</span><strong>HUMAN</strong><small>LLM wording only</small></div>
+        <div><span>Projection</span><strong>{projection.stale ? "STALE" : "FRESH"}</strong><small>{projection.lag_events} lag events</small></div>
+        <div><span>Evidence provenance</span><strong>SYNTHETIC</strong><small>source-linked portfolio data</small></div>
+        <div><span>Decision authority</span><strong>HUMAN</strong><small>AI wording cannot decide</small></div>
+        <div className="cockpit-trust"><span>Execution boundary</span><strong>NONE</strong><small>NO EQUIPMENT CONTROL</small></div>
       </div>
     </section>
     {top ? <section className="decision-spotlight panel">
@@ -250,8 +274,16 @@ export function DecisionCockpit({cockpit, onOpenCase, onOpenDecision}: {
         </div>
         <span className="eyebrow">Highest-ranked unresolved decision</span>
         <h2>{top.decision_question}</h2>
+        {classification ? <div className={`forensic-classification forensic-classification--${top.classification}`}><span>{classification.label}</span><p>{classification.detail}</p></div> : null}
+        <div className="decision-context-grid" aria-label="Affected semiconductor scope">
+          <div><span>Lot</span><strong>{top.lot_id}</strong><small>current decision object</small></div>
+          <div><span>Wafer</span><strong>{topInspection?.wafer_id ?? "Not exposed"}</strong><small>{topInspection ? "inspection source record" : "current packet has no wafer identifier"}</small></div>
+          <div><span>Step</span><strong>{topProcess?.step_id ?? "Not exposed"}</strong><small>{topProcess?.recipe_id ?? "open case investigation for process path"}</small></div>
+          <div><span>Equipment / chamber</span><strong>{top.evidence.affected_scope.equipment[0] ?? "—"}</strong><small>{top.evidence.affected_scope.chambers.join(", ") || "no affected chamber returned"}</small></div>
+        </div>
+        {topEvidence ? <div className="mobile-evidence-summary" aria-label="Evidence sufficiency summary"><span>Evidence sufficiency</span><strong>{topEvidence.label}</strong><small>{topEvidence.support} supporting · {topEvidence.contradict} contradicting</small></div> : null}
         <div className="recommended-callout">
-          <span>Recommended next stance</span>
+          <span>Deterministic recommended next stance</span>
           <strong>{top.options.find((option) => option.option_id === top.recommended_option_id)?.label}</strong>
           <p>{top.options.find((option) => option.option_id === top.recommended_option_id)?.tradeoff}</p>
         </div>
@@ -260,7 +292,11 @@ export function DecisionCockpit({cockpit, onOpenCase, onOpenDecision}: {
           <div><span>Affected lots</span><strong>{top.impact.affected_lot_count}</strong><small>synthetic lots</small></div>
           <div><span>Yield gap</span><strong>{top.impact.synthetic_yield_gap_percentage_points == null ? "—" : top.impact.synthetic_yield_gap_percentage_points.toFixed(1)}</strong><small>percentage points</small></div>
         </div>
-        <div className="decision-spotlight__actions">
+        <div className="decision-unresolved-strip">
+          <span>Resolve before acting</span>
+          {unresolved.length ? <ul>{unresolved.slice(0, 4).map((item) => <li key={item}>{item}</li>)}</ul> : <strong>No unresolved deterministic boundary conditions are reported.</strong>}
+        </div>
+        <div className="decision-spotlight__actions" aria-label="Human investigation actions">
           <button onClick={() => onOpenCase(top.case_id)}>Investigate evidence</button>
           <button className="primary" onClick={() => onOpenDecision(top.case_id)}>Compare options →</button>
         </div>
@@ -277,12 +313,10 @@ export function DecisionCockpit({cockpit, onOpenCase, onOpenDecision}: {
           <div className="evidence-meter" aria-label={`${topEvidence.support} supporting and ${topEvidence.contradict} contradicting evidence`}><span style={{width: `${Math.max(6, topEvidence.supportRatio)}%`}} /></div>
           <small>{topEvidence.support} supporting · {topEvidence.contradict} contradicting</small>
         </div> : null}
-        <div className="uncertainty-list">
-          <span>Decision uncertainty</span>
-          <ul>{top.uncertainties.slice(0, 2).map((item) => <li key={item}>{item}</li>)}</ul>
-        </div>
+        <div className="forensic-source-stamp"><span>Source / freshness</span><strong>{sourceTimestamp}</strong><small>{projection.stale ? "Projection requires freshness review" : "Projection current at returned checkpoint"}</small></div>
       </aside>
     </section> : null}
+    <AuthorityChain projection={projection} />
     {top ? <section className="panel option-comparison-panel">
       <header><div><span className="eyebrow">Decision design</span><h2>Compare the available stances before acting</h2></div><small>Trade-offs are deterministic; LLM narration cannot add or replace options.</small></header>
       <DecisionOptionCards packet={top} compact />
@@ -448,7 +482,7 @@ export function ExcursionCase({detail, advisory}: {detail: CaseDetailResponse; a
   </div>;
 }
 
-export function EvidenceGraph({detail, selectedStep, onSelectStep}: {detail: CaseDetailResponse; selectedStep: string | null; onSelectStep: (step: string) => void}) {
+export function EvidenceGraph({detail, selectedStep, onSelectStep, onSelectEvidenceNode}: {detail: CaseDetailResponse; selectedStep: string | null; onSelectStep: (step: string) => void; onSelectEvidenceNode: (node: EvidenceGraphNode) => void}) {
   const step = selectedStep ?? detail.trace.process_path[0]?.step_id ?? "LITHO";
   const allMeasurements = detail.evidence_series.measurements;
   const stepOrder = Array.from(new Set(detail.trace.process_path.map((item) => item.step_id)));
@@ -475,7 +509,7 @@ export function EvidenceGraph({detail, selectedStep, onSelectStep}: {detail: Cas
     </section>
     <section className="panel graph-workspace graph-workspace--console">
       <header><div><span className="eyebrow">Process lineage</span><h2>Lot → run → chamber → evidence</h2></div><div className="graph-header-meta"><ProjectionBadge projection={detail.trace.projection} /><small>Select a step to coordinate every lens.</small></div></header>
-      <EvidenceGraphExplorer detail={detail} onSelectStep={onSelectStep} />
+      <EvidenceGraphExplorer detail={detail} onSelectStep={onSelectStep} onSelectNode={onSelectEvidenceNode} />
       <div className="lineage-row" aria-label="Process lineage">{detail.trace.process_path.map((item, index) => <div className="lineage-fragment" key={item.process_run_id}>
         <button className={item.step_id === step ? "lineage-node is-selected" : "lineage-node"} aria-pressed={item.step_id === step} onClick={() => onSelectStep(item.step_id)}>
           <span>{item.step_id}</span><strong>{item.chamber_id ?? "no chamber"}</strong><small>{item.equipment_id ?? "—"}</small>
@@ -487,6 +521,7 @@ export function EvidenceGraph({detail, selectedStep, onSelectStep}: {detail: Cas
         <ChamberHeatmap points={caseSignals} selectedChamber={selectedProcess?.chamber_id ?? null} />
       </div>
       <SignalKpis casePoints={allMeasurements} stepPoints={selectedSignals} sensor={activeSensor} step={step} />
+      <WaferInspectionContext inspections={detail.evidence_series.inspections} />
       <div className="console-ledger-head"><div><span className="eyebrow">Raw evidence ledger</span><strong>Selected signal events</strong></div><small>Values below are source-linked synthetic evidence.</small></div>
       <div className="table-scroll console-table"><table>
         <thead><tr><th>Sensor</th><th>Value</th><th>Chamber</th><th>Event time</th><th>Event</th></tr></thead>
@@ -533,6 +568,7 @@ export function DecisionApproval({detail, packet, replayTrace, advisory, busy, f
       <div className="decision-header__guardrail"><span>Authority boundary</span><strong>HUMAN DECISION</strong><small>No equipment command path</small></div>
     </section>
     {feedback ? <WorkbenchState kind={feedback.kind === "unauthorized" ? "unauthorized" : feedback.kind === "error" ? "error" : "degraded"} title={feedback.kind === "ok" ? "Workflow updated" : "Workflow action not applied"} detail={feedback.message} /> : null}
+    <AuthorityChain projection={detail.rca.projection} />
     {packet ? <section className="panel option-comparison-panel option-comparison-panel--decision">
       <header><div><span className="eyebrow">Option comparison</span><h2>Choose a stance, not an opaque AI answer</h2></div><small>Recommendation is deterministic · approval remains human-controlled</small></header>
       <DecisionOptionCards packet={packet} />

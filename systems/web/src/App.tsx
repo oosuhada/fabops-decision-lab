@@ -3,6 +3,7 @@ import {api} from "./api";
 import {EvidenceInspector, WorkbenchState} from "./components";
 import {AnalysisWorkbench} from "./features/analysis/AnalysisWorkbench";
 import {CaseComparisonWorkbench} from "./features/comparison/CaseComparisonWorkbench";
+import type {EvidenceGraphNode} from "./features/evidence/evidenceGraphModel";
 import {ShiftHandoffBrief} from "./features/handoff/ShiftHandoffBrief";
 import {WorkbenchResizeHandle} from "./platform/workbench/WorkbenchResizeHandle";
 import {useWorkbenchLayout} from "./platform/workbench/useWorkbenchLayout";
@@ -81,6 +82,7 @@ export default function App() {
   const [narrationFeedback, setNarrationFeedback] = useState<string | null>(null);
   const [narrationStatus, setNarrationStatus] = useState<NarrationStatusResponse | null>(null);
   const [selectedStep, setSelectedStep] = useState<string | null>(null);
+  const [selectedEvidenceNode, setSelectedEvidenceNode] = useState<EvidenceGraphNode | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -125,7 +127,10 @@ export default function App() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
   useEffect(() => { void api.narrationStatus().then(setNarrationStatus).catch(() => setNarrationStatus(null)); }, []);
-  useEffect(() => { if (selectedCaseId) void loadCase(selectedCaseId); }, [loadCase, selectedCaseId]);
+  useEffect(() => {
+    setSelectedEvidenceNode(null);
+    if (selectedCaseId) void loadCase(selectedCaseId);
+  }, [loadCase, selectedCaseId]);
   useEffect(() => {
     if (!selectedCaseId || screen !== "decision") return;
     setDecisionBrief(null);
@@ -215,11 +220,11 @@ export default function App() {
   }
 
   let workSurface;
-  if (screen === "cockpit") workSurface = <DecisionCockpit cockpit={cockpit} onOpenCase={selectCase} onOpenDecision={openDecision} />;
+  if (screen === "cockpit") workSurface = <DecisionCockpit cockpit={cockpit} detail={detail} projection={overview.projection} sourceTimestamp={overview.source_timestamp} selectedCaseId={selectedCaseId} onOpenCase={selectCase} onOpenDecision={openDecision} />;
   else if (screen === "overview") workSurface = <OperationsOverview overview={overview} onSelectCase={selectCase} />;
   else if ((screen === "case" || screen === "graph" || screen === "analysis" || screen === "decision") && !detail) workSurface = <WorkbenchState kind="loading" title="Loading selected case" detail="Fetching source-linked evidence and deterministic RCA." />;
   else if (screen === "case" && detail) workSurface = <ExcursionCase detail={detail} advisory={advisory} />;
-  else if (screen === "graph" && detail) workSurface = <EvidenceGraph detail={detail} selectedStep={selectedStep} onSelectStep={setSelectedStep} />;
+  else if (screen === "graph" && detail) workSurface = <EvidenceGraph detail={detail} selectedStep={selectedStep} onSelectStep={setSelectedStep} onSelectEvidenceNode={setSelectedEvidenceNode} />;
   else if (screen === "analysis" && detail) workSurface = <AnalysisWorkbench detail={detail} />;
   else if (screen === "compare") workSurface = <CaseComparisonWorkbench packets={cockpit.queue} />;
   else if (screen === "handoff") workSurface = <ShiftHandoffBrief cockpit={cockpit} overview={overview} replay={replay} />;
@@ -301,7 +306,7 @@ export default function App() {
     <main id="work-surface" className="work-surface" tabIndex={-1}>{workSurface}</main>
     {workbench.layout.rightOpen ? <WorkbenchResizeHandle side="right" width={workbench.layout.rightWidth} onBegin={workbench.beginResize} onMove={workbench.moveResize} onEnd={workbench.endResize} onKeyboardResize={workbench.keyboardResize} onReset={workbench.resetWidth} /> : null}
     <div className={workbench.layout.rightOpen ? "evidence-inspector-slot" : "evidence-inspector-slot is-collapsed"} aria-hidden={!workbench.layout.rightOpen}>
-      {workbench.layout.rightOpen ? <EvidenceInspector selectedCase={detail?.case ?? selectedCase} selectedPacket={selectedPacket} projection={overview.projection} sourceTimestamp={overview.source_timestamp} selectedStep={selectedStep} /> : null}
+      {workbench.layout.rightOpen ? <EvidenceInspector selectedCase={detail?.case ?? selectedCase} selectedPacket={selectedPacket} projection={overview.projection} sourceTimestamp={overview.source_timestamp} selectedStep={selectedStep} selectedEvidenceNode={selectedEvidenceNode} /> : null}
     </div>
   </div>;
 }

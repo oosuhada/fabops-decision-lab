@@ -3,6 +3,8 @@ import {expect, test} from "@playwright/test";
 test("decision cockpit connects priority, evidence, grounded brief and governed approval", async ({page}) => {
   await page.goto("/");
   await expect(page.getByRole("heading", {name: "What needs a decision now?"})).toBeVisible();
+  await expect(page.getByText("NO EQUIPMENT CONTROL").first()).toBeVisible();
+  await expect(page.getByText("Resolve before acting")).toBeVisible();
   await expect(page).toHaveURL(/\/DecisionCockpit$/);
   const header = page.locator(".global-header");
   await expect(header.getByText("0.7 CANDIDATE", {exact: true})).toBeVisible();
@@ -19,6 +21,8 @@ test("decision cockpit connects priority, evidence, grounded brief and governed 
   await page.getByRole("button", {name: /ETCH/i}).first().click();
   await expect(page.getByRole("img", {name: /ETCH selected within case-normalized sensor trajectories/i})).toBeVisible();
   await expect(page.getByText("Within-case range position", {exact: true})).toBeVisible();
+  await expect(page.getByText("Spatial die coordinates unavailable in current API", {exact: true})).toBeVisible();
+  await expect(page.getByText("Accessible relationship fallback", {exact: true})).toBeVisible();
   const signalLegend = page.locator(".signal-legend");
   await expect(signalLegend).toContainText("pressure");
   await expect(signalLegend).toContainText("rf power");
@@ -80,7 +84,7 @@ test("mobile decision cockpit keeps candidate, provenance and read-only identity
   await expect(page.getByRole("button", {name: /Decision & Approval/i})).toBeVisible();
 });
 
-test("Foundry Glass design grammar stays consistent across routes", async ({page}) => {
+test("Semiconductor Forensics design grammar stays consistent across routes", async ({page}) => {
   test.setTimeout(120_000);
   const routes = [
     {path: "/DecisionCockpit", ready: ".decision-cockpit"},

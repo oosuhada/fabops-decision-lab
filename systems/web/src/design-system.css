@@ -1,11 +1,10 @@
 /*
- * FabOps Foundry Glass Design Grammar
- * ------------------------------------
+ * FabOps Semiconductor Forensics Design Grammar
+ * ----------------------------------------------
  * This file is intentionally loaded after the legacy stylesheet and is the
- * canonical visual contract for v0.7+.  The structure borrows the disciplined
- * density of Foundry/Blueprint work surfaces while retaining the FabOps glass
- * identity.  New UI should use these tokens instead of introducing ad-hoc
- * pixel values in styles.css.
+ * canonical visual contract for v0.7+. The grammar treats panels as evidence,
+ * instrument, inspection, and decision surfaces. Transparency is reserved for
+ * semantic overlays such as a selected evidence lens or projection layer.
  */
 
 :root {
@@ -41,10 +40,10 @@
 
   /* Foundry-like neutral hierarchy with FabOps cyan interaction accents. */
   --ds-canvas: #e9eef2;
-  --ds-surface: rgba(255, 255, 255, .82);
+  --ds-surface: #ffffff;
   --ds-surface-solid: #fdfefe;
-  --ds-surface-subtle: rgba(246, 249, 251, .88);
-  --ds-surface-hover: rgba(232, 242, 247, .82);
+  --ds-surface-subtle: #f5f8fa;
+  --ds-surface-hover: #edf4f7;
   --ds-border: rgba(122, 148, 166, .30);
   --ds-border-strong: rgba(101, 132, 152, .48);
   --ds-text: #172b3a;
@@ -52,7 +51,11 @@
   --ds-text-muted: #718695;
   --ds-accent: #1d8299;
   --ds-accent-soft: rgba(71, 190, 201, .12);
-  --ds-shadow-panel: 0 10px 28px rgba(26, 55, 72, .055), inset 0 1px rgba(255,255,255,.82);
+  --ds-shadow-panel: 0 5px 16px rgba(26, 55, 72, .045), inset 0 1px #ffffff;
+  --ds-diffraction-cyan: #238aa1;
+  --ds-diffraction-violet: #6f68b8;
+  --ds-diffraction-amber: #b27a25;
+  --ds-overlay: rgba(238, 247, 250, .82);
 }
 
 html { color: var(--ds-text); background: var(--ds-canvas); }
@@ -79,8 +82,8 @@ button, textarea, input, select { font-size: var(--ds-type-control); }
 .panel {
   border-radius: var(--ds-radius-panel);
   background: var(--ds-surface);
-  backdrop-filter: blur(20px) saturate(125%);
-  -webkit-backdrop-filter: blur(20px) saturate(125%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .panel > header {
@@ -457,4 +460,1077 @@ td { min-height: 40px; padding: 10px var(--ds-space-3); }
 
 @media (prefers-reduced-motion: reduce) {
   .panel, .decision-option, .lineage-node { transition: none !important; transform: none !important; }
+}
+
+/* --------------------------------------------------------------------------
+   Semiconductor Forensics × Governed Decision Instrument
+   -------------------------------------------------------------------------- */
+
+html,
+body {
+  background: #edf1f3;
+}
+
+body::before {
+  opacity: .55;
+  background-image:
+    linear-gradient(rgba(103, 123, 137, .07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(103, 123, 137, .07) 1px, transparent 1px),
+    linear-gradient(rgba(103, 123, 137, .035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(103, 123, 137, .035) 1px, transparent 1px);
+  background-size: 48px 48px, 48px 48px, 12px 12px, 12px 12px;
+  mask-image: none;
+}
+
+.app-shell,
+.work-surface {
+  background: transparent;
+}
+
+.global-header {
+  border-bottom-color: #263542;
+  background: #111b24;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+
+.brand-mark {
+  border-radius: 6px;
+  border-color: #476a78;
+  background: #183745;
+  box-shadow: none;
+}
+
+.header-status .status-chip,
+.left-rail,
+.cockpit-hero,
+.decision-header,
+.signal-console-hero,
+.cockpit-hero__status > div,
+.console-live-status,
+.console-toolbar,
+.glass-visual-card,
+.decision-spotlight,
+.decision-option,
+.recommended-callout,
+.brief-provider-card,
+.brief-live-controls,
+.recommendation-evidence > div,
+.case-hero,
+.case-hero__hypothesis,
+.signal-chart,
+.lineage-node,
+.analysis-workbench {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.left-rail {
+  background: #15222d;
+  border-right-color: #293a47;
+  box-shadow: none;
+}
+
+.left-rail::after {
+  display: none;
+}
+
+.nav-item:hover {
+  transform: none;
+}
+
+.nav-item.is-active {
+  border-color: #466d7b;
+  background: #203642;
+  box-shadow: inset 3px 0 var(--ds-diffraction-cyan);
+}
+
+.surface-header,
+.metric-strip,
+.case-hero,
+.console-toolbar,
+.glass-visual-card,
+.analysis-workbench,
+.case-comparison-hero,
+.case-comparison-card,
+.shift-handoff-hero,
+.shift-handoff-summary {
+  border-color: var(--ds-border);
+  background: var(--ds-surface);
+  box-shadow: var(--ds-shadow-panel);
+}
+
+.panel > header,
+.workspace-context {
+  background: #f7f9fa;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.cockpit-hero,
+.decision-header,
+.signal-console-hero {
+  position: relative;
+  overflow: hidden;
+  color: var(--ds-text);
+  border: 1px solid var(--ds-border-strong);
+  border-radius: var(--ds-radius-panel);
+  background:
+    linear-gradient(90deg, rgba(38, 138, 161, .08), transparent 22%),
+    repeating-linear-gradient(90deg, transparent 0 47px, rgba(96, 118, 133, .045) 47px 48px),
+    #fbfcfd;
+  box-shadow: var(--ds-shadow-panel);
+}
+
+.cockpit-hero::before,
+.decision-header::before,
+.signal-console-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: linear-gradient(var(--ds-diffraction-violet), var(--ds-diffraction-cyan), var(--ds-diffraction-amber));
+}
+
+.cockpit-hero::after,
+.decision-header::after {
+  display: none;
+}
+
+.cockpit-hero {
+  min-height: 136px;
+  padding: 20px 22px;
+  gap: 24px;
+}
+
+.cockpit-hero .eyebrow,
+.signal-console-hero .eyebrow,
+.decision-header .eyebrow {
+  color: #607887;
+}
+
+.cockpit-hero__intro h1,
+.signal-console-hero h1,
+.decision-header h1 {
+  color: #172a38;
+}
+
+.cockpit-hero__intro p,
+.signal-console-hero p,
+.decision-header p {
+  color: #5f7482;
+}
+
+.cockpit-hero__status > div {
+  min-height: 64px;
+  border: 1px solid #d7e0e5;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.cockpit-hero__status span,
+.cockpit-hero__status small {
+  color: #6e818d;
+}
+
+.cockpit-hero__status strong,
+.cockpit-hero__status .cockpit-trust strong {
+  color: #223d4d;
+  font-size: 14px;
+}
+
+.cockpit-hero__status .cockpit-trust {
+  border-left: 3px solid #41806f;
+}
+
+.decision-spotlight {
+  border-radius: var(--ds-radius-panel);
+  background: #ffffff;
+  box-shadow: var(--ds-shadow-panel);
+}
+
+.decision-spotlight__evidence {
+  background: #f6f9fa;
+}
+
+.decision-option,
+.brief-provider-card,
+.recommendation-evidence > div,
+.case-hero__hypothesis,
+.hypothesis-card,
+.evidence-meter-card,
+.signal-chart,
+.lineage-node,
+.glass-visual-card {
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.decision-option:hover,
+.lineage-node:hover {
+  transform: none;
+  box-shadow: inset 0 0 0 1px #b9ccd5;
+}
+
+.decision-option.is-recommended {
+  background: #f1f8f9;
+  box-shadow: inset 0 3px var(--ds-diffraction-cyan);
+}
+
+.forensic-classification {
+  display: grid;
+  gap: 3px;
+  margin: 0 0 var(--ds-space-3);
+  border: 1px solid #d7e0e5;
+  border-left: 4px solid #728b98;
+  padding: 9px 11px;
+  background: #f8fafb;
+}
+
+.forensic-classification span,
+.decision-context-grid span,
+.decision-context-grid small,
+.decision-unresolved-strip > span,
+.decision-unresolved-strip li,
+.decision-unresolved-strip strong,
+.forensic-source-stamp span,
+.forensic-source-stamp small {
+  font-size: var(--ds-type-meta);
+}
+
+.forensic-classification span {
+  font-weight: 850;
+  letter-spacing: .06em;
+}
+
+.forensic-classification p {
+  margin: 0;
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-type-caption);
+  line-height: 1.45;
+}
+
+.forensic-classification--physical_excursion {
+  border-left-color: #a75454;
+}
+
+.forensic-classification--sensor_bias_suspected {
+  border-left-color: var(--ds-diffraction-amber);
+}
+
+.forensic-classification--data_quality_incident {
+  border-left-color: #4e7b9a;
+  background: #f2f7fa;
+}
+
+.decision-context-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin-bottom: var(--ds-space-3);
+  overflow: hidden;
+  border: 1px solid #d9e1e6;
+  background: #d9e1e6;
+}
+
+.decision-context-grid > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  min-height: 68px;
+  align-content: center;
+  padding: 9px 10px;
+  background: #ffffff;
+}
+
+.decision-context-grid span,
+.forensic-source-stamp span {
+  color: #748894;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.decision-context-grid strong {
+  overflow-wrap: anywhere;
+  color: #203b4b;
+  font-size: var(--ds-type-body);
+}
+
+.decision-context-grid small,
+.forensic-source-stamp small {
+  color: #7d8f9a;
+  line-height: 1.4;
+}
+
+.recommended-callout {
+  border-left-color: var(--ds-diffraction-cyan);
+  background: #f2f8fa;
+}
+
+.mobile-evidence-summary {
+  display: none;
+}
+
+.decision-unresolved-strip {
+  display: grid;
+  gap: 6px;
+  margin-top: var(--ds-space-3);
+  border: 1px solid #dec89e;
+  border-left: 4px solid var(--ds-diffraction-amber);
+  padding: 9px 11px;
+  background: #fffaf1;
+}
+
+.decision-unresolved-strip > span {
+  color: #7d652f;
+  font-weight: 850;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.decision-unresolved-strip ul {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding-left: 18px;
+  color: #6d6045;
+}
+
+.decision-unresolved-strip strong {
+  color: #486858;
+}
+
+.forensic-source-stamp {
+  display: grid;
+  gap: 3px;
+  border-top: 1px solid #dce4e8;
+  padding-top: var(--ds-space-3);
+}
+
+.forensic-source-stamp strong {
+  overflow-wrap: anywhere;
+  color: #304c5c;
+  font-size: var(--ds-type-caption);
+}
+
+.authority-chain {
+  overflow: hidden;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-panel);
+  background: #ffffff;
+  box-shadow: var(--ds-shadow-panel);
+}
+
+.authority-chain > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+  padding: 10px 14px;
+  border-bottom: 1px solid #dce4e8;
+  background: #f7f9fa;
+}
+
+.authority-chain > header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.authority-chain > header strong {
+  font-size: var(--ds-type-caption);
+}
+
+.authority-chain > header > b {
+  border: 1px solid #d8bb7d;
+  padding: 4px 7px;
+  color: #725916;
+  background: #fff8e8;
+  font-size: var(--ds-type-meta);
+  letter-spacing: .06em;
+}
+
+.authority-chain ol {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.authority-stage {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 25px minmax(0, 1fr);
+  gap: 7px;
+  padding: 11px 9px;
+  border-right: 1px solid #e0e6ea;
+}
+
+.authority-stage:last-child {
+  border-right: 0;
+}
+
+.authority-stage > span {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1px solid #cbd6dc;
+  color: #657b88;
+  font-size: var(--ds-type-meta);
+  font-weight: 800;
+}
+
+.authority-stage > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.authority-stage strong,
+.authority-stage b,
+.authority-stage small {
+  overflow-wrap: anywhere;
+  font-size: var(--ds-type-meta);
+  line-height: 1.35;
+}
+
+.authority-stage strong {
+  color: #243f4f;
+}
+
+.authority-stage b {
+  color: #607785;
+  font-weight: 700;
+}
+
+.authority-stage small {
+  color: #7c8e99;
+}
+
+.authority-stage--source {
+  border-top: 3px solid #4f8774;
+}
+
+.authority-stage--deterministic,
+.authority-stage--advisory {
+  border-top: 3px solid #4e7f98;
+}
+
+.authority-stage--projection {
+  border-top: 3px solid var(--ds-diffraction-violet);
+}
+
+.authority-stage--wording {
+  border-top: 3px dashed #7f8c94;
+}
+
+.authority-stage--human {
+  border-top: 3px solid var(--ds-diffraction-amber);
+}
+
+.authority-stage--audit {
+  border-top: 3px solid #586874;
+}
+
+.signal-console-hero {
+  min-height: 118px;
+  padding: 18px 20px;
+}
+
+.console-live-status {
+  border-color: #b8d0c6;
+  background: #f1f8f5;
+}
+
+.console-live-status strong,
+.console-live-status small {
+  color: #3d6f60;
+}
+
+.console-toolbar {
+  background: #ffffff;
+  box-shadow: var(--ds-shadow-panel);
+}
+
+.typed-graph-workbench {
+  background: #f7f9fa;
+}
+
+.typed-graph-layer-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 7px 12px;
+  border-bottom: 1px solid #dfe6ea;
+  background: #ffffff;
+}
+
+.typed-graph-layer-legend span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #607582;
+  font-size: var(--ds-type-meta);
+}
+
+.typed-graph-layer-legend i {
+  width: 12px;
+  height: 3px;
+  background: #708c9a;
+}
+
+.typed-graph-layer-legend i.is-source {
+  background: #4b8873;
+}
+
+.typed-graph-layer-legend i.is-projection {
+  background: var(--ds-diffraction-violet);
+}
+
+.typed-graph-layer-legend i.is-inference {
+  background: #4c819a;
+}
+
+.typed-graph-layer-legend i.is-contradict {
+  height: 0;
+  border-top: 3px dashed #bd744e;
+  background: transparent;
+}
+
+.typed-graph-canvas {
+  background:
+    linear-gradient(rgba(102, 124, 138, .06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(102, 124, 138, .06) 1px, transparent 1px),
+    #f8fafb;
+  background-size: 24px 24px;
+}
+
+.typed-graph-node rect {
+  filter: none;
+}
+
+.typed-graph-node.is-provenance-source rect {
+  stroke: #568d79;
+}
+
+.typed-graph-node.is-provenance-projection rect {
+  stroke: #817bb4;
+}
+
+.typed-graph-node.is-provenance-inferred rect {
+  stroke: #4f8197;
+}
+
+.typed-graph-edge--authoritative-source-link line {
+  stroke: #5b8878;
+}
+
+.typed-graph-edge--rebuildable-projection-link line {
+  stroke: #807aaa;
+  stroke-dasharray: 3 3;
+}
+
+.typed-graph-edge--system-inference-link line {
+  stroke: #4c7e93;
+}
+
+.typed-graph-linked-edges {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.typed-graph-linked-edges > div {
+  display: grid;
+  gap: 2px;
+  border-left: 2px solid #9bb0bb;
+  padding: 5px 7px;
+  background: #f7f9fa;
+}
+
+.typed-graph-linked-edges strong,
+.typed-graph-linked-edges span,
+.typed-graph-linked-edges code,
+.typed-graph-fallback summary,
+.typed-graph-fallback p {
+  font-size: var(--ds-type-meta);
+}
+
+.typed-graph-linked-edges strong {
+  color: #3f5968;
+}
+
+.typed-graph-linked-edges span,
+.typed-graph-linked-edges code {
+  color: #748995;
+  overflow-wrap: anywhere;
+}
+
+.typed-graph-fallback {
+  border-top: 1px solid #dbe4e9;
+  background: #ffffff;
+}
+
+.typed-graph-fallback summary {
+  cursor: pointer;
+  padding: 9px 12px;
+  color: #3c5968;
+  font-weight: 800;
+}
+
+.typed-graph-fallback > p {
+  margin: 0;
+  padding: 0 12px 9px;
+  color: #6b7f8c;
+}
+
+.wafer-inspection-context {
+  border-top: 1px solid #d8e1e6;
+  border-bottom: 1px solid #d8e1e6;
+  background: #ffffff;
+}
+
+.wafer-inspection-context > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 14px;
+  border-bottom: 1px solid #e0e6ea;
+  background: #f7f9fa;
+}
+
+.wafer-inspection-context > header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.wafer-inspection-context > header strong {
+  font-size: var(--ds-type-card-title);
+}
+
+.wafer-spatial-gap {
+  border: 1px solid #d5be88;
+  padding: 4px 7px;
+  color: #745e2b;
+  background: #fff9ec;
+  font-size: var(--ds-type-meta);
+  font-weight: 800;
+}
+
+.wafer-inspection-layout {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 14px;
+  padding: 14px;
+}
+
+.wafer-outline {
+  position: relative;
+  min-height: 238px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #d9e2e7;
+  background:
+    linear-gradient(rgba(99, 122, 136, .05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(99, 122, 136, .05) 1px, transparent 1px),
+    #f8fafb;
+  background-size: 20px 20px;
+}
+
+.wafer-outline svg {
+  width: 208px;
+  height: 208px;
+}
+
+.wafer-outline circle,
+.wafer-outline path,
+.wafer-outline line {
+  fill: none;
+  stroke: #9eb0ba;
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.wafer-outline > div {
+  position: absolute;
+  display: grid;
+  gap: 2px;
+  text-align: center;
+}
+
+.wafer-outline strong {
+  color: #253f4e;
+  font-size: 28px;
+}
+
+.wafer-outline span,
+.wafer-outline small {
+  color: #718591;
+  font-size: var(--ds-type-meta);
+}
+
+.wafer-inspection-records {
+  display: grid;
+  gap: 8px;
+}
+
+.wafer-inspection-records article {
+  display: grid;
+  grid-template-columns: minmax(140px, .8fr) minmax(150px, 1fr) minmax(150px, 1fr) minmax(190px, 1.2fr);
+  gap: 12px;
+  align-items: center;
+  border: 1px solid #dbe3e8;
+  padding: 10px 11px;
+  background: #ffffff;
+}
+
+.wafer-inspection-record__identity,
+.wafer-inspection-record__metric {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.wafer-inspection-record__identity span,
+.wafer-inspection-record__identity small,
+.wafer-inspection-record__metric span,
+.wafer-inspection-record dl dt,
+.wafer-inspection-record dl dd,
+.wafer-inspection-empty p,
+.wafer-inspection-context > footer {
+  font-size: var(--ds-type-meta);
+}
+
+.wafer-inspection-record__identity span,
+.wafer-inspection-record__metric span,
+.wafer-inspection-record dl dt {
+  color: #768a96;
+}
+
+.wafer-inspection-record__identity strong {
+  overflow-wrap: anywhere;
+  color: #243f4f;
+  font-size: var(--ds-type-caption);
+}
+
+.wafer-inspection-record__metric > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.wafer-inspection-record__metric strong {
+  font-size: var(--ds-type-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.wafer-quantitative-track {
+  height: 7px;
+  overflow: hidden;
+  border: 1px solid #d5dde2;
+  background: #edf1f3;
+}
+
+.wafer-quantitative-track i {
+  display: block;
+  height: 100%;
+  background: var(--ds-diffraction-cyan);
+}
+
+.wafer-inspection-record__metric--failure .wafer-quantitative-track i {
+  background: var(--ds-diffraction-amber);
+}
+
+.wafer-inspection-record dl {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+}
+
+.wafer-inspection-record dl > div {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  gap: 7px;
+}
+
+.wafer-inspection-record dl dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #405a69;
+}
+
+.wafer-inspection-empty {
+  display: grid;
+  align-content: center;
+  min-height: 150px;
+  border: 1px dashed #cdd8df;
+  padding: 16px;
+  background: #f8fafb;
+}
+
+.wafer-inspection-empty strong {
+  font-size: var(--ds-type-card-title);
+}
+
+.wafer-inspection-empty p {
+  color: #718591;
+}
+
+.wafer-inspection-context > footer {
+  padding: 8px 14px;
+  border-top: 1px solid #e2e7ea;
+  color: #6e818d;
+  background: #f8fafb;
+}
+
+.inspector-classification-instrument {
+  background: var(--ds-overlay);
+}
+
+.inspector-evidence-kind {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #cfdde4;
+  border-left: 3px solid var(--ds-diffraction-violet);
+  padding: 9px 10px;
+  background: rgba(255, 255, 255, .72);
+}
+
+.inspector-evidence-kind span,
+.inspector-evidence-kind p,
+.evidence-classification-key span,
+.evidence-classification-key b {
+  font-size: var(--ds-type-meta);
+}
+
+.inspector-evidence-kind span {
+  color: #667b88;
+  font-weight: 850;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.inspector-evidence-kind strong {
+  color: #233e4e;
+  font-size: var(--ds-type-caption);
+}
+
+.inspector-evidence-kind p {
+  margin: 0;
+  color: #637783;
+  line-height: 1.45;
+}
+
+.evidence-classification-key {
+  display: grid;
+  gap: 5px;
+  margin-top: 9px;
+}
+
+.evidence-classification-key span {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 6px;
+  color: #718591;
+  line-height: 1.35;
+}
+
+.evidence-classification-key b {
+  color: #405d6d;
+}
+
+.boot-experience {
+  color: var(--ds-text);
+  background:
+    linear-gradient(rgba(100, 122, 136, .07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(100, 122, 136, .07) 1px, transparent 1px),
+    #edf1f3;
+  background-size: 32px 32px;
+}
+
+.boot-panel {
+  border: 1px solid var(--ds-border-strong);
+  border-radius: var(--ds-radius-panel);
+  background: #ffffff;
+  backdrop-filter: none;
+  box-shadow: var(--ds-shadow-panel);
+}
+
+.boot-panel__topline,
+.boot-lockup span,
+.boot-lockup p,
+.boot-telemetry span,
+.boot-telemetry small,
+.boot-panel footer {
+  color: #657b88;
+}
+
+.boot-lockup strong,
+.boot-telemetry strong {
+  color: #24404f;
+}
+
+.boot-logo {
+  border-color: #97bac4;
+  background: #eef7f8;
+  color: #246c7d;
+}
+
+.boot-orb::before {
+  border: 1px solid #87aab5;
+  background: #f6fafb;
+  box-shadow: none;
+}
+
+.boot-orb span {
+  border-color: rgba(75, 126, 144, .24);
+}
+
+.boot-progress {
+  background: #e3eaee;
+}
+
+.boot-progress i {
+  background: linear-gradient(90deg, transparent, var(--ds-diffraction-cyan), transparent);
+}
+
+.boot-telemetry > div {
+  border-color: #dbe3e8;
+  background: #f8fafb;
+}
+
+@media (max-width: 1180px) {
+  .authority-chain ol {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .authority-stage {
+    border-bottom: 1px solid #e0e6ea;
+  }
+
+  .decision-context-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .wafer-inspection-layout {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .wafer-inspection-records article {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  body::before {
+    background-size: 30px 30px, 30px 30px, 10px 10px, 10px 10px;
+  }
+
+  .cockpit-hero {
+    padding: 15px 13px;
+    gap: 13px;
+  }
+
+  .cockpit-hero__intro h1 {
+    font-size: 1.55rem;
+  }
+
+  .cockpit-hero__intro p {
+    font-size: var(--ds-type-caption);
+  }
+
+  .cockpit-hero__status {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cockpit-hero__status > div {
+    min-height: 58px;
+    padding: 8px;
+  }
+
+  .decision-context-grid,
+  .authority-chain ol,
+  .wafer-inspection-layout,
+  .wafer-inspection-records article {
+    grid-template-columns: 1fr;
+  }
+
+  .decision-context-grid > div {
+    min-height: 58px;
+  }
+
+  .mobile-evidence-summary {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 2px 8px;
+    margin-bottom: var(--ds-space-3);
+    border: 1px solid #d7e1e6;
+    border-left: 4px solid var(--ds-diffraction-violet);
+    padding: 9px 10px;
+    background: #f6f5fb;
+  }
+
+  .mobile-evidence-summary span,
+  .mobile-evidence-summary small {
+    color: #6f7f8a;
+    font-size: var(--ds-type-meta);
+  }
+
+  .mobile-evidence-summary strong {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+    color: #504c84;
+    font-size: var(--ds-type-caption);
+  }
+
+  .authority-chain > header,
+  .wafer-inspection-context > header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .authority-stage {
+    border-right: 0;
+  }
+
+  .wafer-inspection-layout {
+    padding: 9px;
+  }
+
+  .wafer-outline {
+    min-height: 210px;
+  }
+
+  .wafer-inspection-record dl > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .typed-graph-canvas {
+    min-height: 330px;
+  }
+
+  .evidence-classification-key span {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot-orb span,
+  .boot-progress i,
+  .decision-option,
+  .nav-item,
+  .lineage-node,
+  .typed-graph-node {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
 }

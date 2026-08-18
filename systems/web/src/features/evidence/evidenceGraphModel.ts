@@ -18,6 +18,8 @@ export interface EvidenceGraphEdge {
   target: string;
   type: string;
   emphasis?: "support" | "contradict";
+  provenance: "authoritative-source-link" | "rebuildable-projection-link" | "system-inference-link";
+  sourceIdentity?: string;
 }
 
 export interface EvidenceGraphModel {
@@ -61,25 +63,25 @@ export function buildEvidenceGraph(detail: CaseDetailResponse): EvidenceGraphMod
     properties: {mean_yield: detail.case.mean_yield, evidence_events: detail.case.evidence_event_ids.length},
     provenance: "source",
   });
-  addEdge({id: `${caseNodeId}->${lotNodeId}`, source: caseNodeId, target: lotNodeId, type: "CASE_FOR_LOT"});
+  addEdge({id: `${caseNodeId}->${lotNodeId}`, source: caseNodeId, target: lotNodeId, type: "CASE_FOR_LOT", provenance: "system-inference-link", sourceIdentity: detail.case.case_id});
 
   for (const path of detail.trace.process_path) {
     const runId = `run:${path.process_run_id}`;
     const stepId = `step:${path.process_run_id}:${path.step_id}`;
     addNode({id: runId, type: "ProcessRun", label: path.process_run_id, subtitle: path.recipe_id, properties: {step_id: path.step_id, recipe_id: path.recipe_id}, provenance: "projection"});
     addNode({id: stepId, type: "Step", label: path.step_id, subtitle: path.recipe_id, properties: {step_id: path.step_id, process_run_id: path.process_run_id}, provenance: "projection"});
-    addEdge({id: `${lotNodeId}->${runId}`, source: lotNodeId, target: runId, type: "PROCESSED_BY"});
-    addEdge({id: `${runId}->${stepId}`, source: runId, target: stepId, type: "HAS_STEP"});
+    addEdge({id: `${lotNodeId}->${runId}`, source: lotNodeId, target: runId, type: "PROCESSED_BY", provenance: "rebuildable-projection-link", sourceIdentity: path.process_run_id});
+    addEdge({id: `${runId}->${stepId}`, source: runId, target: stepId, type: "HAS_STEP", provenance: "rebuildable-projection-link", sourceIdentity: path.process_run_id});
 
     if (path.equipment_id) {
       const equipmentId = `equipment:${path.equipment_id}`;
       addNode({id: equipmentId, type: "Equipment", label: path.equipment_id, subtitle: "equipment", properties: {equipment_id: path.equipment_id}, provenance: "projection"});
-      addEdge({id: `${runId}->${equipmentId}`, source: runId, target: equipmentId, type: "USED_EQUIPMENT"});
+      addEdge({id: `${runId}->${equipmentId}`, source: runId, target: equipmentId, type: "USED_EQUIPMENT", provenance: "rebuildable-projection-link", sourceIdentity: path.process_run_id});
     }
     if (path.chamber_id) {
       const chamberId = `chamber:${path.chamber_id}`;
       addNode({id: chamberId, type: "Chamber", label: path.chamber_id, subtitle: "chamber", properties: {chamber_id: path.chamber_id}, provenance: "projection"});
-      addEdge({id: `${runId}->${chamberId}`, source: runId, target: chamberId, type: "USED_CHAMBER"});
+      addEdge({id: `${runId}->${chamberId}`, source: runId, target: chamberId, type: "USED_CHAMBER", provenance: "rebuildable-projection-link", sourceIdentity: path.process_run_id});
     }
   }
 
@@ -102,7 +104,7 @@ export function buildEvidenceGraph(detail: CaseDetailResponse): EvidenceGraphMod
       },
       provenance: "source",
     });
-    if (nodes.has(runId)) addEdge({id: `${runId}->${measurementId}`, source: runId, target: measurementId, type: "HAS_MEASUREMENT"});
+    if (nodes.has(runId)) addEdge({id: `${runId}->${measurementId}`, source: runId, target: measurementId, type: "HAS_MEASUREMENT", provenance: "authoritative-source-link", sourceIdentity: measurement.event_id});
   }
 
   for (const inspection of detail.evidence_series.inspections) {
@@ -117,8 +119,8 @@ export function buildEvidenceGraph(detail: CaseDetailResponse): EvidenceGraphMod
       properties: {inspection_id: inspection.inspection_id, yield: inspection.yield, failed_die_ratio: inspection.failed_die_ratio, event_time: inspection.event_time, pattern_provenance: inspection.pattern_provenance},
       provenance: "source",
     });
-    addEdge({id: `${lotNodeId}->${waferId}`, source: lotNodeId, target: waferId, type: "CONTAINS_WAFER"});
-    addEdge({id: `${waferId}->${inspectionId}`, source: waferId, target: inspectionId, type: "HAS_INSPECTION"});
+    addEdge({id: `${lotNodeId}->${waferId}`, source: lotNodeId, target: waferId, type: "CONTAINS_WAFER", provenance: "authoritative-source-link", sourceIdentity: inspection.inspection_id});
+    addEdge({id: `${waferId}->${inspectionId}`, source: waferId, target: inspectionId, type: "HAS_INSPECTION", provenance: "authoritative-source-link", sourceIdentity: inspection.inspection_id});
   }
 
   detail.rca.candidates.forEach((candidate, candidateIndex) => {
@@ -129,10 +131,10 @@ export function buildEvidenceGraph(detail: CaseDetailResponse): EvidenceGraphMod
       label: candidate.candidate_id,
       subtitle: `score ${candidate.score.toFixed(2)} · ${candidate.candidate_type}`,
       properties: {score: candidate.score, candidate_type: candidate.candidate_type, recommended_action: candidate.recommended_action},
-      provenance: "projection",
+      provenance: "inferred",
       emphasis: candidateIndex === 0 ? "top-rca" : undefined,
     });
-    addEdge({id: `${caseNodeId}->${candidateId}`, source: caseNodeId, target: candidateId, type: "HAS_RCA_CANDIDATE"});
+    addEdge({id: `${caseNodeId}->${candidateId}`, source: caseNodeId, target: candidateId, type: "HAS_RCA_CANDIDATE", provenance: "system-inference-link", sourceIdentity: candidate.candidate_id});
 
     const records: Array<{kind: "support" | "contradict"; item: Record<string, unknown>}> = [
       ...candidate.supporting_evidence.map((item) => ({kind: "support" as const, item})),
@@ -150,9 +152,9 @@ export function buildEvidenceGraph(detail: CaseDetailResponse): EvidenceGraphMod
         provenance: "projection",
         emphasis: kind,
       });
-      addEdge({id: `${recordId}->${candidateId}`, source: recordId, target: candidateId, type: kind === "support" ? "SUPPORTS" : "CONTRADICTS", emphasis: kind});
+      addEdge({id: `${recordId}->${candidateId}`, source: recordId, target: candidateId, type: kind === "support" ? "SUPPORTS" : "CONTRADICTS", emphasis: kind, provenance: "system-inference-link", sourceIdentity: candidate.candidate_id});
       const eventId = typeof item.event_id === "string" ? `measurement:${item.event_id}` : null;
-      if (eventId && nodes.has(eventId)) addEdge({id: `${recordId}->${eventId}`, source: recordId, target: eventId, type: "DERIVED_FROM"});
+      if (eventId && nodes.has(eventId)) addEdge({id: `${recordId}->${eventId}`, source: recordId, target: eventId, type: "DERIVED_FROM", provenance: "authoritative-source-link", sourceIdentity: String(item.event_id)});
     });
   });
 

@@ -7,6 +7,10 @@ FabOps Decision Lab is a portfolio-scale engineering decision platform for yield
 > **Live Demo — GOVERNED PUBLIC CANDIDATE:** https://fabops-preview.oosu.dev  
 > The public UI is a **v0.7 candidate** running beside the still-authoritative `0.6.0` M8 soak target. Portfolio data is synthetic. GET/HEAD decision data is cache-only/deterministic and workflow mutation remains blocked at ingress. Live AI wording is available only through predefined bounded demo intents with signed anonymous sessions, application/edge rate limits, provider concurrency and daily budgets. AI wording cannot change the deterministic recommendation, and the demo exposes **NO TOOL CONTROL** or equipment execution. v0.7 is not an official release yet.
 
+![FabOps Semiconductor Forensics decision cockpit](docs/assets/semiconductor-forensics/decision-cockpit-1440.png)
+
+The current workbench uses a **Semiconductor Forensics × Governed Decision Instrument** visual system: source-backed scope, counter-evidence, projection freshness, deterministic recommendation and human authority are prioritized ahead of decorative telemetry. Spatial die coordinates are not fabricated when the API does not provide them.
+
 <!-- RELEASE_IDENTITY_START -->
 > Release `0.6.0` · canonical release hash `ab8b20a696b9b1996495f23a3e413cc33a67b6861efa184c64742e0f310c6326` · source commit `6824ca11198a`
 > Generated from `evidence/release/release-manifest.json`; this block is updated by `python -m evaluation.release_manifest`.
@@ -73,9 +77,11 @@ The advisory agent cannot own anomaly score, authorization, case state or equipm
 | M5 Evaluation & Release Gates | PASSED |
 | M6 Reliability & Portfolio Release | PASSED |
 | M7 Mac mini Deployment | PASSED |
-| M8 Burn-in & Recovery Proof | IN PROGRESS |
+| M8 Burn-in & Recovery Proof | UNVERIFIED / GAP |
 
 The detailed execution ledger is in `ROADMAP.md`.
+
+M8 collected more than 24 hours of healthy API/Web availability with zero observed service restarts, zero projection lag and zero broker lag. One collector-only `TimeoutExpired` sample lacked Docker/container metadata while API and Web remained healthy and the immediately adjacent samples recovered normally. Because the pre-existing M8 runbook did not define a tolerance rule for that condition, the deterministic final audit records `UNVERIFIED / GAP` instead of inventing a PASS criterion. See `evidence/m8/final-audit-20260823T233943+0900.json`.
 
 ## Quick start / 빠른 시작
 

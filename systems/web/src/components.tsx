@@ -1,5 +1,7 @@
-import type {ReactNode} from "react";
+import {useEffect, useRef, type ReactNode} from "react";
+import {animate} from "motion/mini";
 import type {DecisionPacket, FabCase, ProjectionStatus} from "./types";
+import type {EvidenceGraphNode} from "./features/evidence/evidenceGraphModel";
 
 export function ProvenanceBadge({kind}: {kind: "synthetic" | "inferred" | "real-public" | "evaluation"}) {
   const label = kind === "real-public" ? "REAL PUBLIC" : kind.toUpperCase();
@@ -42,22 +44,42 @@ export function ClassificationBadge({value}: {value: string}) {
 
 function packetEvidenceBalance(packet: DecisionPacket | null) {
   const candidate = packet?.evidence.top_candidate;
-  if (!candidate) return {support: 0, contradict: 0, confidence: "UNRANKED"};
+  if (!candidate) return {support: 0, contradict: 0, sufficiency: "UNRANKED"};
   const support = candidate.supporting_evidence.length;
   const contradict = candidate.contradicting_evidence.length;
-  const confidence = contradict > 0 ? "CONTESTED" : support >= 3 ? "SUPPORTED" : support > 0 ? "PARTIAL" : "THIN";
-  return {support, contradict, confidence};
+  const sufficiency = contradict > 0 ? "CONTESTED" : support >= 3 ? "SUPPORTED" : support > 0 ? "PARTIAL" : "THIN";
+  return {support, contradict, sufficiency};
 }
 
-export function EvidenceInspector({selectedCase, selectedPacket, projection, sourceTimestamp, selectedStep}: {
+function selectedEvidenceClassification(node: EvidenceGraphNode | null) {
+  if (!node) return {kind: "Missing evidence", detail: "No graph evidence object is selected. Select a source, projection, or inference object to inspect its classification."};
+  if (node.type === "Case") return {kind: "Deterministic detection", detail: "Case state produced by deterministic detection logic; it is not a raw measurement."};
+  if (node.provenance === "source") return {kind: "Observed fact", detail: "Source-linked operational evidence from the authoritative event contract."};
+  if (node.provenance === "projection") return {kind: "Graph projection", detail: "Current rebuildable RCA/read projection; PostgreSQL/event truth remains authoritative."};
+  return {kind: "System inference", detail: "Deterministic RCA/system inference. Score is a ranking value, not a confidence probability."};
+}
+
+export function EvidenceInspector({selectedCase, selectedPacket, projection, sourceTimestamp, selectedStep, selectedEvidenceNode = null}: {
   selectedCase: FabCase | null;
   selectedPacket: DecisionPacket | null;
   projection: ProjectionStatus | null;
   sourceTimestamp: string | null;
   selectedStep: string | null;
+  selectedEvidenceNode?: EvidenceGraphNode | null;
 }) {
+  const classificationRef = useRef<HTMLElement>(null);
   const evidenceBalance = packetEvidenceBalance(selectedPacket);
   const recommended = selectedPacket?.options.find((option) => option.option_id === selectedPacket.recommended_option_id);
+  const evidenceClassification = selectedEvidenceClassification(selectedEvidenceNode);
+  const selectedTimestamp = selectedEvidenceNode && typeof selectedEvidenceNode.properties.event_time === "string" ? selectedEvidenceNode.properties.event_time : null;
+  const selectedSourceIdentity = selectedEvidenceNode ? selectedEvidenceNode.properties.event_id ?? selectedEvidenceNode.properties.inspection_id ?? selectedEvidenceNode.properties.process_run_id ?? selectedEvidenceNode.id : null;
+  useEffect(() => {
+    const element = classificationRef.current;
+    const reducedMotion = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!element || reducedMotion || typeof element.animate !== "function") return;
+    const controls = animate(element, {opacity: [0.72, 1], transform: ["translateY(4px)", "translateY(0px)"]}, {duration: .16});
+    return () => controls.cancel();
+  }, [selectedEvidenceNode?.id]);
   return <aside className="evidence-inspector" aria-label="Evidence inspector">
     <header>
       <span className="eyebrow">Decision context</span>
@@ -74,9 +96,9 @@ export function EvidenceInspector({selectedCase, selectedPacket, projection, sou
       </div>
     </section> : null}
     {selectedPacket ? <section>
-      <h3>Evidence balance</h3>
-      <div className={`evidence-balance evidence-balance--${evidenceBalance.confidence.toLowerCase()}`}>
-        <strong>{evidenceBalance.confidence}</strong>
+      <h3>Evidence sufficiency</h3>
+      <div className={`evidence-balance evidence-balance--${evidenceBalance.sufficiency.toLowerCase()}`}>
+        <strong>{evidenceBalance.sufficiency}</strong>
         <span>{evidenceBalance.support} supporting · {evidenceBalance.contradict} contradicting</span>
       </div>
       <dl className="property-list">
@@ -86,6 +108,24 @@ export function EvidenceInspector({selectedCase, selectedPacket, projection, sou
         <div><dt>Affected scope</dt><dd>{selectedPacket.impact.affected_chamber_count} chambers</dd></div>
       </dl>
     </section> : null}
+    <section ref={classificationRef} className="inspector-classification-instrument">
+      <h3>Evidence classification</h3>
+      <div className="inspector-evidence-kind"><span>{evidenceClassification.kind}</span><strong>{selectedEvidenceNode?.label ?? "No evidence object selected"}</strong><p>{evidenceClassification.detail}</p></div>
+      <dl className="property-list">
+        <div><dt>Source identity</dt><dd>{selectedSourceIdentity == null ? "Unavailable for current selection" : String(selectedSourceIdentity)}</dd></div>
+        <div><dt>Timestamp</dt><dd>{selectedTimestamp ?? "No source timestamp on current selection"}</dd></div>
+        <div><dt>Freshness</dt><dd>{selectedEvidenceNode?.provenance === "projection" || selectedEvidenceNode?.provenance === "inferred" ? projection?.stale ? `STALE · ${projection.lag_events} events` : "Current rebuildable projection" : "Source-record time applies"}</dd></div>
+      </dl>
+      <div className="evidence-classification-key" aria-label="Evidence classification key">
+        <span><b>Observed fact</b> source-linked measurement / inspection</span>
+        <span><b>Deterministic detection</b> case classification / anomaly output</span>
+        <span><b>Graph projection</b> rebuildable read model</span>
+        <span><b>System inference</b> deterministic RCA / advisory</span>
+        <span><b>Human note</b> only when present in audit/workflow data</span>
+        <span><b>AI wording</b> only inside bounded PresentationSpec output</span>
+        <span><b>Missing evidence</b> shown as an explicit gap, never timestamped</span>
+      </div>
+    </section>
     <section>
       <h3>Provenance</h3>
       <div className="badge-row"><ProvenanceBadge kind="synthetic" /><ProvenanceBadge kind="inferred" /></div>
