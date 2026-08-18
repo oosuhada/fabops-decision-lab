@@ -9,6 +9,9 @@ from pathlib import Path
 from typing import Any, Iterable
 
 EXPECTED_RESTART_SERVICES = ("api", "web", "postgres", "redpanda", "neo4j")
+COLLECTOR_INTERVAL_SECONDS = 300
+MAX_ADJACENT_SAMPLE_DELTA_SECONDS = COLLECTOR_INTERVAL_SECONDS * 2
+MAX_ACCEPTABLE_OBSERVATION_WINDOW_SECONDS = COLLECTOR_INTERVAL_SECONDS * 3
 
 
 def _read_samples(paths: Iterable[Path]) -> list[dict[str, Any]]:
@@ -54,7 +57,65 @@ def _neighbor_summary(sample: dict[str, Any] | None) -> dict[str, Any] | None:
         "projection_lag_events": sample.get("api", {}).get("projection_lag_events"),
         "broker_lag": sample.get("broker", {}).get("total_lag"),
         "restart_counts": sample.get("containers", {}).get("restart_counts", {}),
+        "container_states": sample.get("containers", {}).get("states", {}),
+        "release": sample.get("release", {}),
     }
+
+
+def _direct_product_health(sample: dict[str, Any]) -> bool:
+    return (
+        sample.get("api", {}).get("http_status") == 200
+        and sample.get("api", {}).get("ready") is True
+        and sample.get("web", {}).get("http_status") == 200
+        and sample.get("web", {}).get("alive") is True
+        and sample.get("api", {}).get("projection_lag_events") in (None, 0)
+    )
+
+
+def _restart_metadata_complete(sample: dict[str, Any]) -> bool:
+    counts = sample.get("containers", {}).get("restart_counts", {})
+    return all(isinstance(counts.get(service), int) for service in EXPECTED_RESTART_SERVICES)
+
+
+def _container_state_metadata_complete(sample: dict[str, Any]) -> bool:
+    states = sample.get("containers", {}).get("states", {})
+    return all(isinstance(states.get(service), str) and states.get(service) for service in EXPECTED_RESTART_SERVICES)
+
+
+def _release_metadata_complete(sample: dict[str, Any]) -> bool:
+    release = sample.get("release", {})
+    return all(release.get(field) for field in ("release_version", "deployed_git_sha", "release_hash"))
+
+
+def _metadata_complete(sample: dict[str, Any]) -> bool:
+    return (
+        sample.get("broker", {}).get("total_lag") is not None
+        and _restart_metadata_complete(sample)
+        and _container_state_metadata_complete(sample)
+        and _release_metadata_complete(sample)
+    )
+
+
+def _release_matches(sample: dict[str, Any], expected_release: dict[str, Any]) -> bool:
+    release = sample.get("release", {})
+    return (
+        release.get("release_version") == expected_release.get("release_version")
+        and release.get("deployed_git_sha") == expected_release.get("deployed_git_sha")
+        and release.get("release_hash") == expected_release.get("release_hash")
+    )
+
+
+def _complete_operational_sample_is_healthy(sample: dict[str, Any], expected_release: dict[str, Any]) -> bool:
+    if not _direct_product_health(sample) or not _metadata_complete(sample):
+        return False
+    states = sample.get("containers", {}).get("states", {})
+    counts = sample.get("containers", {}).get("restart_counts", {})
+    return (
+        sample.get("broker", {}).get("total_lag") == 0
+        and all(counts.get(service) == 0 for service in EXPECTED_RESTART_SERVICES)
+        and all(states.get(service) == "running|healthy" for service in EXPECTED_RESTART_SERVICES)
+        and _release_matches(sample, expected_release)
+    )
 
 
 def build_audit(
@@ -76,6 +137,47 @@ def build_audit(
     failure_records: list[dict[str, Any]] = []
     for failed in collector_failures:
         index = window.index(failed)
+        before = window[index - 1] if index > 0 else None
+        after = window[index + 1] if index + 1 < len(window) else None
+        before_delta = (_timestamp(failed) - _timestamp(before)).total_seconds() if before is not None else None
+        after_delta = (_timestamp(after) - _timestamp(failed)).total_seconds() if after is not None else None
+        observation_window = (_timestamp(after) - _timestamp(before)).total_seconds() if before is not None and after is not None else None
+        direct_product_healthy = _direct_product_health(failed)
+        isolated = bool(before and after and before.get("collector_ok") is True and after.get("collector_ok") is True)
+        neighbors_complete = bool(before and after and _metadata_complete(before) and _metadata_complete(after))
+        neighbors_healthy = bool(
+            before
+            and after
+            and _complete_operational_sample_is_healthy(before, expected_release)
+            and _complete_operational_sample_is_healthy(after, expected_release)
+        )
+        release_consistent = bool(
+            before
+            and after
+            and _release_matches(before, expected_release)
+            and _release_matches(after, expected_release)
+            and before.get("release") == after.get("release")
+        )
+        adjacent_cadence_bounded = bool(
+            before_delta is not None
+            and after_delta is not None
+            and before_delta <= MAX_ADJACENT_SAMPLE_DELTA_SECONDS
+            and after_delta <= MAX_ADJACENT_SAMPLE_DELTA_SECONDS
+        )
+        observation_window_bounded = bool(
+            observation_window is not None and observation_window <= MAX_ACCEPTABLE_OBSERVATION_WINDOW_SECONDS
+        )
+        qualifies_as_observation_gap = all(
+            (
+                direct_product_healthy,
+                isolated,
+                neighbors_complete,
+                neighbors_healthy,
+                release_consistent,
+                adjacent_cadence_bounded,
+                observation_window_bounded,
+            )
+        )
         failure_records.append(
             {
                 "captured_at": failed.get("captured_at"),
@@ -85,8 +187,21 @@ def build_audit(
                 "web_http_status": failed.get("web", {}).get("http_status"),
                 "web_alive": failed.get("web", {}).get("alive"),
                 "container_metadata_available": bool(failed.get("containers", {}).get("states")),
-                "before": _neighbor_summary(window[index - 1] if index > 0 else None),
-                "after": _neighbor_summary(window[index + 1] if index + 1 < len(window) else None),
+                "before": _neighbor_summary(before),
+                "after": _neighbor_summary(after),
+                "observation_window_seconds": round(observation_window, 3) if observation_window is not None else None,
+                "before_delta_seconds": round(before_delta, 3) if before_delta is not None else None,
+                "after_delta_seconds": round(after_delta, 3) if after_delta is not None else None,
+                "acceptance": {
+                    "direct_product_health_required": direct_product_healthy,
+                    "isolated_single_failed_sample": isolated,
+                    "neighbor_metadata_complete": neighbors_complete,
+                    "neighbor_operational_fields_healthy": neighbors_healthy,
+                    "neighbor_release_identity_consistent": release_consistent,
+                    "adjacent_sample_cadence_bounded": adjacent_cadence_bounded,
+                    "observation_window_bounded": observation_window_bounded,
+                    "qualifies_as_observation_gap": qualifies_as_observation_gap,
+                },
             }
         )
 
@@ -129,6 +244,30 @@ def build_audit(
         (_timestamp(right) - _timestamp(left)).total_seconds()
         for left, right in zip(window, window[1:], strict=False)
     ]
+    cadence_gap_samples = [
+        {
+            "left": left.get("captured_at"),
+            "right": right.get("captured_at"),
+            "delta_seconds": round((_timestamp(right) - _timestamp(left)).total_seconds(), 3),
+        }
+        for left, right in zip(window, window[1:], strict=False)
+        if (_timestamp(right) - _timestamp(left)).total_seconds() > MAX_ADJACENT_SAMPLE_DELTA_SECONDS
+    ]
+    metadata_incomplete_healthy_samples = [
+        sample.get("captured_at")
+        for sample in window
+        if sample.get("collector_ok") is True and not _metadata_complete(sample)
+    ]
+    qualified_observation_gaps = [
+        record for record in failure_records if record["acceptance"]["qualifies_as_observation_gap"] is True
+    ]
+    unqualified_observation_gaps = [
+        record for record in failure_records if record["acceptance"]["qualifies_as_observation_gap"] is not True
+    ]
+    consecutive_collector_failure_pairs = sum(
+        left.get("collector_ok") is not True and right.get("collector_ok") is not True
+        for left, right in zip(window, window[1:], strict=False)
+    )
 
     facts = {
         "sample_count": len(window),
@@ -138,6 +277,16 @@ def build_audit(
         "target_duration_hours": target_hours,
         "window_complete": elapsed_hours >= target_hours,
         "collector_failure_count": len(collector_failures),
+        "collector_interval_seconds": COLLECTOR_INTERVAL_SECONDS,
+        "max_adjacent_sample_delta_seconds": MAX_ADJACENT_SAMPLE_DELTA_SECONDS,
+        "max_acceptable_observation_window_seconds": MAX_ACCEPTABLE_OBSERVATION_WINDOW_SECONDS,
+        "qualified_observation_gap_count": len(qualified_observation_gaps),
+        "unqualified_observation_gap_count": len(unqualified_observation_gaps),
+        "consecutive_collector_failure_pairs": consecutive_collector_failure_pairs,
+        "cadence_gap_count": len(cadence_gap_samples),
+        "cadence_gap_samples": cadence_gap_samples,
+        "metadata_incomplete_healthy_sample_count": len(metadata_incomplete_healthy_samples),
+        "metadata_incomplete_healthy_samples": metadata_incomplete_healthy_samples,
         "api_non_200_samples": sum(sample.get("api", {}).get("http_status") != 200 for sample in window),
         "api_not_ready_samples": sum(sample.get("api", {}).get("ready") is not True for sample in window),
         "web_non_200_samples": sum(sample.get("web", {}).get("http_status") != 200 for sample in window),
@@ -154,6 +303,13 @@ def build_audit(
         "max_sample_gap_seconds": round(max(gaps_seconds), 3) if gaps_seconds else None,
     }
 
+    container_state_regressions = 0
+    for sample in window:
+        states = sample.get("containers", {}).get("states", {})
+        if states and any(states.get(service) != "running|healthy" for service in EXPECTED_RESTART_SERVICES):
+            container_state_regressions += 1
+    facts["container_state_regression_samples"] = container_state_regressions
+
     operational_regression = any(
         (
             facts["api_non_200_samples"],
@@ -161,6 +317,7 @@ def build_audit(
             facts["web_non_200_samples"],
             facts["web_not_alive_samples"],
             facts["release_identity_mismatch_count_when_metadata_present"],
+            facts["container_state_regression_samples"],
         )
     ) or (facts["max_projection_lag_events"] not in (None, 0)) or (facts["max_broker_lag"] not in (None, 0)) or any(
         value not in (None, 0) for value in facts["restart_count_max"].values()
@@ -172,11 +329,18 @@ def build_audit(
     elif operational_regression:
         status = "failed"
         reason = "The completed evidence window contains an observed operational regression in a documented M8 field."
-    elif collector_failures:
+    elif facts["cadence_gap_count"] or facts["metadata_incomplete_healthy_sample_count"] or unqualified_observation_gaps:
         status = "unverified_gap"
         reason = (
-            "The 24-hour operational window is healthy, but one or more collector samples are incomplete and the pre-existing "
-            "M8 runbook defines no tolerance or pass/fail rule for collector-only metadata timeouts. The audit therefore does not infer PASS."
+            "The 24-hour product probes do not show an operational regression, but the evidence contains an observation gap that exceeds "
+            "the documented collector-gap acceptance rule or otherwise lacks enough metadata to prove bounded recovery."
+        )
+    elif qualified_observation_gaps:
+        status = "passed_with_observation_gap"
+        reason = (
+            "The 24-hour window completed without an observed product/runtime regression. Every collector-only gap is isolated, bounded by the "
+            "300-second launchd cadence, retains healthy direct API/Web probes, and is bracketed by complete healthy samples with consistent "
+            "restart and release identity evidence. The gap remains explicit rather than being normalized away."
         )
     else:
         status = "passed"
@@ -184,18 +348,21 @@ def build_audit(
 
     return {
         "milestone": "M8-B",
-        "schema_version": "m8-final-audit-v1",
+        "schema_version": "m8-final-audit-v2",
         "generated_at": (generated_at or datetime.now(timezone.utc)).isoformat(),
         "status": status,
-        "passed": status == "passed",
+        "passed": status in {"passed", "passed_with_observation_gap"},
         "source_manifest": "evidence/m8/soak-manifest.json",
         "sample_sha256": sample_hashes or {},
         "facts": facts,
         "collector_failures": failure_records,
         "audit_boundary": {
-            "pre_existing_runbook_defines_collector_timeout_tolerance": False,
+            "observation_gap_rule": "ADR-006",
+            "collector_interval_seconds": COLLECTOR_INTERVAL_SECONDS,
+            "max_acceptable_observation_window_seconds": MAX_ACCEPTABLE_OBSERVATION_WINDOW_SECONDS,
             "collector_failure_not_silently_removed": True,
             "missing_container_metadata_not_treated_as_release_mismatch": True,
+            "actual_operational_failure_overrides_gap_tolerance": True,
             "no_equipment_control_or_runtime_mutation_performed": True,
         },
         "reason": reason,

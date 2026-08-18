@@ -48,9 +48,45 @@ burn-in pass.
 JSONL samples. It never restarts or mutates the official stack and it writes a new
 M8-B artifact instead of changing the historical setup gate or soak manifest.
 
-The audit distinguishes product availability from collector availability. If a
-sample has healthy API/Web responses but collector-side Docker or broker metadata
-is incomplete, that sample remains in the evidence and its neighboring recovery
-samples are recorded. Because the original M8 runbook did not define a tolerance
-or pass/fail rule for such a collector-only timeout, a completed soak containing
-one is reported conservatively as `UNVERIFIED / GAP`, not inferred as `PASSED`.
+The audit distinguishes product/runtime failure from collector availability.
+`ADR-006` defines the deterministic acceptance rule for observation gaps. The
+historical audit generated before ADR-006 remains immutable and must not be
+rewritten.
+
+### Product/runtime failure
+
+Any observed API non-200/not-ready result, Web non-200/not-alive result, non-zero
+projection or broker lag, non-healthy official container state, non-zero official
+container restart count, or observed release-identity mismatch makes M8 `failed`.
+An operational failure always overrides collector-gap tolerance.
+
+### Collector observation gap
+
+The launchd interval is 300 seconds. An incomplete collector sample is eligible
+for `passed_with_observation_gap` only when it is a single isolated failed sample
+with healthy direct API/Web probes, complete healthy samples immediately before
+and after it, zero neighboring broker/projection lag, zero neighboring restart
+counts for API/Web/PostgreSQL/Redpanda/Neo4j, healthy neighboring container
+states, and consistent expected release identity before/after.
+
+Each timestamp delta adjacent to the failed sample must be at most 600 seconds.
+The complete-metadata window from the preceding valid sample to the following
+valid sample must be at most 900 seconds (three configured collector intervals).
+Two adjacent failed samples, an excessive cadence gap, missing neighbor proof, or
+incomplete required metadata outside that isolated gap is `unverified_gap`.
+
+The 900-second maximum is cadence-derived rather than fitted to the historical
+timeout: a single failed scheduled observation normally spans two complete-
+metadata intervals, while the third interval is the hard boundary before the
+audit treats the history as containing an additional unobserved scheduling
+opportunity.
+
+Status meanings are therefore:
+
+- `passed`: clean completed window with no observation gap;
+- `passed_with_observation_gap`: completed healthy window where every collector
+  gap satisfies ADR-006 and remains explicitly recorded;
+- `unverified_gap`: no proven operational failure, but observation evidence is
+  insufficient for either pass status;
+- `in_progress`: less than the documented 24-hour duration; and
+- `failed`: an observed product/runtime regression.

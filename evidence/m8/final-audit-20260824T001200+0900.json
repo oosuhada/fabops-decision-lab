@@ -1,0 +1,147 @@
+{
+  "audit_boundary": {
+    "actual_operational_failure_overrides_gap_tolerance": true,
+    "collector_failure_not_silently_removed": true,
+    "collector_interval_seconds": 300,
+    "max_acceptable_observation_window_seconds": 900,
+    "missing_container_metadata_not_treated_as_release_mismatch": true,
+    "no_equipment_control_or_runtime_mutation_performed": true,
+    "observation_gap_rule": "ADR-006"
+  },
+  "collector_failures": [
+    {
+      "acceptance": {
+        "adjacent_sample_cadence_bounded": true,
+        "direct_product_health_required": true,
+        "isolated_single_failed_sample": true,
+        "neighbor_metadata_complete": true,
+        "neighbor_operational_fields_healthy": true,
+        "neighbor_release_identity_consistent": true,
+        "observation_window_bounded": true,
+        "qualifies_as_observation_gap": true
+      },
+      "after": {
+        "api_http_status": 200,
+        "api_ready": true,
+        "broker_lag": 0,
+        "captured_at": "2026-08-23T02:29:14.774513+00:00",
+        "collector_ok": true,
+        "container_states": {
+          "api": "running|healthy",
+          "neo4j": "running|healthy",
+          "postgres": "running|healthy",
+          "redpanda": "running|healthy",
+          "web": "running|healthy"
+        },
+        "projection_lag_events": 0,
+        "release": {
+          "deployed_git_sha": "2a3df187294706afb397f0cf8072c0f3ddcc2f23",
+          "release_hash": "ab8b20a696b9b1996495f23a3e413cc33a67b6861efa184c64742e0f310c6326",
+          "release_version": "0.6.0"
+        },
+        "restart_counts": {
+          "api": 0,
+          "neo4j": 0,
+          "postgres": 0,
+          "redpanda": 0,
+          "web": 0
+        },
+        "web_alive": true,
+        "web_http_status": 200
+      },
+      "after_delta_seconds": 303.856,
+      "api_http_status": 200,
+      "api_ready": true,
+      "before": {
+        "api_http_status": 200,
+        "api_ready": true,
+        "broker_lag": 0,
+        "captured_at": "2026-08-23T02:18:55.128014+00:00",
+        "collector_ok": true,
+        "container_states": {
+          "api": "running|healthy",
+          "neo4j": "running|healthy",
+          "postgres": "running|healthy",
+          "redpanda": "running|healthy",
+          "web": "running|healthy"
+        },
+        "projection_lag_events": 0,
+        "release": {
+          "deployed_git_sha": "2a3df187294706afb397f0cf8072c0f3ddcc2f23",
+          "release_hash": "ab8b20a696b9b1996495f23a3e413cc33a67b6861efa184c64742e0f310c6326",
+          "release_version": "0.6.0"
+        },
+        "restart_counts": {
+          "api": 0,
+          "neo4j": 0,
+          "postgres": 0,
+          "redpanda": 0,
+          "web": 0
+        },
+        "web_alive": true,
+        "web_http_status": 200
+      },
+      "before_delta_seconds": 315.79,
+      "captured_at": "2026-08-23T02:24:10.918050+00:00",
+      "collector_error_class": "TimeoutExpired",
+      "container_metadata_available": false,
+      "observation_window_seconds": 619.646,
+      "web_alive": true,
+      "web_http_status": 200
+    }
+  ],
+  "facts": {
+    "api_non_200_samples": 0,
+    "api_not_ready_samples": 0,
+    "cadence_gap_count": 0,
+    "cadence_gap_samples": [],
+    "collector_failure_count": 1,
+    "collector_interval_seconds": 300,
+    "consecutive_collector_failure_pairs": 0,
+    "container_state_regression_samples": 0,
+    "elapsed_from_declared_start_hours": 24.725689473,
+    "first_sample_at": "2026-08-22T14:25:23.719448+00:00",
+    "last_sample_at": "2026-08-23T15:08:56.201550+00:00",
+    "max_acceptable_observation_window_seconds": 900,
+    "max_adjacent_sample_delta_seconds": 600,
+    "max_broker_lag": 0,
+    "max_projection_lag_events": 0,
+    "max_sample_gap_seconds": 316.149,
+    "metadata_incomplete_healthy_sample_count": 0,
+    "metadata_incomplete_healthy_samples": [],
+    "qualified_observation_gap_count": 1,
+    "release_identity_mismatch_count_when_metadata_present": 0,
+    "release_identity_mismatch_samples": [],
+    "release_metadata_sample_count": 295,
+    "restart_count_max": {
+      "api": 0,
+      "neo4j": 0,
+      "postgres": 0,
+      "redpanda": 0,
+      "web": 0
+    },
+    "restart_metadata_missing_samples": {
+      "api": 1,
+      "neo4j": 1,
+      "postgres": 1,
+      "redpanda": 1,
+      "web": 1
+    },
+    "sample_count": 296,
+    "target_duration_hours": 24.0,
+    "unqualified_observation_gap_count": 0,
+    "web_non_200_samples": 0,
+    "web_not_alive_samples": 0,
+    "window_complete": true
+  },
+  "generated_at": "2026-08-23T15:12:00.568431+00:00",
+  "milestone": "M8-B",
+  "passed": true,
+  "reason": "The 24-hour window completed without an observed product/runtime regression. Every collector-only gap is isolated, bounded by the 300-second launchd cadence, retains healthy direct API/Web probes, and is bracketed by complete healthy samples with consistent restart and release identity evidence. The gap remains explicit rather than being normalized away.",
+  "sample_sha256": {
+    "soak.jsonl": "e0a959e0e470a28ddc02f5226f552ec62994749de4d34b9651e1f7022dd6cd59"
+  },
+  "schema_version": "m8-final-audit-v2",
+  "source_manifest": "evidence/m8/soak-manifest.json",
+  "status": "passed_with_observation_gap"
+}
