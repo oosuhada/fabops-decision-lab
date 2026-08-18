@@ -3,11 +3,21 @@ FROM python:3.13-slim
 ARG FABOPS_RELEASE_VERSION=0.6.0
 ARG FABOPS_RELEASE_HASH
 ARG FABOPS_DEPLOY_GIT_SHA
+ARG FABOPS_BASE_RELEASE_VERSION=0.6.0
+ARG FABOPS_DEPLOYMENT_KIND=official
+ARG FABOPS_DEPLOYMENT_CHANNEL=official
+ARG FABOPS_CANDIDATE_LABEL=""
+ARG FABOPS_DEPLOYMENT_HASH=""
 
 LABEL org.opencontainers.image.title="FabOps Decision Lab API" \
       org.opencontainers.image.version="${FABOPS_RELEASE_VERSION}" \
       org.opencontainers.image.revision="${FABOPS_DEPLOY_GIT_SHA}" \
-      com.oosu.fabops.release-hash="${FABOPS_RELEASE_HASH}"
+      com.oosu.fabops.release-hash="${FABOPS_RELEASE_HASH}" \
+      com.oosu.fabops.base-release-version="${FABOPS_BASE_RELEASE_VERSION}" \
+      com.oosu.fabops.deployment-kind="${FABOPS_DEPLOYMENT_KIND}" \
+      com.oosu.fabops.deployment-channel="${FABOPS_DEPLOYMENT_CHANNEL}" \
+      com.oosu.fabops.candidate-label="${FABOPS_CANDIDATE_LABEL}" \
+      com.oosu.fabops.deployment-hash="${FABOPS_DEPLOYMENT_HASH}"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

@@ -4,9 +4,14 @@ x-release-labels: &release-labels
   org.opencontainers.image.version: ${FABOPS_RELEASE_VERSION:-0.6.0}
   org.opencontainers.image.revision: ${FABOPS_DEPLOY_GIT_SHA:?FABOPS_DEPLOY_GIT_SHA must be set}
   com.oosu.fabops.release-hash: ${FABOPS_RELEASE_HASH:?FABOPS_RELEASE_HASH must be set}
+  com.oosu.fabops.base-release-version: ${FABOPS_RELEASE_VERSION:-0.6.0}
+  com.oosu.fabops.deployment-kind: official
+  com.oosu.fabops.deployment-channel: official
 
 x-api-environment: &api-environment
   FABOPS_RUNTIME_MODE: integration
+  FABOPS_DEPLOYMENT_KIND: official
+  FABOPS_DEPLOYMENT_CHANNEL: official
   FABOPS_POSTGRES_DSN: postgresql://fabops:${FABOPS_POSTGRES_PASSWORD:?FABOPS_POSTGRES_PASSWORD must be set}@postgres:5432/fabops
   FABOPS_REDPANDA_BOOTSTRAP: redpanda:9092
   FABOPS_REDPANDA_TOPIC: fabops.events.v1
@@ -116,6 +121,9 @@ services:
         FABOPS_RELEASE_VERSION: ${FABOPS_RELEASE_VERSION:-0.6.0}
         FABOPS_RELEASE_HASH: ${FABOPS_RELEASE_HASH}
         FABOPS_DEPLOY_GIT_SHA: ${FABOPS_DEPLOY_GIT_SHA}
+        FABOPS_BASE_RELEASE_VERSION: ${FABOPS_RELEASE_VERSION:-0.6.0}
+        FABOPS_DEPLOYMENT_KIND: official
+        FABOPS_DEPLOYMENT_CHANNEL: official
     labels: *release-labels
     restart: "no"
     cpus: 0.5
@@ -139,6 +147,9 @@ services:
         FABOPS_RELEASE_VERSION: ${FABOPS_RELEASE_VERSION:-0.6.0}
         FABOPS_RELEASE_HASH: ${FABOPS_RELEASE_HASH}
         FABOPS_DEPLOY_GIT_SHA: ${FABOPS_DEPLOY_GIT_SHA}
+        FABOPS_BASE_RELEASE_VERSION: ${FABOPS_RELEASE_VERSION:-0.6.0}
+        FABOPS_DEPLOYMENT_KIND: official
+        FABOPS_DEPLOYMENT_CHANNEL: official
     labels: *release-labels
     restart: unless-stopped
     cpus: 0.75
@@ -167,6 +178,9 @@ services:
         FABOPS_RELEASE_VERSION: ${FABOPS_RELEASE_VERSION:-0.6.0}
         FABOPS_RELEASE_HASH: ${FABOPS_RELEASE_HASH}
         FABOPS_DEPLOY_GIT_SHA: ${FABOPS_DEPLOY_GIT_SHA}
+        FABOPS_BASE_RELEASE_VERSION: ${FABOPS_RELEASE_VERSION:-0.6.0}
+        FABOPS_DEPLOYMENT_KIND: official
+        FABOPS_DEPLOYMENT_CHANNEL: official
         VITE_API_URL: ""
     labels: *release-labels
     restart: unless-stopped

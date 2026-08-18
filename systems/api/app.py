@@ -17,7 +17,7 @@ from services.decision import DecisionSupportService
 from services.narration import NarrationService
 from services.narration.demo import DemoPolicyError, DemoSessionPolicy, demo_policy_from_env
 from services.rca.cqrs import RankRootCausesQuery, TraceAffectedLotsQuery
-from services.release import RELEASE_VERSION, load_release_identity
+from services.release import RELEASE_VERSION, load_deployment_identity, load_release_identity
 from services.workflow.state_machine import AuthorizationError, InvalidTransitionError
 from systems.api.runtime import LocalRuntime, build_runtime
 
@@ -182,6 +182,11 @@ def readiness(runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dict[st
 @app.get("/api/release")
 def release_identity() -> dict[str, Any]:
     return {"source": "generated-release-manifest", **load_release_identity()}
+
+
+@app.get("/api/deployment-identity")
+def deployment_identity() -> dict[str, Any]:
+    return load_deployment_identity()
 
 
 @app.get("/api/overview")
