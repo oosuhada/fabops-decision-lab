@@ -3,6 +3,7 @@ import {api} from "./api";
 import {EvidenceInspector, WorkbenchState} from "./components";
 import {AnalysisWorkbench} from "./features/analysis/AnalysisWorkbench";
 import {CaseComparisonWorkbench} from "./features/comparison/CaseComparisonWorkbench";
+import {ShiftHandoffBrief} from "./features/handoff/ShiftHandoffBrief";
 import {WorkbenchResizeHandle} from "./platform/workbench/WorkbenchResizeHandle";
 import {useWorkbenchLayout} from "./platform/workbench/useWorkbenchLayout";
 import {DecisionApproval, DecisionCockpit, EvaluationLab, EvidenceGraph, ExcursionCase, OperationsOverview, ReplayOperations, caseById} from "./screens";
@@ -11,18 +12,20 @@ import type {AdvisoryResponse, CaseDetailResponse, CaseReplayTraceResponse, Deci
 const navigation: Array<{id: ScreenId; label: string; short: string; group: "Decide" | "Investigate" | "Trust"}> = [
   {id: "cockpit", label: "Decision Cockpit", short: "01", group: "Decide"},
   {id: "decision", label: "Decision & Approval", short: "02", group: "Decide"},
-  {id: "case", label: "Case Investigation", short: "03", group: "Investigate"},
-  {id: "graph", label: "Evidence Graph", short: "04", group: "Investigate"},
-  {id: "analysis", label: "Analysis Workbench", short: "05", group: "Investigate"},
-  {id: "compare", label: "Case Comparison", short: "06", group: "Investigate"},
-  {id: "overview", label: "Operations Queue", short: "07", group: "Investigate"},
-  {id: "evaluation", label: "Model & Evidence", short: "08", group: "Trust"},
-  {id: "replay", label: "System Health", short: "09", group: "Trust"},
+  {id: "handoff", label: "Shift Handoff", short: "03", group: "Decide"},
+  {id: "case", label: "Case Investigation", short: "04", group: "Investigate"},
+  {id: "graph", label: "Evidence Graph", short: "05", group: "Investigate"},
+  {id: "analysis", label: "Analysis Workbench", short: "06", group: "Investigate"},
+  {id: "compare", label: "Case Comparison", short: "07", group: "Investigate"},
+  {id: "overview", label: "Operations Queue", short: "08", group: "Investigate"},
+  {id: "evaluation", label: "Model & Evidence", short: "09", group: "Trust"},
+  {id: "replay", label: "System Health", short: "10", group: "Trust"},
 ];
 
 const screenPaths: Record<ScreenId, string> = {
   cockpit: "/DecisionCockpit",
   decision: "/DecisionApproval",
+  handoff: "/ShiftHandoff",
   case: "/CaseInvestigation",
   graph: "/EvidenceGraph",
   analysis: "/AnalysisWorkbench",
@@ -219,6 +222,7 @@ export default function App() {
   else if (screen === "graph" && detail) workSurface = <EvidenceGraph detail={detail} selectedStep={selectedStep} onSelectStep={setSelectedStep} />;
   else if (screen === "analysis" && detail) workSurface = <AnalysisWorkbench detail={detail} />;
   else if (screen === "compare") workSurface = <CaseComparisonWorkbench packets={cockpit.queue} />;
+  else if (screen === "handoff") workSurface = <ShiftHandoffBrief cockpit={cockpit} overview={overview} replay={replay} />;
   else if (screen === "decision" && detail) workSurface = <DecisionApproval
     detail={detail}
     packet={selectedPacket}
