@@ -285,6 +285,26 @@ td { min-height: 40px; padding: 10px var(--ds-space-3); }
 .version-grid span { font-size: var(--ds-type-meta); }
 .version-grid strong { font-size: var(--ds-type-caption); line-height: 1.45; }
 
+/* Replay is an inspection surface, not a miniature timeline. Keep every
+   interactive label and evidence coordinate at the documented metadata floor. */
+.adapter-state,
+.replay-trace-authority span,
+.replay-trace-authority strong,
+.replay-controls button,
+.replay-controls > span,
+.replay-event-strip button span,
+.replay-event-strip button strong,
+.replay-event-strip button small,
+.replay-event-inspector__title span,
+.replay-event-inspector__title small,
+.replay-event-inspector dt,
+.replay-event-inspector dd,
+.replay-payload > span,
+.replay-payload pre,
+.replay-summary-strip span,
+.replay-limitations strong,
+.replay-limitations li { font-size: var(--ds-type-meta); }
+
 .provenance,
 .projection-badge,
 .classification,
