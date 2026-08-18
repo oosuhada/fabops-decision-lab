@@ -41,3 +41,16 @@ initial samples. M8 overall remains IN PROGRESS until at least 24 hours have
 elapsed from `soak_started_at` and the completed sample window plus recovery
 checks have been audited. A setup manifest must never be interpreted as a 24-hour
 burn-in pass.
+
+## Final audit
+
+`evaluation/m8_final_audit.py` audits a copied, read-only snapshot of the Mac mini
+JSONL samples. It never restarts or mutates the official stack and it writes a new
+M8-B artifact instead of changing the historical setup gate or soak manifest.
+
+The audit distinguishes product availability from collector availability. If a
+sample has healthy API/Web responses but collector-side Docker or broker metadata
+is incomplete, that sample remains in the evidence and its neighboring recovery
+samples are recorded. Because the original M8 runbook did not define a tolerance
+or pass/fail rule for such a collector-only timeout, a completed soak containing
+one is reported conservatively as `UNVERIFIED / GAP`, not inferred as `PASSED`.

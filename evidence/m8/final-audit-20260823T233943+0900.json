@@ -1,0 +1,96 @@
+{
+  "audit_boundary": {
+    "collector_failure_not_silently_removed": true,
+    "missing_container_metadata_not_treated_as_release_mismatch": true,
+    "no_equipment_control_or_runtime_mutation_performed": true,
+    "pre_existing_runbook_defines_collector_timeout_tolerance": false
+  },
+  "collector_failures": [
+    {
+      "after": {
+        "api_http_status": 200,
+        "api_ready": true,
+        "broker_lag": 0,
+        "captured_at": "2026-08-23T02:29:14.774513+00:00",
+        "collector_ok": true,
+        "projection_lag_events": 0,
+        "restart_counts": {
+          "api": 0,
+          "neo4j": 0,
+          "postgres": 0,
+          "redpanda": 0,
+          "web": 0
+        },
+        "web_alive": true,
+        "web_http_status": 200
+      },
+      "api_http_status": 200,
+      "api_ready": true,
+      "before": {
+        "api_http_status": 200,
+        "api_ready": true,
+        "broker_lag": 0,
+        "captured_at": "2026-08-23T02:18:55.128014+00:00",
+        "collector_ok": true,
+        "projection_lag_events": 0,
+        "restart_counts": {
+          "api": 0,
+          "neo4j": 0,
+          "postgres": 0,
+          "redpanda": 0,
+          "web": 0
+        },
+        "web_alive": true,
+        "web_http_status": 200
+      },
+      "captured_at": "2026-08-23T02:24:10.918050+00:00",
+      "collector_error_class": "TimeoutExpired",
+      "container_metadata_available": false,
+      "web_alive": true,
+      "web_http_status": 200
+    }
+  ],
+  "facts": {
+    "api_non_200_samples": 0,
+    "api_not_ready_samples": 0,
+    "collector_failure_count": 1,
+    "elapsed_from_declared_start_hours": 24.219649869,
+    "first_sample_at": "2026-08-22T14:25:23.719448+00:00",
+    "last_sample_at": "2026-08-23T14:38:34.458977+00:00",
+    "max_broker_lag": 0,
+    "max_projection_lag_events": 0,
+    "max_sample_gap_seconds": 316.149,
+    "release_identity_mismatch_count_when_metadata_present": 0,
+    "release_identity_mismatch_samples": [],
+    "release_metadata_sample_count": 289,
+    "restart_count_max": {
+      "api": 0,
+      "neo4j": 0,
+      "postgres": 0,
+      "redpanda": 0,
+      "web": 0
+    },
+    "restart_metadata_missing_samples": {
+      "api": 1,
+      "neo4j": 1,
+      "postgres": 1,
+      "redpanda": 1,
+      "web": 1
+    },
+    "sample_count": 290,
+    "target_duration_hours": 24.0,
+    "web_non_200_samples": 0,
+    "web_not_alive_samples": 0,
+    "window_complete": true
+  },
+  "generated_at": "2026-08-23T14:39:43.854495+00:00",
+  "milestone": "M8-B",
+  "passed": false,
+  "reason": "The 24-hour operational window is healthy, but one or more collector samples are incomplete and the pre-existing M8 runbook defines no tolerance or pass/fail rule for collector-only metadata timeouts. The audit therefore does not infer PASS.",
+  "sample_sha256": {
+    "fabops-m8-soak-20260823T2338+0900.jsonl": "2ea1c4557be3f1bf28561bd82978ff065bb294e28182f07e6a7bc71371ba3300"
+  },
+  "schema_version": "m8-final-audit-v1",
+  "source_manifest": "evidence/m8/soak-manifest.json",
+  "status": "unverified_gap"
+}
