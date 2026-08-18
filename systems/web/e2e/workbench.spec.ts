@@ -81,11 +81,15 @@ test("mobile decision cockpit keeps candidate, provenance and read-only identity
 });
 
 test("Foundry Glass design grammar stays consistent across routes", async ({page}) => {
+  test.setTimeout(120_000);
   const routes = [
     {path: "/DecisionCockpit", ready: ".decision-cockpit"},
     {path: "/DecisionApproval", ready: ".decision-header"},
+    {path: "/ShiftHandoff", ready: ".shift-handoff"},
     {path: "/CaseInvestigation", ready: ".case-hero"},
     {path: "/EvidenceGraph", ready: ".signal-console-hero"},
+    {path: "/AnalysisWorkbench", ready: ".analysis-workbench"},
+    {path: "/CaseComparison", ready: ".case-comparison-workbench"},
     {path: "/OperationsQueue", ready: ".overview-visual-grid"},
     {path: "/ModelEvidence", ready: ".version-grid"},
     {path: "/SystemHealth", ready: ".release-identity-panel"},

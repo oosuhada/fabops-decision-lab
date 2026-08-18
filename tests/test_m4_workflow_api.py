@@ -4,12 +4,22 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from services.advisory.provider import DeterministicAdvisoryProvider
 from services.workflow.state_machine import ApprovalTokenIssuer, AuthorizationError, CaseWorkflowService, InvalidTransitionError
-from systems.api.app import app
+from systems.api.app import _cors_origins_from_env, app
 from systems.api.runtime import build_local_runtime
+
+
+def test_cors_origins_keep_safe_defaults_and_allow_explicit_isolated_web_origin(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("FABOPS_CORS_ORIGINS", "http://127.0.0.1:35173")
+    origins = _cors_origins_from_env()
+
+    assert "http://127.0.0.1:5173" in origins
+    assert "http://localhost:5173" in origins
+    assert "http://127.0.0.1:35173" in origins
 
 
 def test_tool_registry_is_capped_at_exact_required_five_tools():

@@ -29,6 +29,7 @@ export default defineConfig({
       url: `${apiBaseURL}/health`,
       env: {
         ...process.env,
+        FABOPS_CORS_ORIGINS: webBaseURL,
         FABOPS_PUBLIC_NARRATION_CACHE_ONLY: "true",
         FABOPS_PUBLIC_AI_DEMO_ENABLED: "true",
         FABOPS_DEMO_SESSION_SECRET: "playwright-demo-session-secret-not-for-production",
