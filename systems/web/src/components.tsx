@@ -109,8 +109,13 @@ export function EvidenceInspector({selectedCase, selectedPacket, projection, sou
       </dl>
     </section> : null}
     <section ref={classificationRef} className="inspector-classification-instrument">
-      <h3>Evidence classification</h3>
+      <div className="inspector-instrument-heading"><div><span className="eyebrow">Engineering artifact</span><h3>Evidence classification</h3></div><b>{evidenceClassification.kind}</b></div>
       <div className="inspector-evidence-kind"><span>{evidenceClassification.kind}</span><strong>{selectedEvidenceNode?.label ?? "No evidence object selected"}</strong><p>{evidenceClassification.detail}</p></div>
+      <div className="inspector-artifact-status" aria-label="Selected evidence artifact coordinates">
+        <div><span>LAYER</span><strong>{selectedEvidenceNode?.provenance ?? "unselected"}</strong></div>
+        <div><span>IDENTITY</span><strong>{selectedSourceIdentity == null ? "missing" : String(selectedSourceIdentity)}</strong></div>
+        <div><span>TIME BASIS</span><strong>{selectedTimestamp ? "source timestamp" : "not available"}</strong></div>
+      </div>
       <dl className="property-list">
         <div><dt>Source identity</dt><dd>{selectedSourceIdentity == null ? "Unavailable for current selection" : String(selectedSourceIdentity)}</dd></div>
         <div><dt>Timestamp</dt><dd>{selectedTimestamp ?? "No source timestamp on current selection"}</dd></div>

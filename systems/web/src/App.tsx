@@ -8,7 +8,7 @@ import {ShiftHandoffBrief} from "./features/handoff/ShiftHandoffBrief";
 import {WorkbenchResizeHandle} from "./platform/workbench/WorkbenchResizeHandle";
 import {useWorkbenchLayout} from "./platform/workbench/useWorkbenchLayout";
 import {DecisionApproval, DecisionCockpit, EvaluationLab, EvidenceGraph, ExcursionCase, OperationsOverview, ReplayOperations, caseById} from "./screens";
-import type {AdvisoryResponse, CaseDetailResponse, CaseReplayTraceResponse, DecisionBriefResponse, DecisionCockpitResponse, EvaluationResponse, NarrationIntent, NarrationStatusResponse, OverviewResponse, ReplayResponse, ScreenId} from "./types";
+import type {AdvisoryResponse, CaseDetailResponse, CaseReplayTraceResponse, DecisionBriefResponse, DecisionCockpitResponse, DeploymentIdentityResponse, EvaluationResponse, NarrationIntent, NarrationStatusResponse, OverviewResponse, ReplayResponse, ScreenId} from "./types";
 
 const navigation: Array<{id: ScreenId; label: string; short: string; group: "Decide" | "Investigate" | "Trust"}> = [
   {id: "cockpit", label: "Decision Cockpit", short: "01", group: "Decide"},
@@ -22,6 +22,12 @@ const navigation: Array<{id: ScreenId; label: string; short: string; group: "Dec
   {id: "evaluation", label: "Model & Evidence", short: "09", group: "Trust"},
   {id: "replay", label: "System Health", short: "10", group: "Trust"},
 ];
+
+const navigationGroups = [
+  {name: "Decide", numeral: "Ⅰ", section: 1},
+  {name: "Investigate", numeral: "Ⅱ", section: 2},
+  {name: "Trust", numeral: "Ⅲ", section: 3},
+] as const;
 
 const screenPaths: Record<ScreenId, string> = {
   cockpit: "/DecisionCockpit",
@@ -71,6 +77,7 @@ export default function App() {
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [evaluation, setEvaluation] = useState<EvaluationResponse | null>(null);
   const [replay, setReplay] = useState<ReplayResponse | null>(null);
+  const [deploymentIdentity, setDeploymentIdentity] = useState<DeploymentIdentityResponse | null>(null);
   const [caseReplayTrace, setCaseReplayTrace] = useState<CaseReplayTraceResponse | null>(null);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [detail, setDetail] = useState<CaseDetailResponse | null>(null);
@@ -92,11 +99,12 @@ export default function App() {
     setLoading(true);
     setError("");
     try {
-      const [nextCockpit, nextOverview, nextEvaluation, nextReplay] = await Promise.all([api.decisionCockpit(), api.overview(), api.evaluation(), api.replay()]);
+      const [nextCockpit, nextOverview, nextEvaluation, nextReplay, nextDeploymentIdentity] = await Promise.all([api.decisionCockpit(), api.overview(), api.evaluation(), api.replay(), api.deploymentIdentity()]);
       setCockpit(nextCockpit);
       setOverview(nextOverview);
       setEvaluation(nextEvaluation);
       setReplay(nextReplay);
+      setDeploymentIdentity(nextDeploymentIdentity);
       setSelectedCaseId((current) => current ?? nextCockpit.queue[0]?.case_id ?? nextOverview.cases[0]?.case_id ?? null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to load workbench data");
@@ -215,7 +223,7 @@ export default function App() {
   if (error && !overview) {
     return <main className="boot-state"><WorkbenchState kind="error" title="Workbench unavailable" detail={error} action={<button onClick={() => void loadRoot()}>Retry</button>} /></main>;
   }
-  if (!cockpit || !overview || !evaluation || !replay) {
+  if (!cockpit || !overview || !evaluation || !replay || !deploymentIdentity) {
     return <main className="boot-state"><WorkbenchState kind="empty" title="No operational evidence" detail="The API returned no source state." /></main>;
   }
 
@@ -250,19 +258,32 @@ export default function App() {
   else if (screen === "evaluation") workSurface = <EvaluationLab evaluation={evaluation} />;
   else workSurface = <ReplayOperations replay={replay} trace={caseReplayTrace} />;
 
-  const navGroups = ["Decide", "Investigate", "Trust"] as const;
   const activeNavigation = navigation.find((item) => item.id === screen) ?? navigation[0];
+  const candidateSha = deploymentIdentity.candidate?.git_sha ?? null;
+  const candidateShortSha = candidateSha?.slice(0, 10) ?? "metadata unavailable";
+  const candidateLabel = deploymentIdentity.candidate?.label ?? "candidate metadata unavailable";
+  const primaryDeploymentLabel = deploymentIdentity.deployment_kind === "candidate" ? "CANDIDATE BUILD" : "OFFICIAL RELEASE";
 
   return <div className="app-shell" style={workbench.shellStyle}>
     <header className="global-header">
       <div className="brand-mark">FO</div>
       <div className="brand-copy"><strong>FabOps</strong><span>Decision intelligence for yield excursions</span></div>
-      <div className="header-status">
-        <span className="status-chip status-chip--candidate">0.7 CANDIDATE</span>
-        <span className="status-chip">BASE {replay.release.release_version}</span>
-        <span className="status-chip">SYNTHETIC</span>
-        <span className="status-chip">READ-ONLY PREVIEW</span>
-        <span className="status-chip status-chip--safe">NO TOOL CONTROL</span>
+      <div className="deployment-identity-strip" aria-label="Deployment identity">
+        <div className="deployment-identity-strip__primary">
+          <span>{primaryDeploymentLabel}</span>
+          <strong>{deploymentIdentity.deployment_kind === "candidate" ? candidateLabel : deploymentIdentity.base_release.version}</strong>
+          <code title={candidateSha ?? undefined}>{deploymentIdentity.deployment_kind === "candidate" ? candidateShortSha : deploymentIdentity.base_release.source_git_commit?.slice(0, 10) ?? "manifest"}</code>
+        </div>
+        <div>
+          <span>BASE RELEASE</span>
+          <strong>{deploymentIdentity.base_release.version}</strong>
+          <small>authoritative release identity</small>
+        </div>
+        <div>
+          <span>{deploymentIdentity.channel.replaceAll("-", " ").toUpperCase()}</span>
+          <strong>READ-ONLY</strong>
+          <small>bounded AI · no equipment control</small>
+        </div>
       </div>
     </header>
     <div className="workspace-context" aria-label="Current workspace context">
@@ -284,13 +305,13 @@ export default function App() {
       </div>
     </div>
     <div className="mobile-status-ribbon" aria-label="Release and provenance status">
-      <span>0.7 candidate</span><span>base {replay.release.release_version}</span><span>synthetic</span><span>read-only</span>
+      <span>{deploymentIdentity.deployment_kind === "candidate" ? `candidate ${candidateShortSha}` : `official ${deploymentIdentity.base_release.version}`}</span><span>base {deploymentIdentity.base_release.version}</span><span>human authority</span><span>no equipment control</span>
     </div>
     <aside className={workbench.layout.leftOpen ? "left-rail" : "left-rail is-collapsed"} aria-label="Primary navigation" aria-hidden={!workbench.layout.leftOpen}>
       <div className="nav-heading"><span>Decision workspace</span><strong>From exception to governed action</strong></div>
-      <nav>{navGroups.map((group) => <div className="nav-group" key={group}>
-        <span className="nav-group__label"><b>{String(navGroups.indexOf(group) + 1).padStart(2, "0")}</b>{group}</span>
-        {navigation.filter((item) => item.group === group).map((item) => <button key={item.id} className={screen === item.id ? "nav-item is-active" : "nav-item"} aria-current={screen === item.id ? "page" : undefined} onClick={() => navigate(item.id)}>
+      <nav>{navigationGroups.map((group) => <div className="nav-group" key={group.name}>
+        <span className="nav-group__label" aria-label={`Section ${group.section}, ${group.name}`}><b aria-hidden="true">{group.numeral}</b><span aria-hidden="true">{group.name}</span></span>
+        {navigation.filter((item) => item.group === group.name).map((item) => <button key={item.id} className={screen === item.id ? "nav-item is-active" : "nav-item"} aria-current={screen === item.id ? "page" : undefined} onClick={() => navigate(item.id)}>
           <span>{item.short}</span><strong>{item.label}</strong>
         </button>)}
       </div>)}</nav>

@@ -32,6 +32,7 @@ const narrationStatus = {source: "runtime-configuration", public_get_mode: "cach
 const llmDecisionBrief = {...decisionBrief, source: "bounded-public-demo-narration", brief: {...decisionBrief.brief, mode: "llm", provider: "fake-grounded", fallback_reason: null, intent: "tradeoff_compare"}};
 const evaluation = {source: "generated-evaluation-evidence", versions: {detector: "spc-ewma-v1.0.0", projection: "rca-graph-v1.0.0", advisory: "deterministic-advisory-v1.1.0"}, metrics: {detector: {fault_recall: 1, false_alarms_per_simulated_day: 0}, rca: {top1_accuracy: 1, mrr: 1, false_causal_attribution_rate: 0}}, limitations: ["synthetic only"]};
 const replay = {source: "synthetic-replay", event_count: 3, detection_checkpoint: 3, projection, outbox_count: 3, quarantine_count: 0, delivery_status_counts: {on_time: 3, late: 0, out_of_order: 0}, external_services: {postgres: true, redpanda: true, neo4j: true, external_llm: "disabled-not-required"}, integration: {status: "verified", compose_config_verified: true, postgres_runtime_verified: true, redpanda_runtime_verified: true, neo4j_runtime_verified: true, container_integration_verified: true, reason: null}, release: {release_version: "0.6.0", release_hash: "a".repeat(64), source_git_commit: "b".repeat(40), manifest_available: true}};
+const deploymentIdentity = {schema_version: "fabops-deployment-identity-v1", deployment_kind: "candidate", channel: "public-preview", candidate: {label: "0.6.0-v0.7-candidate", git_sha: "64f74cd9a387a6f41a5611d84835dc10287c0998", deployment_hash: "candidate-64f74cd9a387a6f41a5611d84835dc10287c0998", metadata_available: true}, base_release: {version: "0.6.0", release_hash: "a".repeat(64), source_git_commit: "b".repeat(40), manifest_available: true}, runtime: {mode: "local", equipment_control_enabled: false}};
 const caseReplayTrace = {source: "source-event-and-audit-replay", case_id: fabCase.case_id, lot_id: fabCase.lot_id, source_of_truth: "local adapter shaped as the PostgreSQL event contract", projection_role: "rebuildable RCA/read projection", timeline: [{timeline_id: "source:evt-1", kind: "source_event", phase: "signal", sequence: 1, event_time: "2026-01-01T00:01:00Z", time_semantics: "source_event_time", event_type: "process.measurement.recorded.v1", event_id: "evt-1", delivery_status: "on_time", source: "local-event-adapter", payload: {sensor_name: "temperature", value: 12}}, {timeline_id: "audit:1", kind: "audit_event", phase: "detection", sequence: 1, event_time: "2026-01-01T00:01:00Z", time_semantics: "trigger_event_time", event_type: "case.detected", event_id: null, delivery_status: null, source: "decision-audit", payload: {classification: "physical_excursion"}}], summary: {source_event_count: 1, audit_event_count: 1, projection_snapshot_count: 0, out_of_order_count: 0, late_count: 0}, limitations: ["Synthetic only"]};
 
 describe("FabOps workbench", () => {
@@ -39,7 +40,7 @@ describe("FabOps workbench", () => {
     window.history.replaceState({}, "", "/");
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      const value = url.endsWith("/api/demo/session") ? demoSession : url.endsWith("/api/demo/narration") ? llmDecisionBrief : url.endsWith("/api/narration/status") ? narrationStatus : url.endsWith("/api/decision-cockpit") ? cockpit : url.includes("/decision-brief?") ? decisionBrief : url.endsWith("/api/overview") ? overview : url.endsWith("/api/evaluation") ? evaluation : url.endsWith("/api/replay") ? replay : url.endsWith("/replay-trace") ? caseReplayTrace : url.endsWith("/advisory") ? advisory : detail;
+      const value = url.endsWith("/api/deployment-identity") ? deploymentIdentity : url.endsWith("/api/demo/session") ? demoSession : url.endsWith("/api/demo/narration") ? llmDecisionBrief : url.endsWith("/api/narration/status") ? narrationStatus : url.endsWith("/api/decision-cockpit") ? cockpit : url.includes("/decision-brief?") ? decisionBrief : url.endsWith("/api/overview") ? overview : url.endsWith("/api/evaluation") ? evaluation : url.endsWith("/api/replay") ? replay : url.endsWith("/replay-trace") ? caseReplayTrace : url.endsWith("/advisory") ? advisory : detail;
       return new Response(JSON.stringify(value), {status: 200, headers: {"Content-Type": "application/json"}});
     }));
   });
@@ -53,9 +54,15 @@ describe("FabOps workbench", () => {
     expect(screen.getAllByText("LOT-00002").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Collect confirming metrology", {exact: false}).length).toBeGreaterThan(1);
     expect(screen.getByText("Prepare containment review", {exact: false})).toBeInTheDocument();
-    expect(screen.getByText("READ-ONLY PREVIEW")).toBeInTheDocument();
-    expect(screen.getAllByText("BASE 0.6.0", {exact: true}).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Deployment identity")).toHaveTextContent("CANDIDATE BUILD");
+    expect(screen.getByLabelText("Deployment identity")).toHaveTextContent("64f74cd9a3");
+    expect(screen.getByLabelText("Deployment identity")).toHaveTextContent("BASE RELEASE0.6.0");
+    expect(screen.getByLabelText("Section 1, Decide")).toHaveTextContent("ⅠDecide");
+    expect(screen.getByLabelText("Section 2, Investigate")).toHaveTextContent("ⅡInvestigate");
+    expect(screen.getByLabelText("Section 3, Trust")).toHaveTextContent("ⅢTrust");
     expect(screen.getAllByText("NO EQUIPMENT CONTROL").length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Evidence authority separation")).toHaveTextContent("OBSERVED");
+    expect(screen.getByLabelText("Evidence authority separation")).toHaveTextContent("HUMAN DECISION");
     expect(screen.getByText("Resolve before acting")).toBeInTheDocument();
     expect(screen.getAllByText("Evidence sufficiency", {exact: true}).length).toBeGreaterThan(0);
     expect(screen.getByLabelText("Current workspace context")).toHaveTextContent("Decision Lab/Decide/Decision Cockpit");

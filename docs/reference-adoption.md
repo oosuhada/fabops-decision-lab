@@ -41,6 +41,19 @@ The prototype directory was `/tmp/fabops-forensics-prototypes`; no rejected prot
 
 Both are GREEN because they have permissive licenses, are maintained reusable libraries, materially improve core evidence interaction, do not alter decision authority, and have deterministic/accessibility fallbacks. The final production bundle contains these two libraries and no rejected prototype dependency.
 
+## V2 Reference-Driven Pass
+
+The V2 pass re-read the full external `AI-UX-REFERENCE-CATALOG.md` and the checked-in catalog before implementation. It intentionally added **no new runtime dependency**. The strongest reference ideas were reinterpreted through the existing D3/Motion stack and FabOps-owned DOM/SVG surfaces:
+
+- **Graphite**: adopted the professional-editor pattern of persistent object identity, explicit authority layers, and a dense engineering artifact inspector. The selected-evidence inspector now exposes layer, source identity, and time basis as instrument coordinates rather than as a generic card.
+- **D3 / graph tooling comparisons**: kept the existing typed SVG graph because it already owns pan/zoom, filters, keyboard selection, one-hop focus, and an accessible relationship table. V2 adds an inspection readout for selected object, current scope, visible node/edge count, projection freshness, and explicit edge direction instead of replacing the renderer.
+- **Motion / Motion Primitives**: retained only the existing selected-evidence handoff transition. No new ambient, looping, background, or navigation animation was introduced, and reduced-motion continues to remove the transition.
+- **Industrial/editorial navigation references**: primary navigation sections are now visually indexed with Unicode Roman numerals `Ⅰ`, `Ⅱ`, `Ⅲ`, while page identifiers remain `01`–`10`. Screen-reader labels preserve the semantic section numbers independently of the decorative glyphs.
+- **Forensic provenance references**: the Decision Cockpit now presents `OBSERVED`, `COMPUTED`, `PROJECTED`, `INFERRED`, `AI WORDING`, and `HUMAN DECISION` as separate authority strata so visual hierarchy reinforces the architecture instead of collapsing evidence and advice into a single “AI result”.
+- **Deployment/operations instrument patterns**: the global header replaces status-badge accumulation with three machine-backed identity columns: candidate build, authoritative base release, and public-preview boundary.
+
+Rejected V2 experiments remained rejected: React Flow/Cytoscape/G6/Sigma would duplicate accepted graph interaction at significant bundle/runtime cost; liquid glass and shader effects do not encode a source-backed operational state; post-processing/WebGL would add rendering failure modes without improving a process/yield decision.
+
 ## Visual Principles Adopted
 
 | Reference | Observed principle | FabOps interpretation | Where visible |

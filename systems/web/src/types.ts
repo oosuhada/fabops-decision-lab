@@ -328,6 +328,28 @@ export interface ReplayResponse {
   };
 }
 
+export interface DeploymentIdentityResponse {
+  schema_version: "fabops-deployment-identity-v1" | string;
+  deployment_kind: "official" | "candidate";
+  channel: string;
+  candidate: null | {
+    label: string | null;
+    git_sha: string | null;
+    deployment_hash: string | null;
+    metadata_available: boolean;
+  };
+  base_release: {
+    version: string;
+    release_hash: string;
+    source_git_commit: string | null;
+    manifest_available: boolean;
+  };
+  runtime: {
+    mode: string;
+    equipment_control_enabled: false;
+  };
+}
+
 export interface CaseReplayTraceResponse {
   source: string;
   case_id: string;

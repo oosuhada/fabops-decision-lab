@@ -265,6 +265,14 @@ export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, s
         <div className="cockpit-trust"><span>Execution boundary</span><strong>NONE</strong><small>NO EQUIPMENT CONTROL</small></div>
       </div>
     </section>
+    <section className="evidence-authority-matrix" aria-label="Evidence authority separation">
+      <article><span>OBSERVED</span><strong>Source records</strong><small>Event, measurement, inspection</small></article>
+      <article><span>COMPUTED</span><strong>Deterministic logic</strong><small>Anomaly, classification, RCA score</small></article>
+      <article><span>PROJECTED</span><strong>Rebuildable view</strong><small>Neo4j read projection · not source truth</small></article>
+      <article><span>INFERRED</span><strong>Advisory stance</strong><small>Evidence-grounded proposal only</small></article>
+      <article><span>AI WORDING</span><strong>Presentation only</strong><small>Cannot change recommendation identity</small></article>
+      <article className="is-human"><span>HUMAN DECISION</span><strong>Final authority</strong><small>Approve · reject · request evidence</small></article>
+    </section>
     {top ? <section className="decision-spotlight panel">
       <div className="decision-spotlight__main">
         <div className="decision-spotlight__meta">

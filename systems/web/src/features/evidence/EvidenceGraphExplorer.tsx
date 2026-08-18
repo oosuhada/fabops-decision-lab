@@ -103,6 +103,13 @@ export function EvidenceGraphExplorer({detail, onSelectStep, onSelectNode}: {det
       <span><i className="is-inference" />Deterministic system inference</span>
       <span><i className="is-contradict" />Contradicting evidence</span>
     </div>
+    <div className="typed-graph-readout" aria-label="Evidence graph inspection state">
+      <div><span>SELECTED</span><strong>{selectedNode?.label ?? "None"}</strong></div>
+      <div><span>SCOPE</span><strong>{focusMode ? "1-HOP FOCUS" : "FULL GRAPH"}</strong></div>
+      <div><span>VISIBLE</span><strong>{nodes.length} nodes · {edges.length} edges</strong></div>
+      <div><span>PROJECTION</span><strong>{detail.rca.projection.stale ? `STALE · ${detail.rca.projection.lag_events}` : "FRESH"}</strong></div>
+      <p>Relationship labels follow the arrow direction →. Edge layer and source identity remain inspectable in the object panel and table fallback.</p>
+    </div>
     <div className="typed-graph-body">
       <svg className="typed-graph-canvas" viewBox="0 0 1760 650" role="img" aria-label={`${nodes.length} typed nodes and ${edges.length} visible relationships`} onWheel={wheel} onPointerDown={beginPan} onPointerMove={movePan} onPointerUp={endPan} onPointerCancel={endPan}>
         <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>

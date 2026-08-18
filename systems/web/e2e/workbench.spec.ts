@@ -7,8 +7,12 @@ test("decision cockpit connects priority, evidence, grounded brief and governed 
   await expect(page.getByText("Resolve before acting")).toBeVisible();
   await expect(page).toHaveURL(/\/DecisionCockpit$/);
   const header = page.locator(".global-header");
-  await expect(header.getByText("0.7 CANDIDATE", {exact: true})).toBeVisible();
-  await expect(header.getByText("READ-ONLY PREVIEW", {exact: true})).toBeVisible();
+  await expect(header.getByText("CANDIDATE BUILD", {exact: true})).toBeVisible();
+  await expect(header.getByText("BASE RELEASE", {exact: true})).toBeVisible();
+  await expect(page.getByLabel("Section 1, Decide")).toContainText("ⅠDecide");
+  await expect(page.getByLabel("Section 2, Investigate")).toContainText("ⅡInvestigate");
+  await expect(page.getByLabel("Section 3, Trust")).toContainText("ⅢTrust");
+  await expect(page.getByLabel("Evidence authority separation")).toContainText("HUMAN DECISION");
   await expect(page.getByRole("heading", {name: "Compare the available stances before acting"})).toBeVisible();
   await expect(page.getByText("Current recommendation").first()).toBeVisible();
   await page.getByRole("button", {name: "Investigate evidence"}).click();
@@ -73,15 +77,64 @@ test("mobile decision cockpit keeps candidate, provenance and read-only identity
   await expect(page.getByRole("heading", {name: "What needs a decision now?"})).toBeVisible();
   const ribbon = page.getByLabel("Release and provenance status");
   await expect(ribbon).toBeVisible();
-  await expect(ribbon).toContainText("0.7 candidate");
-  await expect(ribbon).toContainText("synthetic");
-  await expect(ribbon).toContainText("read-only");
+  await expect(ribbon).toContainText("candidate");
   await expect(ribbon).toContainText("base 0.6.0");
+  await expect(ribbon).toContainText("human authority");
+  await expect(ribbon).toContainText("no equipment control");
+  await expect(page.getByLabel("Section 1, Decide")).toContainText("ⅠDecide");
+  await expect(page.getByLabel("Section 2, Investigate")).toContainText("ⅡInvestigate");
+  await expect(page.getByLabel("Section 3, Trust")).toContainText("ⅢTrust");
   const workspaceContext = page.getByLabel("Current workspace context");
   await expect(workspaceContext).toBeVisible();
   await expect(workspaceContext).toContainText("Decision Cockpit");
   await expect(workspaceContext).toContainText(/LOT-\d{5}/);
   await expect(page.getByRole("button", {name: /Decision & Approval/i})).toBeVisible();
+});
+
+test("1024 and reduced-motion modes preserve decision authority, keyboard access and layout", async ({page}) => {
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()); });
+
+  await page.setViewportSize({width: 1024, height: 900});
+  await page.goto("/DecisionCockpit");
+  await expect(page.getByRole("heading", {name: "What needs a decision now?"})).toBeVisible();
+  await expect(page.getByLabel("Evidence authority separation")).toContainText("HUMAN DECISION");
+  await expect(page.locator(".cockpit-trust").getByText("NO EQUIPMENT CONTROL", {exact: true})).toBeVisible();
+  await expect(page.getByLabel("Section 1, Decide")).toContainText("ⅠDecide");
+  await expect(page.getByLabel("Section 2, Investigate")).toContainText("ⅡInvestigate");
+  await expect(page.getByLabel("Section 3, Trust")).toContainText("ⅢTrust");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1)).toBe(false);
+
+  const graphNav = page.getByRole("button", {name: /Evidence Graph/i});
+  await graphNav.focus();
+  await expect(graphNav).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/EvidenceGraph$/);
+  await expect(graphNav).toHaveAttribute("aria-current", "page");
+  await expect(page.getByText("Spatial die coordinates unavailable in current API", {exact: true})).toBeVisible();
+  await expect(page.getByText("Accessible relationship fallback", {exact: true})).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1)).toBe(false);
+
+  await page.emulateMedia({reducedMotion: "reduce"});
+  await page.setViewportSize({width: 390, height: 844});
+  await page.goto("/DecisionCockpit");
+  await expect(page.getByRole("heading", {name: "What needs a decision now?"})).toBeVisible();
+  const motionAudit = await page.evaluate(() => {
+    const nav = document.querySelector(".nav-item");
+    const style = nav ? getComputedStyle(nav) : null;
+    return {
+      overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+      transitionDuration: style?.transitionDuration ?? "missing",
+      animationName: style?.animationName ?? "missing",
+    };
+  });
+  expect(motionAudit.overflow).toBe(false);
+  expect(["0s", "missing"]).toContain(motionAudit.transitionDuration);
+  expect(["none", "missing"]).toContain(motionAudit.animationName);
+  expect(pageErrors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
 });
 
 test("Semiconductor Forensics design grammar stays consistent across routes", async ({page}) => {
