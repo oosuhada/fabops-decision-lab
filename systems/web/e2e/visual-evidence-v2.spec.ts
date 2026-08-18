@@ -1,9 +1,10 @@
 import {expect, test} from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
+import {fileURLToPath} from "node:url";
 
 const captureEnabled = process.env.FABOPS_CAPTURE_VISUAL_EVIDENCE === "1";
-const outputDir = path.resolve(process.cwd(), "../../docs/assets/semiconductor-forensics-v2");
+const outputDir = fileURLToPath(new URL("../../../docs/assets/semiconductor-forensics-v2/", import.meta.url));
 
 test("capture Semiconductor Forensics V2 browser evidence", async ({page}) => {
   test.skip(!captureEnabled, "Visual evidence capture is opt-in so normal verification does not overwrite versioned screenshots.");

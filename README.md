@@ -7,9 +7,9 @@ FabOps Decision Lab is a portfolio-scale engineering decision platform for yield
 > **Live Demo — GOVERNED PUBLIC CANDIDATE:** https://fabops-preview.oosu.dev  
 > The public UI is a **v0.7 candidate** running beside the still-authoritative `0.6.0` M8 soak target. Portfolio data is synthetic. GET/HEAD decision data is cache-only/deterministic and workflow mutation remains blocked at ingress. Live AI wording is available only through predefined bounded demo intents with signed anonymous sessions, application/edge rate limits, provider concurrency and daily budgets. AI wording cannot change the deterministic recommendation, and the demo exposes **NO TOOL CONTROL** or equipment execution. v0.7 is not an official release yet.
 
-![FabOps Semiconductor Forensics decision cockpit](docs/assets/semiconductor-forensics/decision-cockpit-1440.png)
+![FabOps Semiconductor Forensics V2 decision cockpit](docs/assets/semiconductor-forensics-v2/decision-cockpit-1440.png)
 
-The current workbench uses a **Semiconductor Forensics × Governed Decision Instrument** visual system: source-backed scope, counter-evidence, projection freshness, deterministic recommendation and human authority are prioritized ahead of decorative telemetry. Spatial die coordinates are not fabricated when the API does not provide them.
+The current workbench uses a **Semiconductor Forensics × Governed Decision Instrument** visual system: `Ⅰ Decide / Ⅱ Investigate / Ⅲ Trust`, source-backed scope, counter-evidence, projection freshness, deterministic recommendation and human authority are prioritized ahead of decorative telemetry. Candidate build identity and authoritative base-release identity are exposed separately in both API and UI. Spatial die coordinates are not fabricated when the API does not provide them.
 
 <!-- RELEASE_IDENTITY_START -->
 > Release `0.6.0` · canonical release hash `ab8b20a696b9b1996495f23a3e413cc33a67b6861efa184c64742e0f310c6326` · source commit `6824ca11198a`

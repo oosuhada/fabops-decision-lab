@@ -6,6 +6,7 @@ const apiBaseURL = `http://127.0.0.1:${apiPort}`;
 const webBaseURL = `http://127.0.0.1:${webPort}`;
 const externalBaseURL = process.env.FABOPS_E2E_EXTERNAL_URL?.replace(/\/$/, "");
 const effectiveBaseURL = externalBaseURL ?? webBaseURL;
+const e2eCandidateGitSha = process.env.FABOPS_E2E_CANDIDATE_GIT_SHA ?? "e2e-candidate-sha";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -39,8 +40,8 @@ export default defineConfig({
         FABOPS_DEPLOYMENT_KIND: "candidate",
         FABOPS_DEPLOYMENT_CHANNEL: "public-preview",
         FABOPS_CANDIDATE_LABEL: "0.6.0-v0.7-candidate",
-        FABOPS_CANDIDATE_GIT_SHA: "e2e-candidate-sha",
-        FABOPS_DEPLOYMENT_HASH: "candidate-e2e-candidate-sha",
+        FABOPS_CANDIDATE_GIT_SHA: e2eCandidateGitSha,
+        FABOPS_DEPLOYMENT_HASH: `candidate-${e2eCandidateGitSha}`,
       },
       reuseExistingServer: false,
       timeout: 30_000,
