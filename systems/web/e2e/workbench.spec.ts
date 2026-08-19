@@ -251,3 +251,40 @@ test("Semiconductor Forensics design grammar stays consistent across routes", as
   expect(releaseGeometry.firstLabelInset).toBeGreaterThanOrEqual(15);
 });
 
+test("SystemHealth replay keeps the timeline above responsive selected-event details", async ({page}) => {
+  await page.setViewportSize({width: 1180, height: 1000});
+  await page.goto("/SystemHealth");
+
+  const timeline = page.getByRole("list", {name: "Case replay event timeline"});
+  const inspector = page.getByRole("article", {name: "Selected replay event"});
+  const metadata = page.getByRole("region", {name: "Selected source event metadata"});
+  const payload = page.getByRole("region", {name: "Recorded payload"});
+  await expect(timeline).toBeVisible();
+  await expect(inspector).toBeVisible();
+  await expect(metadata).toContainText("local-event-adapter");
+  const initialMetadata = await metadata.textContent();
+  const initialPayload = await payload.textContent();
+
+  const wideGeometry = await page.evaluate(() => {
+    const timelineRect = document.querySelector("[aria-label='Case replay event timeline']")!.getBoundingClientRect();
+    const inspectorRect = document.querySelector("[aria-label='Selected replay event']")!.getBoundingClientRect();
+    const metadataRect = document.querySelector("[aria-label='Selected source event metadata']")!.getBoundingClientRect();
+    const payloadRect = document.querySelector("[aria-label='Recorded payload']")!.getBoundingClientRect();
+    return {timelineRect, inspectorRect, metadataRect, payloadRect};
+  });
+  expect(wideGeometry.inspectorRect.top).toBeGreaterThanOrEqual(wideGeometry.timelineRect.bottom - 1);
+  expect(wideGeometry.metadataRect.left).toBeLessThan(wideGeometry.payloadRect.left);
+  expect(Math.abs(wideGeometry.metadataRect.top - wideGeometry.payloadRect.top)).toBeLessThanOrEqual(1);
+
+  await timeline.getByRole("button").nth(1).click();
+  await expect(metadata).not.toHaveText(initialMetadata ?? "");
+  await expect(payload).not.toHaveText(initialPayload ?? "");
+
+  await page.setViewportSize({width: 390, height: 844});
+  const narrowGeometry = await page.evaluate(() => {
+    const metadataRect = document.querySelector("[aria-label='Selected source event metadata']")!.getBoundingClientRect();
+    const payloadRect = document.querySelector("[aria-label='Recorded payload']")!.getBoundingClientRect();
+    return {metadataRect, payloadRect};
+  });
+  expect(narrowGeometry.payloadRect.top).toBeGreaterThanOrEqual(narrowGeometry.metadataRect.bottom - 1);
+});

@@ -1718,7 +1718,6 @@ body::before {
   .rca-explainability-grid { grid-template-columns: 1fr; }
   .evaluation-grid,.evaluation-grid--lower { grid-template-columns: 1fr; }
   .replay-trace-layout { grid-template-columns: 1fr; }
-  .replay-event-inspector { grid-template-columns: 1fr; border-top: 1px solid #dce5e9; border-left: 0; }
 }
 
 @media (max-width: 760px) {
@@ -1762,6 +1761,7 @@ body::before {
   .evaluation-family-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .seed-range-strip { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .baseline-comparison { grid-template-columns: 1fr; }
+  .replay-event-inspector { grid-template-columns: 1fr; }
   .replay-controls { grid-template-columns: auto auto 1fr auto; }
   .replay-controls > span { display: none; }
   .replay-summary-strip { grid-template-columns: repeat(2,minmax(0,1fr)); }
@@ -1870,4 +1870,3 @@ body::before {
   .shift-handoff-list > ol > li { grid-template-columns: 54px minmax(0,1fr); }
   .shift-handoff-evidence,.shift-handoff-next { grid-column: 2; }
 }
-
