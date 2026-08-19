@@ -81,7 +81,7 @@ describe("FabOps workbench", () => {
     fireEvent.mouseEnter(navigationEdge);
     expect(navigationPane).toHaveAttribute("aria-hidden", "false");
     expect(screen.getByLabelText("Section 1, Decide")).toHaveTextContent("Ⅰ. Decide");
-    fireEvent.mouseLeave(navigationPane);
+    fireEvent.mouseEnter(document.querySelector("#work-surface")!);
     expect(navigationPane).toHaveAttribute("aria-hidden", "true");
 
     fireEvent.click(navigationEdge);
