@@ -155,9 +155,20 @@ describe("FabOps workbench", () => {
     expect(await screen.findByRole("heading", {name: "Event-backed decision trace"})).toBeInTheDocument();
     expect(screen.getByLabelText("Replay scrubber")).toHaveValue("0");
     expect(screen.getByText("process.measurement.recorded.v1")).toBeInTheDocument();
+    const timeline = screen.getByRole("list", {name: "Case replay event timeline"});
+    const inspector = screen.getByRole("article", {name: "Selected replay event"});
+    const metadata = screen.getByRole("region", {name: "Selected source event metadata"});
+    const payload = screen.getByRole("region", {name: "Recorded payload"});
+    expect(timeline.parentElement).toHaveClass("replay-trace-layout");
+    expect(inspector).toContainElement(metadata);
+    expect(inspector).toContainElement(payload);
+    expect(metadata).toHaveTextContent("local-event-adapter");
+    expect(payload).toHaveTextContent("Recorded payload");
     fireEvent.click(screen.getByRole("button", {name: "Next"}));
     expect(screen.getByRole("heading", {name: "case.detected"})).toBeInTheDocument();
     expect(screen.getByText("decision-audit")).toBeInTheDocument();
+    expect(metadata).toHaveTextContent("decision-audit");
+    expect(payload).not.toHaveTextContent('"sensor_name": "rf_power"');
   });
 });
 

@@ -1,0 +1,44 @@
+{
+  "schema_version": "m6-container-integration-evidence-v1",
+  "generated_at": "2026-08-23T23:34:51.108261+00:00",
+  "verification_source_git_sha": "6d02cdf628cfd61d685f078b8a2c15b6857c0bcf",
+  "platform": {
+    "machine": "arm64",
+    "runtime": "Docker Desktop",
+    "docker_architecture": "aarch64"
+  },
+  "loopback_ports": {
+    "api": 18090,
+    "web": 15190,
+    "conflict_avoidance": "Existing unrelated default-port listener was preserved; isolated FabOps loopback ports were used instead."
+  },
+  "status": "verified",
+  "compose_project": "fabops-decision-lab-m6",
+  "compose_config_verified": true,
+  "postgres_runtime_verified": true,
+  "redpanda_runtime_verified": true,
+  "neo4j_runtime_verified": true,
+  "neo4j_memory_limit": "768m",
+  "container_integration_verified": true,
+  "container_pytest": {
+    "exit_code": 0,
+    "result": "4 passed"
+  },
+  "api_restart_verified": true,
+  "actual_equipment_control": false,
+  "duration_seconds": 79.253,
+  "cleanup": {
+    "compose_down_completed": true,
+    "volumes_removed": false
+  },
+  "reproduction_commands": [
+    "docker compose --env-file infra/.env -f infra/docker-compose.yml config --quiet",
+    "uv run python -m evaluation.m6_integration --output /tmp/fabops-m6-container-integration-final.json --check",
+    "docker compose --env-file infra/.env -f infra/docker-compose.yml down"
+  ],
+  "sanitization": {
+    "env_contents_included": false,
+    "credentials_included": false,
+    "credential_bearing_dsns_included": false
+  }
+}

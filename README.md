@@ -148,12 +148,13 @@ Local setup:
 cp infra/.env.example infra/.env
 chmod 0600 infra/.env
 # Replace placeholder values in infra/.env without committing the file.
+# If 8000/5173 are already occupied, set FABOPS_API_PORT/FABOPS_WEB_PORT to free loopback ports.
 
 docker compose --env-file infra/.env -f infra/docker-compose.yml config --quiet
-docker compose --env-file infra/.env -f infra/docker-compose.yml up -d --build
-curl -fsS http://127.0.0.1:8000/health/ready
-docker compose --env-file infra/.env -f infra/docker-compose.yml down
+uv run python -m evaluation.m6_integration --output /tmp/fabops-m6-container-integration.json --check
 ```
+
+The M6 integration verifier reads only the non-secret `FABOPS_API_PORT` setting needed for its loopback readiness probe and defaults to `8000` for backward compatibility. It never copies `infra/.env` contents into evidence. Canonical verification also injects isolated free `FABOPS_E2E_API_PORT` / `FABOPS_E2E_WEB_PORT` values into Playwright so unrelated listeners on the normal development ports are not reused or stopped. Direct `npm run test:e2e` behavior remains unchanged and still defaults to `8000/5173` unless those E2E variables are provided.
 
 ## Canonical verification
 

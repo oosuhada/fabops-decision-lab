@@ -763,17 +763,19 @@ export function ReplayOperations({replay, trace = null}: {replay: ReplayResponse
             <span>{item.phase.replaceAll("_", " ")}</span><strong>{item.event_type.replaceAll(".v1", "")}</strong><small>{item.event_time ? item.event_time.slice(11, 19) : `#${item.sequence} order`}</small>
           </button>
         </li>)}</ol>
-        <article className="replay-event-inspector">
+        <article className="replay-event-inspector" aria-label="Selected replay event">
           {replayItem ? <>
-            <div className="replay-event-inspector__title"><span>{replayItem.kind.replaceAll("_", " ")}</span><h3>{replayItem.event_type}</h3><small>{replayItem.event_time ?? "No persisted wall-clock timestamp"}</small></div>
-            <dl>
-              <div><dt>Phase</dt><dd>{replayItem.phase}</dd></div>
-              <div><dt>Source</dt><dd>{replayItem.source}</dd></div>
-              <div><dt>Time semantics</dt><dd>{replayItem.time_semantics.replaceAll("_", " ")}</dd></div>
-              <div><dt>Delivery</dt><dd>{replayItem.delivery_status ?? "not applicable"}</dd></div>
-              <div><dt>Event ID</dt><dd>{replayItem.event_id ?? "not an authoritative source event"}</dd></div>
-            </dl>
-            <div className="replay-payload"><span>Recorded payload</span><pre>{JSON.stringify(replayItem.payload, null, 2)}</pre></div>
+            <section className="replay-event-metadata" aria-label="Selected source event metadata">
+              <div className="replay-event-inspector__title"><span>{replayItem.kind.replaceAll("_", " ")}</span><h3>{replayItem.event_type}</h3><small>{replayItem.event_time ?? "No persisted wall-clock timestamp"}</small></div>
+              <dl>
+                <div><dt>Phase</dt><dd>{replayItem.phase}</dd></div>
+                <div><dt>Source</dt><dd>{replayItem.source}</dd></div>
+                <div><dt>Time semantics</dt><dd>{replayItem.time_semantics.replaceAll("_", " ")}</dd></div>
+                <div><dt>Delivery</dt><dd>{replayItem.delivery_status ?? "not applicable"}</dd></div>
+                <div><dt>Event ID</dt><dd>{replayItem.event_id ?? "not an authoritative source event"}</dd></div>
+              </dl>
+            </section>
+            <section className="replay-payload" aria-label="Recorded payload"><span>Recorded payload</span><pre>{JSON.stringify(replayItem.payload, null, 2)}</pre></section>
           </> : <p>No replay item is available for the selected case.</p>}
         </article>
       </div>

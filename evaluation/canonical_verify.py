@@ -6,6 +6,7 @@ import os
 import platform
 import shlex
 import shutil
+import socket
 import subprocess
 import tarfile
 import tempfile
@@ -40,9 +41,13 @@ def _run(
     *,
     cwd: Path = ROOT,
     extra_paths: list[Path] | None = None,
+    env_overrides: dict[str, str] | None = None,
     timeout: int = 900,
 ) -> dict[str, Any]:
     started = time.perf_counter()
+    environment = os.environ.copy()
+    if env_overrides:
+        environment.update(env_overrides)
     completed = subprocess.run(
         arguments,
         cwd=cwd,
@@ -50,7 +55,7 @@ def _run(
         text=True,
         timeout=timeout,
         check=False,
-        env=os.environ.copy(),
+        env=environment,
     )
     duration = time.perf_counter() - started
     output = "\n".join([completed.stdout, completed.stderr]).strip()
@@ -64,6 +69,48 @@ def _run(
         "duration_seconds": round(duration, 3),
         "output_tail": _sanitize(tail, extra_paths),
     }
+
+
+def _allocate_loopback_port(excluded: set[int]) -> int:
+    for _ in range(32):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = int(probe.getsockname()[1])
+        if port not in excluded:
+            return port
+    raise RuntimeError("unable to allocate an isolated loopback port")
+
+
+def _select_isolated_e2e_ports() -> dict[str, int]:
+    excluded = {8000, 5173}
+    api_port = _allocate_loopback_port(excluded)
+    excluded.add(api_port)
+    web_port = _allocate_loopback_port(excluded)
+    return {"api_port": api_port, "web_port": web_port}
+
+
+def _run_frontend_e2e(npm: str) -> tuple[dict[str, Any], dict[str, int]]:
+    ports: dict[str, int] = {}
+    step: dict[str, Any] = {}
+    for attempt in range(3):
+        ports = _select_isolated_e2e_ports()
+        step = _run(
+            "frontend-e2e",
+            [npm, "run", "test:e2e"],
+            cwd=ROOT / "systems/web",
+            env_overrides={
+                "FABOPS_E2E_API_PORT": str(ports["api_port"]),
+                "FABOPS_E2E_WEB_PORT": str(ports["web_port"]),
+            },
+            timeout=300,
+        )
+        if step["exit_code"] == 0:
+            return step, ports
+        output = step.get("output_tail", "").lower()
+        port_conflict = "address already in use" in output or "eaddrinuse" in output
+        if not port_conflict or attempt == 2:
+            return step, ports
+    return step, ports
 
 
 def _clean_setup(uv: str, npm: str, temp_root: Path) -> dict[str, Any]:
@@ -133,14 +180,19 @@ def verify(output: Path) -> dict[str, Any]:
             _run("frontend-component-tests", [npm, "run", "test"], cwd=ROOT / "systems/web"),
             _run("frontend-build", [npm, "run", "build"], cwd=ROOT / "systems/web"),
             _run("frontend-audit", [npm, "audit", "--audit-level=high"], cwd=ROOT / "systems/web"),
-            _run("frontend-e2e", [npm, "run", "test:e2e"], cwd=ROOT / "systems/web", timeout=300),
-            _run(
-                "architecture-fitness",
-                [uv, "run", "python", "-m", "evaluation.m6_fitness", "--output-dir", str(temp_fitness)],
-                extra_paths=[temp_dir],
-            ),
-            _run("release-manifest-consistency", [uv, "run", "python", "-m", "evaluation.release_manifest", "--check"]),
         ]
+        e2e_step, e2e_ports = _run_frontend_e2e(npm)
+        steps.extend(
+            [
+                e2e_step,
+                _run(
+                    "architecture-fitness",
+                    [uv, "run", "python", "-m", "evaluation.m6_fitness", "--output-dir", str(temp_fitness)],
+                    extra_paths=[temp_dir],
+                ),
+                _run("release-manifest-consistency", [uv, "run", "python", "-m", "evaluation.release_manifest", "--check"]),
+            ]
+        )
 
         docker_info = _run("docker-info", [docker, "info"], timeout=30)
         docker_available = docker_info["exit_code"] == 0
@@ -197,6 +249,7 @@ def verify(output: Path) -> dict[str, Any]:
             "expected_evaluation_hash": expected_evaluation_hash,
             "evaluation_identity_passed": evaluation_identity_passed,
             "steps": steps,
+            "e2e_ports": e2e_ports,
             "docker_integration": docker_status,
             "clean_setup": clean_setup,
             "policy": {

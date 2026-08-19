@@ -12,6 +12,33 @@ from typing import Any
 
 INTEGRATION_VERSION = "m6-container-integration-v1"
 COMPOSE = ["docker", "compose", "--env-file", "infra/.env", "-f", "infra/docker-compose.yml"]
+ENV_FILE = Path("infra/.env")
+DEFAULT_API_PORT = 8000
+
+
+def _validate_port(raw_value: str, *, source: str) -> int:
+    try:
+        port = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(f"{source} must be an integer in range 1-65535") from exc
+    if not 1 <= port <= 65535:
+        raise ValueError(f"{source} must be an integer in range 1-65535")
+    return port
+
+
+def resolve_api_port(env_file: Path = ENV_FILE, *, explicit_port: str | None = None) -> int:
+    if explicit_port is not None:
+        return _validate_port(explicit_port, source="--api-port")
+    if not env_file.exists():
+        return DEFAULT_API_PORT
+    for raw_line in env_file.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        if key.strip() == "FABOPS_API_PORT":
+            return _validate_port(value.strip(), source="FABOPS_API_PORT")
+    return DEFAULT_API_PORT
 
 
 def _run(arguments: list[str], *, timeout: int = 300) -> dict[str, Any]:
@@ -27,18 +54,19 @@ def _run(arguments: list[str], *, timeout: int = 300) -> dict[str, Any]:
     }
 
 
-def _read_health(timeout_seconds: float = 60.0) -> dict[str, Any] | None:
+def _read_health(host: str, port: int, timeout_seconds: float = 60.0) -> dict[str, Any] | None:
     deadline = time.monotonic() + timeout_seconds
+    health_url = f"http://{host}:{port}/health/ready"
     while time.monotonic() < deadline:
         try:
-            with urllib.request.urlopen("http://127.0.0.1:8000/health/ready", timeout=3) as response:
+            with urllib.request.urlopen(health_url, timeout=3) as response:
                 return json.load(response)
         except (OSError, urllib.error.URLError, json.JSONDecodeError):
             time.sleep(1.0)
     return None
 
 
-def generate(output: Path, *, keep_up: bool = False) -> dict[str, Any]:
+def generate(output: Path, *, keep_up: bool = False, api_port_override: str | None = None) -> dict[str, Any]:
     generated_at = datetime.now(timezone.utc).isoformat()
     commands: list[dict[str, Any]] = []
     docker_info = _run(["docker", "info"], timeout=30)
@@ -68,6 +96,55 @@ def generate(output: Path, *, keep_up: bool = False) -> dict[str, Any]:
         output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         return result
 
+    if not ENV_FILE.exists():
+        result = {
+            "schema_version": INTEGRATION_VERSION,
+            "generated_at": generated_at,
+            "status": "unverified",
+            "reason": "Local server-only infra/.env unavailable; container-backed integration was not executed",
+            "compose_config_verified": False,
+            "postgres_runtime_verified": False,
+            "redpanda_runtime_verified": False,
+            "neo4j_runtime_verified": False,
+            "container_integration_verified": False,
+            "api_restart_verified": False,
+            "docker_daemon_available": True,
+            "api_port": DEFAULT_API_PORT,
+            "commands": [{"command": "docker info", "exit_code": docker_info["exit_code"]}],
+            "reproduction_commands": [
+                "cp infra/.env.example infra/.env",
+                "chmod 0600 infra/.env",
+                "docker compose --env-file infra/.env -f infra/docker-compose.yml config --quiet",
+            ],
+        }
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        return result
+
+    try:
+        api_port = resolve_api_port(ENV_FILE, explicit_port=api_port_override)
+    except ValueError:
+        result = {
+            "schema_version": INTEGRATION_VERSION,
+            "generated_at": generated_at,
+            "status": "unverified",
+            "reason": "Invalid integration API port configuration; expected an integer in range 1-65535",
+            "compose_config_verified": False,
+            "postgres_runtime_verified": False,
+            "redpanda_runtime_verified": False,
+            "neo4j_runtime_verified": False,
+            "container_integration_verified": False,
+            "api_restart_verified": False,
+            "docker_daemon_available": True,
+            "commands": [{"command": "docker info", "exit_code": docker_info["exit_code"]}],
+            "reproduction_commands": [
+                "docker compose --env-file infra/.env -f infra/docker-compose.yml config --quiet",
+            ],
+        }
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        return result
+
     compose_config = _run([*COMPOSE, "config", "--quiet"], timeout=30)
     commands.append({key: value for key, value in compose_config.items() if key not in {"stdout_tail", "stderr_tail"}})
     compose_config_verified = compose_config["exit_code"] == 0
@@ -84,6 +161,7 @@ def generate(output: Path, *, keep_up: bool = False) -> dict[str, Any]:
             "container_integration_verified": False,
             "api_restart_verified": False,
             "docker_daemon_available": True,
+            "api_port": api_port,
             "commands": commands,
             "reproduction_commands": [compose_config["command"]],
         }
@@ -99,7 +177,7 @@ def generate(output: Path, *, keep_up: bool = False) -> dict[str, Any]:
     restart: dict[str, Any] = {"exit_code": 1, "command": "not executed", "duration_seconds": 0.0}
     try:
         if up["exit_code"] == 0:
-            health = _read_health()
+            health = _read_health("127.0.0.1", api_port)
             integration_test = _run(
                 [
                     *COMPOSE,
@@ -120,7 +198,7 @@ def generate(output: Path, *, keep_up: bool = False) -> dict[str, Any]:
             restart = _run([*COMPOSE, "restart", "api"], timeout=60)
             commands.append({key: value for key, value in restart.items() if key not in {"stdout_tail", "stderr_tail"}})
             if restart["exit_code"] == 0:
-                restart_health = _read_health()
+                restart_health = _read_health("127.0.0.1", api_port)
     finally:
         if not keep_up:
             down = _run([*COMPOSE, "down"], timeout=120)
@@ -149,6 +227,7 @@ def generate(output: Path, *, keep_up: bool = False) -> dict[str, Any]:
         "status": "verified" if container_verified else "degraded",
         "reason": None if container_verified else "one or more container-backed runtime checks failed",
         "docker_daemon_available": True,
+        "api_port": api_port,
         "compose_config_verified": compose_config_verified,
         "postgres_runtime_verified": postgres_verified,
         "redpanda_runtime_verified": redpanda_verified,
@@ -181,9 +260,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Verify the isolated M6 Docker Compose integration stack.")
     parser.add_argument("--output", type=Path, default=Path("evidence/m6/integration-summary.json"))
     parser.add_argument("--keep-up", action="store_true")
+    parser.add_argument("--api-port", help="Override the loopback API port used for readiness probes.")
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
-    result = generate(args.output, keep_up=args.keep_up)
+    result = generate(args.output, keep_up=args.keep_up, api_port_override=args.api_port)
     if args.check and result["docker_daemon_available"] and not result["container_integration_verified"]:
         raise SystemExit("M6 container integration verification failed")
 
