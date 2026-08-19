@@ -13,5 +13,8 @@ describe("workbench layout contract", () => {
     expect(parseWorkbenchLayout("not-json")).toEqual(DEFAULT_WORKBENCH_LAYOUT);
     expect(parseWorkbenchLayout(JSON.stringify({leftWidth: 250, rightWidth: 390, leftOpen: false, rightOpen: true}))).toEqual({leftWidth: 250, rightWidth: 390, leftOpen: false, rightOpen: true});
   });
-});
 
+  it("starts desktop panes unpinned unless the user explicitly persisted a pin", () => {
+    expect(parseWorkbenchLayout(null)).toEqual({leftWidth: 232, rightWidth: 336, leftOpen: false, rightOpen: false});
+  });
+});

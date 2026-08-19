@@ -38,6 +38,7 @@ const caseReplayTrace = {source: "source-event-and-audit-replay", case_id: fabCa
 describe("FabOps workbench", () => {
   beforeEach(() => {
     window.history.replaceState({}, "", "/");
+    window.localStorage.setItem("fabops:v08:workbench-layout", JSON.stringify({leftWidth: 232, rightWidth: 336, leftOpen: true, rightOpen: true}));
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       const value = url.endsWith("/api/deployment-identity") ? deploymentIdentity : url.endsWith("/api/demo/session") ? demoSession : url.endsWith("/api/demo/narration") ? llmDecisionBrief : url.endsWith("/api/narration/status") ? narrationStatus : url.endsWith("/api/decision-cockpit") ? cockpit : url.includes("/decision-brief?") ? decisionBrief : url.endsWith("/api/overview") ? overview : url.endsWith("/api/evaluation") ? evaluation : url.endsWith("/api/replay") ? replay : url.endsWith("/replay-trace") ? caseReplayTrace : url.endsWith("/advisory") ? advisory : detail;
@@ -57,9 +58,9 @@ describe("FabOps workbench", () => {
     expect(screen.getByLabelText("Deployment identity")).toHaveTextContent("CANDIDATE BUILD");
     expect(screen.getByLabelText("Deployment identity")).toHaveTextContent("64f74cd9a3");
     expect(screen.getByLabelText("Deployment identity")).toHaveTextContent("BASE RELEASE0.6.0");
-    expect(screen.getByLabelText("Section 1, Decide")).toHaveTextContent("ⅠDecide");
-    expect(screen.getByLabelText("Section 2, Investigate")).toHaveTextContent("ⅡInvestigate");
-    expect(screen.getByLabelText("Section 3, Trust")).toHaveTextContent("ⅢTrust");
+    expect(screen.getByLabelText("Section 1, Decide")).toHaveTextContent("Ⅰ. Decide");
+    expect(screen.getByLabelText("Section 2, Investigate")).toHaveTextContent("Ⅱ. Investigate");
+    expect(screen.getByLabelText("Section 3, Trust")).toHaveTextContent("Ⅲ. Trust");
     expect(screen.getAllByText("NO EQUIPMENT CONTROL").length).toBeGreaterThan(0);
     expect(screen.getByLabelText("Evidence authority separation")).toHaveTextContent("OBSERVED");
     expect(screen.getByLabelText("Evidence authority separation")).toHaveTextContent("HUMAN DECISION");
@@ -67,6 +68,36 @@ describe("FabOps workbench", () => {
     expect(screen.getAllByText("Evidence sufficiency", {exact: true}).length).toBeGreaterThan(0);
     expect(screen.getByLabelText("Current workspace context")).toHaveTextContent("Decision Lab/Decide/Decision Cockpit");
     expect(screen.getByLabelText("Current workspace context")).toHaveTextContent("LOT-00002");
+  });
+
+  it("previews unpinned desktop panes from the edge and keeps them open when pinned", async () => {
+    window.localStorage.removeItem("fabops:v08:workbench-layout");
+    render(<App />);
+    await screen.findByRole("heading", {name: "What needs a decision now?"});
+
+    const navigationPane = screen.getByLabelText("Primary navigation");
+    const navigationEdge = screen.getByRole("button", {name: "Open navigation pane"});
+    expect(navigationPane).toHaveAttribute("aria-hidden", "true");
+    fireEvent.mouseEnter(navigationEdge);
+    expect(navigationPane).toHaveAttribute("aria-hidden", "false");
+    expect(screen.getByLabelText("Section 1, Decide")).toHaveTextContent("Ⅰ. Decide");
+    fireEvent.mouseLeave(navigationPane);
+    expect(navigationPane).toHaveAttribute("aria-hidden", "true");
+
+    fireEvent.click(navigationEdge);
+    const navigationPins = screen.getAllByRole("button", {name: "Pin navigation pane"});
+    fireEvent.click(navigationPins[navigationPins.length - 1]);
+    expect(navigationPins[0]).toHaveAttribute("aria-pressed", "true");
+    fireEvent.mouseLeave(navigationPane);
+    expect(navigationPane).toHaveAttribute("aria-hidden", "false");
+
+    const inspectorPane = screen.getByText("Inspector", {selector: ".pane-edge-trigger span"}).closest("button");
+    expect(inspectorPane).not.toBeNull();
+    fireEvent.mouseEnter(inspectorPane!);
+    expect(screen.getByLabelText("Evidence inspector")).toBeInTheDocument();
+    const inspectorPins = screen.getAllByRole("button", {name: "Pin inspector pane"});
+    fireEvent.click(inspectorPins[inspectorPins.length - 1]);
+    expect(inspectorPins[0]).toHaveAttribute("aria-pressed", "true");
   });
 
   it("coordinates evidence graph selection and exposes no equipment execution control", async () => {
@@ -171,4 +202,3 @@ describe("FabOps workbench", () => {
     expect(payload).not.toHaveTextContent('"sensor_name": "rf_power"');
   });
 });
-

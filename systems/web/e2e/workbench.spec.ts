@@ -1,17 +1,26 @@
-import {expect, test} from "@playwright/test";
+import {expect, test, type Page} from "@playwright/test";
+
+async function ensureDesktopPanesPinned(page: Page) {
+  const controls = page.getByLabel("Workbench pane controls");
+  const navigationPin = controls.getByRole("button", {name: "Pin navigation pane"});
+  const inspectorPin = controls.getByRole("button", {name: "Pin inspector pane"});
+  if (await navigationPin.getAttribute("aria-pressed") === "false") await navigationPin.click();
+  if (await inspectorPin.getAttribute("aria-pressed") === "false") await inspectorPin.click();
+}
 
 test("decision cockpit connects priority, evidence, grounded brief and governed approval", async ({page}) => {
   await page.goto("/");
   await expect(page.getByRole("heading", {name: "What needs a decision now?"})).toBeVisible();
+  await ensureDesktopPanesPinned(page);
   await expect(page.getByText("NO EQUIPMENT CONTROL").first()).toBeVisible();
   await expect(page.getByText("Resolve before acting")).toBeVisible();
   await expect(page).toHaveURL(/\/DecisionCockpit$/);
   const header = page.locator(".global-header");
   await expect(header.getByText("CANDIDATE BUILD", {exact: true})).toBeVisible();
   await expect(header.getByText("BASE RELEASE", {exact: true})).toBeVisible();
-  await expect(page.getByLabel("Section 1, Decide")).toContainText("ⅠDecide");
-  await expect(page.getByLabel("Section 2, Investigate")).toContainText("ⅡInvestigate");
-  await expect(page.getByLabel("Section 3, Trust")).toContainText("ⅢTrust");
+  await expect(page.getByLabel("Section 1, Decide")).toContainText("Ⅰ. Decide");
+  await expect(page.getByLabel("Section 2, Investigate")).toContainText("Ⅱ. Investigate");
+  await expect(page.getByLabel("Section 3, Trust")).toContainText("Ⅲ. Trust");
   await expect(page.getByLabel("Evidence authority separation")).toContainText("HUMAN DECISION");
   await expect(page.getByRole("heading", {name: "Compare the available stances before acting"})).toBeVisible();
   await expect(page.getByText("Current recommendation").first()).toBeVisible();
@@ -81,9 +90,9 @@ test("mobile decision cockpit keeps candidate, provenance and read-only identity
   await expect(ribbon).toContainText("base 0.6.0");
   await expect(ribbon).toContainText("human authority");
   await expect(ribbon).toContainText("no equipment control");
-  await expect(page.getByLabel("Section 1, Decide")).toContainText("ⅠDecide");
-  await expect(page.getByLabel("Section 2, Investigate")).toContainText("ⅡInvestigate");
-  await expect(page.getByLabel("Section 3, Trust")).toContainText("ⅢTrust");
+  await expect(page.getByLabel("Section 1, Decide")).toContainText("Ⅰ. Decide");
+  await expect(page.getByLabel("Section 2, Investigate")).toContainText("Ⅱ. Investigate");
+  await expect(page.getByLabel("Section 3, Trust")).toContainText("Ⅲ. Trust");
   const workspaceContext = page.getByLabel("Current workspace context");
   await expect(workspaceContext).toBeVisible();
   await expect(workspaceContext).toContainText("Decision Cockpit");
@@ -100,11 +109,12 @@ test("1024 and reduced-motion modes preserve decision authority, keyboard access
   await page.setViewportSize({width: 1024, height: 900});
   await page.goto("/DecisionCockpit");
   await expect(page.getByRole("heading", {name: "What needs a decision now?"})).toBeVisible();
+  await ensureDesktopPanesPinned(page);
   await expect(page.getByLabel("Evidence authority separation")).toContainText("HUMAN DECISION");
   await expect(page.locator(".cockpit-trust").getByText("NO EQUIPMENT CONTROL", {exact: true})).toBeVisible();
-  await expect(page.getByLabel("Section 1, Decide")).toContainText("ⅠDecide");
-  await expect(page.getByLabel("Section 2, Investigate")).toContainText("ⅡInvestigate");
-  await expect(page.getByLabel("Section 3, Trust")).toContainText("ⅢTrust");
+  await expect(page.getByLabel("Section 1, Decide")).toContainText("Ⅰ. Decide");
+  await expect(page.getByLabel("Section 2, Investigate")).toContainText("Ⅱ. Investigate");
+  await expect(page.getByLabel("Section 3, Trust")).toContainText("Ⅲ. Trust");
   expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1)).toBe(false);
 
   const graphNav = page.getByRole("button", {name: /Evidence Graph/i});
@@ -156,6 +166,7 @@ test("Semiconductor Forensics design grammar stays consistent across routes", as
     await page.setViewportSize({width: 1440, height: 1000});
     await page.goto(route.path);
     await expect(page.locator(".app-shell")).toBeVisible();
+    await ensureDesktopPanesPinned(page);
     await expect(page.locator(route.ready)).toBeVisible();
     const workspaceContext = page.getByLabel("Current workspace context");
     await expect(workspaceContext).toBeVisible();
@@ -249,6 +260,35 @@ test("Semiconductor Forensics design grammar stays consistent across routes", as
   });
   expect(releaseGeometry.firstRowInset).toBeGreaterThanOrEqual(15);
   expect(releaseGeometry.firstLabelInset).toBeGreaterThanOrEqual(15);
+});
+
+test("desktop workbench panes preview from the edges and remain open only when pinned", async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 1000});
+  await page.goto("/DecisionCockpit");
+  await expect(page.getByRole("heading", {name: "What needs a decision now?"})).toBeVisible();
+
+  const navigation = page.getByLabel("Primary navigation");
+  const navigationEdge = page.getByRole("button", {name: "Open navigation pane"});
+  await expect(navigation).toBeHidden();
+  await navigationEdge.hover();
+  await expect(navigation).toBeVisible();
+  await expect(page.getByLabel("Section 1, Decide")).toContainText("Ⅰ. Decide");
+  await page.locator("#work-surface").hover({position: {x: 300, y: 100}});
+  await expect(navigation).toBeHidden();
+
+  await navigationEdge.click();
+  await page.locator(".pane-pin-toolbar--dark").getByRole("button", {name: "Pin navigation pane"}).click();
+  await page.locator("#work-surface").hover({position: {x: 300, y: 100}});
+  await expect(navigation).toBeVisible();
+
+  const inspectorEdge = page.getByRole("button", {name: "Open inspector pane"});
+  await inspectorEdge.hover();
+  await expect(page.getByLabel("Evidence inspector")).toBeVisible();
+  await page.locator(".evidence-inspector-slot .pane-pin-toolbar").getByRole("button", {name: "Pin inspector pane"}).click();
+  await page.locator("#work-surface").hover({position: {x: 300, y: 100}});
+  await expect(page.getByLabel("Evidence inspector")).toBeVisible();
+  await expect(page.getByLabel("Workbench pane controls").getByRole("button", {name: "Pin navigation pane"})).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByLabel("Workbench pane controls").getByRole("button", {name: "Pin inspector pane"})).toHaveAttribute("aria-pressed", "true");
 });
 
 test("SystemHealth replay keeps the timeline above responsive selected-event details", async ({page}) => {

@@ -1,15 +1,25 @@
 import {useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent} from "react";
 import {clampWorkbenchWidth, DEFAULT_WORKBENCH_LAYOUT, parseWorkbenchLayout, type WorkbenchLayoutState} from "./workbenchLayout";
 
-const STORAGE_KEY = "fabops:v07:workbench-layout";
+const STORAGE_KEY = "fabops:v08:workbench-layout";
 
 export function useWorkbenchLayout() {
   const [layout, setLayout] = useState<WorkbenchLayoutState>(() => parseWorkbenchLayout(window.localStorage.getItem(STORAGE_KEY)));
+  const [preview, setPreview] = useState({left: false, right: false});
+  const [isDesktop, setIsDesktop] = useState(() => typeof window.matchMedia === "function" ? window.matchMedia("(min-width: 761px)").matches : true);
   const drag = useRef<{side: "left" | "right"; startX: number; startWidth: number} | null>(null);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(layout));
   }, [layout]);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia("(min-width: 761px)");
+    const update = () => setIsDesktop(query.matches);
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
 
   function setWidth(side: "left" | "right", width: number) {
     setLayout((current) => ({
@@ -46,15 +56,32 @@ export function useWorkbenchLayout() {
     setWidth(side, side === "left" ? DEFAULT_WORKBENCH_LAYOUT.leftWidth : DEFAULT_WORKBENCH_LAYOUT.rightWidth);
   }
 
-  function togglePane(side: "left" | "right") {
-    setLayout((current) => ({...current, [side === "left" ? "leftOpen" : "rightOpen"]: !current[side === "left" ? "leftOpen" : "rightOpen"]}));
+  function togglePin(side: "left" | "right") {
+    const key = side === "left" ? "leftOpen" : "rightOpen";
+    setLayout((current) => ({...current, [key]: !current[key]}));
+    setPreview((current) => ({...current, [side]: true}));
   }
+
+  function previewPane(side: "left" | "right") {
+    setPreview((current) => ({...current, [side]: true}));
+  }
+
+  function dismissPane(side: "left" | "right") {
+    const pinned = side === "left" ? layout.leftOpen : layout.rightOpen;
+    if (!pinned) setPreview((current) => ({...current, [side]: false}));
+  }
+
+  const leftVisible = !isDesktop || layout.leftOpen || preview.left;
+  const rightVisible = isDesktop && (layout.rightOpen || preview.right);
 
   const shellStyle = {
     "--workbench-left-width": layout.leftOpen ? `${layout.leftWidth}px` : "0px",
     "--workbench-right-width": layout.rightOpen ? `${layout.rightWidth}px` : "0px",
+    "--workbench-left-overlay-width": `${layout.leftWidth}px`,
+    "--workbench-right-overlay-width": `${layout.rightWidth}px`,
+    "--workbench-left-handle-width": layout.leftOpen ? "5px" : "0px",
+    "--workbench-right-handle-width": layout.rightOpen ? "5px" : "0px",
   } as CSSProperties;
 
-  return {layout, shellStyle, beginResize, moveResize, endResize, keyboardResize, resetWidth, togglePane};
+  return {layout, shellStyle, isDesktop, leftVisible, rightVisible, beginResize, moveResize, endResize, keyboardResize, resetWidth, togglePin, previewPane, dismissPane};
 }
-

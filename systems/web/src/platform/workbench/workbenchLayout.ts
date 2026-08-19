@@ -8,8 +8,8 @@ export interface WorkbenchLayoutState {
 export const DEFAULT_WORKBENCH_LAYOUT: WorkbenchLayoutState = {
   leftWidth: 232,
   rightWidth: 336,
-  leftOpen: true,
-  rightOpen: true,
+  leftOpen: false,
+  rightOpen: false,
 };
 
 export function clampWorkbenchWidth(side: "left" | "right", width: number) {
@@ -24,11 +24,10 @@ export function parseWorkbenchLayout(value: string | null): WorkbenchLayoutState
     return {
       leftWidth: clampWorkbenchWidth("left", Number(parsed.leftWidth) || DEFAULT_WORKBENCH_LAYOUT.leftWidth),
       rightWidth: clampWorkbenchWidth("right", Number(parsed.rightWidth) || DEFAULT_WORKBENCH_LAYOUT.rightWidth),
-      leftOpen: parsed.leftOpen !== false,
-      rightOpen: parsed.rightOpen !== false,
+      leftOpen: parsed.leftOpen === true,
+      rightOpen: parsed.rightOpen === true,
     };
   } catch {
     return DEFAULT_WORKBENCH_LAYOUT;
   }
 }
-

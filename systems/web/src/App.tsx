@@ -299,18 +299,21 @@ export default function App() {
         <strong>{selectedPacket?.lot_id ?? selectedCase?.lot_id ?? "No case selected"}</strong>
         {selectedPacket ? <span className={`workspace-context__priority workspace-context__priority--${selectedPacket.priority_band.toLowerCase()}`}>{selectedPacket.priority_band}</span> : null}
         <span className="workspace-context__layout-controls" aria-label="Workbench pane controls">
-          <button type="button" aria-pressed={workbench.layout.leftOpen} onClick={() => workbench.togglePane("left")}>Navigation</button>
-          <button type="button" aria-pressed={workbench.layout.rightOpen} onClick={() => workbench.togglePane("right")}>Inspector</button>
+          <button type="button" aria-label="Pin navigation pane" aria-pressed={workbench.layout.leftOpen} onClick={() => workbench.togglePin("left")}>Navigation pin</button>
+          <button type="button" aria-label="Pin inspector pane" aria-pressed={workbench.layout.rightOpen} onClick={() => workbench.togglePin("right")}>Inspector pin</button>
         </span>
       </div>
     </div>
     <div className="mobile-status-ribbon" aria-label="Release and provenance status">
       <span>{deploymentIdentity.deployment_kind === "candidate" ? `candidate ${candidateShortSha}` : `official ${deploymentIdentity.base_release.version}`}</span><span>base {deploymentIdentity.base_release.version}</span><span>human authority</span><span>no equipment control</span>
     </div>
-    <aside className={workbench.layout.leftOpen ? "left-rail" : "left-rail is-collapsed"} aria-label="Primary navigation" aria-hidden={!workbench.layout.leftOpen}>
+    {workbench.isDesktop ? <button type="button" className="pane-edge-trigger pane-edge-trigger--left" aria-label="Open navigation pane" aria-expanded={workbench.leftVisible} onMouseEnter={() => workbench.previewPane("left")} onFocus={() => workbench.previewPane("left")} onClick={() => workbench.previewPane("left")}><span>Navigation</span></button> : null}
+    <aside className={`${workbench.leftVisible ? "left-rail" : "left-rail is-collapsed"}${workbench.isDesktop && !workbench.layout.leftOpen ? " is-overlay" : ""}`} aria-label="Primary navigation" aria-hidden={!workbench.leftVisible} onMouseEnter={() => workbench.previewPane("left")} onMouseLeave={() => workbench.dismissPane("left")}>
+      {workbench.leftVisible ? <>
+      <div className="pane-pin-toolbar pane-pin-toolbar--dark"><button type="button" aria-label="Pin navigation pane" aria-pressed={workbench.layout.leftOpen} onClick={() => workbench.togglePin("left")}><span aria-hidden="true">⌖</span>{workbench.layout.leftOpen ? "Pinned" : "Pin navigation"}</button></div>
       <div className="nav-heading"><span>Decision workspace</span><strong>From exception to governed action</strong></div>
       <nav>{navigationGroups.map((group) => <div className="nav-group" key={group.name}>
-        <span className="nav-group__label" aria-label={`Section ${group.section}, ${group.name}`}><b aria-hidden="true">{group.numeral}</b><span aria-hidden="true">{group.name}</span></span>
+        <span className="nav-group__label" aria-label={`Section ${group.section}, ${group.name}`}><span aria-hidden="true">{group.numeral}. {group.name}</span></span>
         {navigation.filter((item) => item.group === group.name).map((item) => <button key={item.id} className={screen === item.id ? "nav-item is-active" : "nav-item"} aria-current={screen === item.id ? "page" : undefined} onClick={() => navigate(item.id)}>
           <span>{item.short}</span><strong>{item.label}</strong>
         </button>)}
@@ -322,13 +325,14 @@ export default function App() {
           <small>{item.options.find((option) => option.option_id === item.recommended_option_id)?.label ?? item.classification.replaceAll("_", " ")}</small>
         </button>)}
       </div>
+      </> : null}
     </aside>
     {workbench.layout.leftOpen ? <WorkbenchResizeHandle side="left" width={workbench.layout.leftWidth} onBegin={workbench.beginResize} onMove={workbench.moveResize} onEnd={workbench.endResize} onKeyboardResize={workbench.keyboardResize} onReset={workbench.resetWidth} /> : null}
     <main id="work-surface" className="work-surface" tabIndex={-1}>{workSurface}</main>
     {workbench.layout.rightOpen ? <WorkbenchResizeHandle side="right" width={workbench.layout.rightWidth} onBegin={workbench.beginResize} onMove={workbench.moveResize} onEnd={workbench.endResize} onKeyboardResize={workbench.keyboardResize} onReset={workbench.resetWidth} /> : null}
-    <div className={workbench.layout.rightOpen ? "evidence-inspector-slot" : "evidence-inspector-slot is-collapsed"} aria-hidden={!workbench.layout.rightOpen}>
-      {workbench.layout.rightOpen ? <EvidenceInspector selectedCase={detail?.case ?? selectedCase} selectedPacket={selectedPacket} projection={overview.projection} sourceTimestamp={overview.source_timestamp} selectedStep={selectedStep} selectedEvidenceNode={selectedEvidenceNode} /> : null}
+    {workbench.isDesktop ? <button type="button" className="pane-edge-trigger pane-edge-trigger--right" aria-label="Open inspector pane" aria-expanded={workbench.rightVisible} onMouseEnter={() => workbench.previewPane("right")} onFocus={() => workbench.previewPane("right")} onClick={() => workbench.previewPane("right")}><span>Inspector</span></button> : null}
+    <div className={`${workbench.rightVisible ? "evidence-inspector-slot" : "evidence-inspector-slot is-collapsed"}${workbench.isDesktop && !workbench.layout.rightOpen ? " is-overlay" : ""}`} aria-hidden={!workbench.rightVisible} onMouseEnter={() => workbench.previewPane("right")} onMouseLeave={() => workbench.dismissPane("right")}>
+      {workbench.rightVisible ? <><div className="pane-pin-toolbar"><button type="button" aria-label="Pin inspector pane" aria-pressed={workbench.layout.rightOpen} onClick={() => workbench.togglePin("right")}><span aria-hidden="true">⌖</span>{workbench.layout.rightOpen ? "Pinned" : "Pin inspector"}</button></div><EvidenceInspector selectedCase={detail?.case ?? selectedCase} selectedPacket={selectedPacket} projection={overview.projection} sourceTimestamp={overview.source_timestamp} selectedStep={selectedStep} selectedEvidenceNode={selectedEvidenceNode} /></> : null}
     </div>
   </div>;
 }
-
