@@ -18,7 +18,7 @@ if [ ! -f "${ENV_FILE}" ]; then
   exit 2
 fi
 
-mode=$(stat -f '%Lp' "${ENV_FILE}")
+mode=$(stat -Lf '%Lp' "${ENV_FILE}")
 if [ "${mode}" != "600" ]; then
   echo "server-only .env must have mode 0600" >&2
   exit 2
