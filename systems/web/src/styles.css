@@ -111,7 +111,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, [tabindex]:fo
 .provenance-synthetic { background: #eef5ff; border-color: #a8c4e8; color: #285e9c; }
 .provenance-inferred, .provenance-evaluation { background: #f2eefb; border-color: #c9b7e8; color: #69499b; }
 .provenance-real-public { background: #edf7ef; border-color: #afd0b7; color: #2c7040; }
-.source-mode-chip { display: inline-flex; align-items: center; min-height: 23px; padding: 3px 7px; border: 1px solid #9dc4c7; border-radius: 3px; background: #edf8f7; color: #2b676a; font-size: 9px; font-weight: 850; letter-spacing: .05em; }
+.source-mode-chip { display: inline-flex; align-items: center; min-height: 23px; padding: 3px 7px; border: 1px solid #9dc4c7; border-radius: 3px; background: #edf8f7; color: #2b676a; font-size: 10px; font-weight: 850; letter-spacing: .05em; }
 .projection-badge.is-fresh { color: var(--success); border-color: #a9cfb9; background: #f0f8f3; }
 .projection-badge.is-stale { color: var(--warning); border-color: #d9c18f; background: #fff9e9; }
 .classification-physical_excursion { color: #8a3535; background: #fff0f0; border-color: #e0abab; }
