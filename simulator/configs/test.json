@@ -1,0 +1,17 @@
+{
+  "version": "m1-test-v1",
+  "profile": "test",
+  "simulated_days": 2,
+  "lot_count": 12,
+  "wafers_per_lot": 3,
+  "product_families": ["PF-A", "PF-B", "PF-C"],
+  "process_steps": ["LITHO", "ETCH", "DEPOSITION", "CMP", "INSPECTION"],
+  "equipment_per_step": 2,
+  "chambers_per_equipment": 2,
+  "sensors": ["temperature", "particle_count", "rf_power", "pressure"],
+  "ar1_phi": 0.72,
+  "process_noise": 0.18,
+  "measurement_noise": 0.08,
+  "chamber_effect_std": 0.12,
+  "tool_aging_per_lot": 0.01
+}

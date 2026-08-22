@@ -1,0 +1,9 @@
+{
+  "registry_version": "fabops-eval-registry-v1",
+  "detector": "spc-ewma-v1.0.0",
+  "rca": "transparent-rca-v1.0.0",
+  "projection": "rca-graph-v1.0.0",
+  "agent": "deterministic-advisory-v1.1.0",
+  "policy": "workflow-policy-v1.0.0",
+  "simulator": "fabtwin-m1.0.0"
+}

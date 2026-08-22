@@ -1,0 +1,22 @@
+{
+  "milestone": "M3",
+  "status": "passed",
+  "projection_version": "rca-graph-v1.0.0",
+  "rca_version": "transparent-rca-v1.0.0",
+  "source_checkpoint": 373,
+  "projection_checkpoint": 373,
+  "projection_stale": false,
+  "node_count": 399,
+  "edge_count": 601,
+  "projection_hash": "14e264cd0c79285012d122dc7cc1ee96aeb964ecbaba4d577101f03378068f2c",
+  "top1_accuracy": 1.0,
+  "top3_accuracy": 1.0,
+  "mrr": 1.0,
+  "evidence_precision_proxy": 1.0,
+  "contradicting_evidence_coverage": 0.42857,
+  "false_causal_attribution_rate": 0.0,
+  "held_out_seeds_verified": [41, 59],
+  "neo4j_runtime_verified": false,
+  "neo4j_contract_verified": true,
+  "regression_result_at_gate": "36 passed"
+}

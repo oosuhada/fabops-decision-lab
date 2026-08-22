@@ -1,0 +1,9 @@
+{
+  "milestone": "M0",
+  "status": "passed",
+  "python": "3.13.14",
+  "verification": "uv run pytest",
+  "baseline_result": "6 passed",
+  "regression_included_in_latest_suite": true,
+  "repository_isolated": true
+}

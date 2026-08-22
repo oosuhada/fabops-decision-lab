@@ -1,0 +1,2 @@
+"""Redpanda/Kafka adapter boundary."""
+

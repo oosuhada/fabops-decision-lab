@@ -1,0 +1,9 @@
+{
+  "fixture_version": "unseen-u1-v1",
+  "family": "U1",
+  "name": "unseen multi-sensor signature with insufficient causal evidence",
+  "classification": "unseen_fault_family",
+  "expected_agent_behavior": "abstain",
+  "expected_physical_action": "none",
+  "claim": "This challenge is evaluation-only and is not part of the F1-F6 development taxonomy."
+}

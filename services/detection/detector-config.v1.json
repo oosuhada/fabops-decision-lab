@@ -1,0 +1,8 @@
+{
+  "version": "spc-ewma-v1.0.0",
+  "shewhart_delta": 1.0,
+  "ewma_lambda": 0.35,
+  "ewma_delta": 0.75,
+  "excursion_yield_threshold": 0.9,
+  "sensor_bias_min_anomalies": 1
+}

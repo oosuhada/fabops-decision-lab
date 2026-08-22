@@ -1,0 +1,6 @@
+{
+  "version": "seed-splits-v1",
+  "development": [42, 43, 44],
+  "validation": [101, 103],
+  "held_out": [211, 223, 227]
+}

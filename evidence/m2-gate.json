@@ -1,0 +1,17 @@
+{
+  "milestone": "M2",
+  "status": "passed",
+  "detector_version": "spc-ewma-v1.0.0",
+  "case_count": 7,
+  "case_hash": "ef559a2e184647a7150f00a00c462be896a4176b970444970141f6c8bbe5dbc8",
+  "event_checkpoint": 373,
+  "outbox_count": 373,
+  "fault_recall": 1.0,
+  "false_alarms_per_simulated_day": 0.0,
+  "affected_scope_precision": 1.0,
+  "affected_scope_recall": 1.0,
+  "postgres_runtime_verified": false,
+  "redpanda_runtime_verified": false,
+  "local_port_contracts_verified": true,
+  "regression_result_at_gate": "27 passed"
+}
