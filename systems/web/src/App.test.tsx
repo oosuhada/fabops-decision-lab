@@ -1,7 +1,8 @@
-import {fireEvent, render, screen} from "@testing-library/react";
+import {fireEvent, render, screen, waitFor} from "@testing-library/react";
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
 import App from "./App";
 import {WorkbenchState} from "./components";
+import {LocaleProvider} from "./locale";
 import {ReplayOperations} from "./screens";
 
 const projection = {projection_version: "rca-graph-v1.0.0", source_checkpoint: 3, projection_checkpoint: 3, lag_events: 0, stale: false};
@@ -38,6 +39,8 @@ const caseReplayTrace = {source: "source-event-and-audit-replay", case_id: fabCa
 describe("FabOps workbench", () => {
   beforeEach(() => {
     window.history.replaceState({}, "", "/");
+    window.localStorage.removeItem("fabops:locale");
+    window.localStorage.removeItem("fabops:nav-groups");
     window.localStorage.setItem("fabops:v08:workbench-layout", JSON.stringify({leftWidth: 232, rightWidth: 336, leftOpen: true, rightOpen: true}));
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -98,6 +101,48 @@ describe("FabOps workbench", () => {
     const inspectorPins = screen.getAllByRole("button", {name: "Pin inspector pane"});
     fireEvent.click(inspectorPins[inspectorPins.length - 1]);
     expect(inspectorPins[0]).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("persists locale, updates html lang, and localizes safety metadata", async () => {
+    render(<LocaleProvider><App /></LocaleProvider>);
+    await screen.findByRole("heading", {name: "What needs a decision now?"});
+    fireEvent.click(screen.getByRole("button", {name: "한국어"}));
+    await waitFor(() => expect(document.documentElement).toHaveAttribute("lang", "ko"));
+    expect(window.localStorage.getItem("fabops:locale")).toBe("ko");
+    expect(screen.getByText("후보 빌드")).toBeInTheDocument();
+    expect(screen.getByText("읽기 전용")).toBeInTheDocument();
+    expect(screen.getByText("제한된 범위의 AI · 장비 제어 없음")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", {name: "탐색 패널 고정 해제"}).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", {name: "EN"}));
+    await waitFor(() => expect(document.documentElement).toHaveAttribute("lang", "en"));
+    expect(screen.getByText("CANDIDATE BUILD")).toBeInTheDocument();
+  });
+
+  it("toggles Decide, Investigate, and Trust independently and persists accordion state", async () => {
+    render(<App />);
+    await screen.findByRole("heading", {name: "What needs a decision now?"});
+    const decide = screen.getByLabelText("Section 1, Decide");
+    const investigate = screen.getByLabelText("Section 2, Investigate");
+    const trust = screen.getByLabelText("Section 3, Trust");
+    expect(decide).toHaveAttribute("aria-expanded", "true");
+    expect(investigate).toHaveAttribute("aria-expanded", "true");
+    expect(trust).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(investigate);
+    expect(investigate).toHaveAttribute("aria-expanded", "false");
+    expect(decide).toHaveAttribute("aria-expanded", "true");
+    expect(trust).toHaveAttribute("aria-expanded", "true");
+    expect(document.getElementById("nav-group-panel-2")).toHaveAttribute("hidden");
+    await waitFor(() => expect(window.localStorage.getItem("fabops:nav-groups")).toContain('"Investigate":false'));
+  });
+
+  it("describes the pin action rather than the current pin state", async () => {
+    render(<App />);
+    await screen.findByRole("heading", {name: "What needs a decision now?"});
+    const unpinNavigation = screen.getAllByRole("button", {name: "Unpin navigation pane"});
+    expect(unpinNavigation.length).toBeGreaterThan(0);
+    fireEvent.click(unpinNavigation[unpinNavigation.length - 1]);
+    fireEvent.mouseEnter(screen.getByRole("button", {name: "Open navigation pane"}));
+    expect(screen.getAllByRole("button", {name: "Pin navigation pane"}).length).toBeGreaterThan(0);
   });
 
   it("coordinates evidence graph selection and exposes no equipment execution control", async () => {

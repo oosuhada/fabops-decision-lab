@@ -7,6 +7,7 @@ import type {EvidenceGraphNode} from "./features/evidence/evidenceGraphModel";
 import {ShiftHandoffBrief} from "./features/handoff/ShiftHandoffBrief";
 import {WorkbenchResizeHandle} from "./platform/workbench/WorkbenchResizeHandle";
 import {useWorkbenchLayout} from "./platform/workbench/useWorkbenchLayout";
+import {useLocale} from "./locale";
 import {DecisionApproval, DecisionCockpit, EvaluationLab, EvidenceGraph, ExcursionCase, OperationsOverview, ReplayOperations, caseById} from "./screens";
 import type {AdvisoryResponse, CaseDetailResponse, CaseReplayTraceResponse, DecisionBriefResponse, DecisionCockpitResponse, DeploymentIdentityResponse, EvaluationResponse, NarrationIntent, NarrationStatusResponse, OverviewResponse, ReplayResponse, ScreenId} from "./types";
 
@@ -28,6 +29,25 @@ const navigationGroups = [
   {name: "Investigate", numeral: "Ⅱ", section: 2},
   {name: "Trust", numeral: "Ⅲ", section: 3},
 ] as const;
+
+type NavigationGroupName = typeof navigationGroups[number]["name"];
+const NAV_GROUP_STORAGE_KEY = "fabops:nav-groups";
+
+function readNavigationGroups(): Record<NavigationGroupName, boolean> {
+  const fallback: Record<NavigationGroupName, boolean> = {Decide: true, Investigate: true, Trust: true};
+  try {
+    const raw = window.localStorage.getItem(NAV_GROUP_STORAGE_KEY);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as Partial<Record<NavigationGroupName, unknown>>;
+    return {
+      Decide: typeof parsed.Decide === "boolean" ? parsed.Decide : true,
+      Investigate: typeof parsed.Investigate === "boolean" ? parsed.Investigate : true,
+      Trust: typeof parsed.Trust === "boolean" ? parsed.Trust : true,
+    };
+  } catch {
+    return fallback;
+  }
+}
 
 const screenPaths: Record<ScreenId, string> = {
   cockpit: "/DecisionCockpit",
@@ -71,7 +91,9 @@ function InitialBoot() {
 }
 
 export default function App() {
+  const {locale, setLocale} = useLocale();
   const workbench = useWorkbenchLayout();
+  const [openGroups, setOpenGroups] = useState<Record<NavigationGroupName, boolean>>(readNavigationGroups);
   const [screen, setScreen] = useState<ScreenId>(() => screenFromPath(window.location.pathname));
   const [cockpit, setCockpit] = useState<DecisionCockpitResponse | null>(null);
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
@@ -127,6 +149,9 @@ export default function App() {
 
   useEffect(() => { void loadRoot(); }, [loadRoot]);
   useEffect(() => {
+    try { window.localStorage.setItem(NAV_GROUP_STORAGE_KEY, JSON.stringify(openGroups)); } catch { /* Storage is optional for the preview. */ }
+  }, [openGroups]);
+  useEffect(() => {
     if (window.location.pathname === "/" || !Object.values(screenPaths).some((path) => path.toLowerCase() === window.location.pathname.replace(/\/+$/, "").toLowerCase())) {
       window.history.replaceState({screen}, "", screenPaths[screen]);
     }
@@ -165,6 +190,10 @@ export default function App() {
   function navigate(next: ScreenId) {
     setScreen(next);
     if (window.location.pathname !== screenPaths[next]) window.history.pushState({screen: next}, "", screenPaths[next]);
+  }
+
+  function toggleNavigationGroup(group: NavigationGroupName) {
+    setOpenGroups((current) => ({...current, [group]: !current[group]}));
   }
 
   async function mutate(action: () => Promise<unknown>) {
@@ -268,6 +297,10 @@ export default function App() {
     <header className="global-header">
       <div className="brand-mark">FO</div>
       <div className="brand-copy"><strong>FabOps</strong><span>Decision intelligence for yield excursions</span></div>
+      <div className="locale-switch" role="group" aria-label="Language">
+        <button type="button" aria-pressed={locale === "en"} onClick={() => setLocale("en")}>EN</button>
+        <button type="button" aria-pressed={locale === "ko"} onClick={() => setLocale("ko")}>한국어</button>
+      </div>
       <div className="deployment-identity-strip" aria-label="Deployment identity">
         <div className="deployment-identity-strip__primary">
           <span>{primaryDeploymentLabel}</span>
@@ -299,8 +332,8 @@ export default function App() {
         <strong>{selectedPacket?.lot_id ?? selectedCase?.lot_id ?? "No case selected"}</strong>
         {selectedPacket ? <span className={`workspace-context__priority workspace-context__priority--${selectedPacket.priority_band.toLowerCase()}`}>{selectedPacket.priority_band}</span> : null}
         <span className="workspace-context__layout-controls" aria-label="Workbench pane controls">
-          <button type="button" aria-label="Pin navigation pane" aria-pressed={workbench.layout.leftOpen} onClick={() => workbench.togglePin("left")}>Navigation pin</button>
-          <button type="button" aria-label="Pin inspector pane" aria-pressed={workbench.layout.rightOpen} onClick={() => workbench.togglePin("right")}>Inspector pin</button>
+          <button type="button" aria-label={workbench.layout.leftOpen ? "Unpin navigation pane" : "Pin navigation pane"} aria-pressed={workbench.layout.leftOpen} onClick={() => workbench.togglePin("left")}>{workbench.layout.leftOpen ? "Unpin navigation" : "Pin navigation"}</button>
+          <button type="button" aria-label={workbench.layout.rightOpen ? "Unpin inspector pane" : "Pin inspector pane"} aria-pressed={workbench.layout.rightOpen} onClick={() => workbench.togglePin("right")}>{workbench.layout.rightOpen ? "Unpin inspector" : "Pin inspector"}</button>
         </span>
       </div>
     </div>
@@ -310,13 +343,17 @@ export default function App() {
     {workbench.isDesktop ? <button type="button" className="pane-edge-trigger pane-edge-trigger--left" aria-label="Open navigation pane" aria-expanded={workbench.leftVisible} onMouseEnter={() => workbench.previewPane("left")} onFocus={() => workbench.previewPane("left")} onClick={() => workbench.previewPane("left")}><span>Navigation</span></button> : null}
     <aside className={`${workbench.leftVisible ? "left-rail" : "left-rail is-collapsed"}${workbench.isDesktop && !workbench.layout.leftOpen ? " is-overlay" : ""}`} aria-label="Primary navigation" aria-hidden={!workbench.leftVisible} onMouseEnter={() => workbench.previewPane("left")} onMouseLeave={() => workbench.dismissPane("left")}>
       {workbench.leftVisible ? <>
-      <div className="pane-pin-toolbar pane-pin-toolbar--dark"><button type="button" aria-label="Pin navigation pane" aria-pressed={workbench.layout.leftOpen} onClick={() => workbench.togglePin("left")}><span aria-hidden="true">⌖</span>{workbench.layout.leftOpen ? "Pinned" : "Pin navigation"}</button></div>
+      <div className="pane-pin-toolbar pane-pin-toolbar--dark"><button type="button" aria-label={workbench.layout.leftOpen ? "Unpin navigation pane" : "Pin navigation pane"} aria-pressed={workbench.layout.leftOpen} onClick={() => workbench.togglePin("left")}><span aria-hidden="true">{workbench.layout.leftOpen ? "↤" : "⌖"}</span>{workbench.layout.leftOpen ? "Unpin navigation" : "Pin navigation"}</button></div>
       <div className="nav-heading"><span>Decision workspace</span><strong>From exception to governed action</strong></div>
       <nav>{navigationGroups.map((group) => <div className="nav-group" key={group.name}>
-        <span className="nav-group__label" aria-label={`Section ${group.section}, ${group.name}`}><span aria-hidden="true">{group.numeral}. {group.name}</span></span>
-        {navigation.filter((item) => item.group === group.name).map((item) => <button key={item.id} className={screen === item.id ? "nav-item is-active" : "nav-item"} aria-current={screen === item.id ? "page" : undefined} onClick={() => navigate(item.id)}>
-          <span>{item.short}</span><strong>{item.label}</strong>
-        </button>)}
+        <button type="button" className="nav-group__label" aria-label={`Section ${group.section}, ${group.name}`} aria-expanded={openGroups[group.name]} aria-controls={`nav-group-panel-${group.section}`} onClick={() => toggleNavigationGroup(group.name)}>
+          <span><b aria-hidden="true">{group.numeral}.</b>{" "}<strong>{group.name}</strong></span><i aria-hidden="true">{openGroups[group.name] ? "⌄" : "›"}</i>
+        </button>
+        <div id={`nav-group-panel-${group.section}`} className="nav-group__panel" hidden={workbench.isDesktop && !openGroups[group.name]}>
+          {navigation.filter((item) => item.group === group.name).map((item) => <button key={item.id} className={screen === item.id ? "nav-item is-active" : "nav-item"} aria-current={screen === item.id ? "page" : undefined} onClick={() => navigate(item.id)}>
+            <span>{item.short}</span><strong>{item.label}</strong>
+          </button>)}
+        </div>
       </div>)}</nav>
       <div className="case-object-list">
         <span className="section-label">Open decisions</span>
@@ -332,7 +369,7 @@ export default function App() {
     {workbench.layout.rightOpen ? <WorkbenchResizeHandle side="right" width={workbench.layout.rightWidth} onBegin={workbench.beginResize} onMove={workbench.moveResize} onEnd={workbench.endResize} onKeyboardResize={workbench.keyboardResize} onReset={workbench.resetWidth} /> : null}
     {workbench.isDesktop ? <button type="button" className="pane-edge-trigger pane-edge-trigger--right" aria-label="Open inspector pane" aria-expanded={workbench.rightVisible} onMouseEnter={() => workbench.previewPane("right")} onFocus={() => workbench.previewPane("right")} onClick={() => workbench.previewPane("right")}><span>Inspector</span></button> : null}
     <div className={`${workbench.rightVisible ? "evidence-inspector-slot" : "evidence-inspector-slot is-collapsed"}${workbench.isDesktop && !workbench.layout.rightOpen ? " is-overlay" : ""}`} aria-hidden={!workbench.rightVisible} onMouseEnter={() => workbench.previewPane("right")} onMouseLeave={() => workbench.dismissPane("right")}>
-      {workbench.rightVisible ? <><div className="pane-pin-toolbar"><button type="button" aria-label="Pin inspector pane" aria-pressed={workbench.layout.rightOpen} onClick={() => workbench.togglePin("right")}><span aria-hidden="true">⌖</span>{workbench.layout.rightOpen ? "Pinned" : "Pin inspector"}</button></div><EvidenceInspector selectedCase={detail?.case ?? selectedCase} selectedPacket={selectedPacket} projection={overview.projection} sourceTimestamp={overview.source_timestamp} selectedStep={selectedStep} selectedEvidenceNode={selectedEvidenceNode} /></> : null}
+      {workbench.rightVisible ? <><div className="pane-pin-toolbar"><button type="button" aria-label={workbench.layout.rightOpen ? "Unpin inspector pane" : "Pin inspector pane"} aria-pressed={workbench.layout.rightOpen} onClick={() => workbench.togglePin("right")}><span aria-hidden="true">{workbench.layout.rightOpen ? "↦" : "⌖"}</span>{workbench.layout.rightOpen ? "Unpin inspector" : "Pin inspector"}</button></div><EvidenceInspector selectedCase={detail?.case ?? selectedCase} selectedPacket={selectedPacket} projection={overview.projection} sourceTimestamp={overview.source_timestamp} selectedStep={selectedStep} selectedEvidenceNode={selectedEvidenceNode} /></> : null}
     </div>
   </div>;
 }

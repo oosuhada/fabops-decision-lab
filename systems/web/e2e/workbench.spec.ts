@@ -2,8 +2,8 @@ import {expect, test, type Page} from "@playwright/test";
 
 async function ensureDesktopPanesPinned(page: Page) {
   const controls = page.getByLabel("Workbench pane controls");
-  const navigationPin = controls.getByRole("button", {name: "Pin navigation pane"});
-  const inspectorPin = controls.getByRole("button", {name: "Pin inspector pane"});
+  const navigationPin = controls.getByRole("button", {name: /^(Pin|Unpin) navigation pane$/});
+  const inspectorPin = controls.getByRole("button", {name: /^(Pin|Unpin) inspector pane$/});
   if (await navigationPin.getAttribute("aria-pressed") === "false") await navigationPin.click();
   if (await inspectorPin.getAttribute("aria-pressed") === "false") await inspectorPin.click();
 }
@@ -106,7 +106,7 @@ test("1024 and reduced-motion modes preserve decision authority, keyboard access
   page.on("pageerror", (error) => pageErrors.push(error.message));
   page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()); });
 
-  await page.setViewportSize({width: 1024, height: 900});
+  await page.setViewportSize({width: 1024, height: 768});
   await page.goto("/DecisionCockpit");
   await expect(page.getByRole("heading", {name: "What needs a decision now?"})).toBeVisible();
   await ensureDesktopPanesPinned(page);
@@ -263,7 +263,7 @@ test("Semiconductor Forensics design grammar stays consistent across routes", as
 });
 
 test("desktop workbench panes preview from the edges and remain open only when pinned", async ({page}) => {
-  await page.setViewportSize({width: 1440, height: 1000});
+  await page.setViewportSize({width: 1440, height: 900});
   await page.goto("/DecisionCockpit");
   await expect(page.getByRole("heading", {name: "What needs a decision now?"})).toBeVisible();
 
@@ -287,8 +287,81 @@ test("desktop workbench panes preview from the edges and remain open only when p
   await page.locator(".evidence-inspector-slot .pane-pin-toolbar").getByRole("button", {name: "Pin inspector pane"}).click();
   await page.locator("#work-surface").hover({position: {x: 300, y: 100}});
   await expect(page.getByLabel("Evidence inspector")).toBeVisible();
-  await expect(page.getByLabel("Workbench pane controls").getByRole("button", {name: "Pin navigation pane"})).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByLabel("Workbench pane controls").getByRole("button", {name: "Pin inspector pane"})).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByLabel("Workbench pane controls").getByRole("button", {name: "Unpin navigation pane"})).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByLabel("Workbench pane controls").getByRole("button", {name: "Unpin inspector pane"})).toHaveAttribute("aria-pressed", "true");
+});
+
+test("locale, accordion and pin action semantics persist across routes and responsive widths", async ({page}) => {
+  test.setTimeout(120_000);
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()); });
+
+  await page.setViewportSize({width: 1440, height: 900});
+  await page.goto("/DecisionCockpit");
+  await expect(page.getByRole("heading", {name: "What needs a decision now?"})).toBeVisible();
+  await ensureDesktopPanesPinned(page);
+
+  const navigationToolbar = page.locator(".pane-pin-toolbar--dark");
+  const navigationButton = navigationToolbar.getByRole("button", {name: "Unpin navigation pane"});
+  await expect(navigationButton).toBeVisible();
+  const pinAlignment = await page.evaluate(() => {
+    const toolbar = document.querySelector(".pane-pin-toolbar--dark")!.getBoundingClientRect();
+    const button = document.querySelector(".pane-pin-toolbar--dark button")!.getBoundingClientRect();
+    return {offset: button.left - toolbar.left};
+  });
+  expect(pinAlignment.offset).toBeLessThanOrEqual(12);
+
+  const investigate = page.getByLabel("Section 2, Investigate");
+  await expect(investigate).toHaveAttribute("aria-expanded", "true");
+  await investigate.click();
+  await expect(investigate).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator("#nav-group-panel-2")).toBeHidden();
+  await expect(page.getByLabel("Section 1, Decide")).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByLabel("Section 3, Trust")).toHaveAttribute("aria-expanded", "true");
+
+  await page.getByRole("button", {name: "한국어"}).click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "ko");
+  await expect(page.getByText("후보 빌드", {exact: true})).toBeVisible();
+  await expect(page.getByText("읽기 전용", {exact: true})).toBeVisible();
+  await expect(page.getByText("제한된 범위의 AI · 장비 제어 없음", {exact: true})).toBeVisible();
+  await expect(page.getByLabel("2절, 조사·분석")).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("button", {name: "탐색 패널 고정 해제"}).last()).toBeVisible();
+
+  await page.goto("/SystemHealth");
+  await expect(page.locator("html")).toHaveAttribute("lang", "ko");
+  await expect(page.getByRole("heading", {name: "결정론적 파이프라인 상태"})).toBeVisible();
+  await expect(page.getByLabel("2절, 조사·분석")).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByLabel("3절, 신뢰·검증")).toHaveAttribute("aria-expanded", "true");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1)).toBe(false);
+
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("lang", "ko");
+  await expect(page.getByText("후보 빌드", {exact: true})).toBeVisible();
+  await expect(page.getByLabel("2절, 조사·분석")).toHaveAttribute("aria-expanded", "false");
+
+  await page.setViewportSize({width: 1024, height: 768});
+  await expect(page.locator(".locale-switch")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1)).toBe(false);
+
+  await page.emulateMedia({reducedMotion: "reduce"});
+  await page.setViewportSize({width: 390, height: 844});
+  await page.goto("/DecisionCockpit");
+  await expect(page.locator("html")).toHaveAttribute("lang", "ko");
+  await expect(page.locator(".pane-pin-toolbar")).toBeHidden();
+  await expect(page.locator("#nav-group-panel-2 .nav-item").first()).toBeVisible();
+  await expect(page.getByLabel("릴리스 및 출처 상태")).toContainText("장비 제어 없음");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1)).toBe(false);
+
+  await page.getByRole("button", {name: "EN", exact: true}).click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.getByLabel("Release and provenance status")).toContainText("candidate");
+  await expect(page.getByLabel("Release and provenance status")).toContainText("no equipment control");
+  expect(pageErrors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
 });
 
 test("SystemHealth replay keeps the timeline above responsive selected-event details", async ({page}) => {
