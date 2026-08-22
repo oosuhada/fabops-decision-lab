@@ -62,7 +62,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, [tabindex]:fo
 
 .app-shell { display: grid; grid-template-columns: 246px minmax(0, 1fr) 318px; grid-template-rows: 52px 38px calc(100vh - 90px); min-height: 100vh; }
 .global-header { grid-column: 1 / -1; grid-row: 1; display: flex; align-items: center; gap: 12px; padding: 0 14px; border-bottom: 1px solid var(--border); background: var(--surface); z-index: 3; }
-.global-header > div:nth-child(2) { display: flex; flex-direction: column; min-width: 260px; }
+.global-header .brand-copy { display: flex; flex-direction: column; min-width: 260px; }
 .global-header span { color: var(--ink-muted); font-size: 11px; }
 .brand-mark { width: 30px; height: 30px; display: grid; place-items: center; background: #173f70; color: white; font-size: 11px; font-weight: 800; border-radius: 4px; }
 .header-status { margin-left: auto; display: flex; gap: 8px; }

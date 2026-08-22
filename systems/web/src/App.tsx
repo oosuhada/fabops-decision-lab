@@ -295,7 +295,6 @@ export default function App() {
 
   return <div className="app-shell" style={workbench.shellStyle}>
     <header className="global-header">
-      <div className="brand-mark">FO</div>
       <div className="brand-copy"><strong>FabOps</strong><span>Decision intelligence for yield excursions</span></div>
       <div className="deployment-identity-strip" aria-label="Deployment identity">
         <div className="deployment-identity-strip__primary">
