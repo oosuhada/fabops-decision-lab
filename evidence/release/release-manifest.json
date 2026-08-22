@@ -69,11 +69,11 @@
     "rca_version": "transparent-rca-v1.0.0",
     "release_version": "0.6.0",
     "simulator_version": "fabtwin-m1.0.0",
-    "source_git_commit": "c02d445a30a4e6d308eded06aee4b7fe4cab70f6"
+    "source_git_commit": "6824ca11198a7aa7b192d561fe01ccf7071a2e6d"
   },
   "detector_version": "spc-ewma-v1.0.0",
   "frontend_package_version": "0.6.0",
-  "generated_at": "2026-08-22T13:28:30.529624+00:00",
+  "generated_at": "2026-08-22T13:29:22.615512+00:00",
   "integration_verification_state": {
     "compose_config_verified": true,
     "container_integration_verified": true,
@@ -98,10 +98,10 @@
   "projection_version": "rca-graph-v1.0.0",
   "python_project_version": "0.6.0",
   "rca_version": "transparent-rca-v1.0.0",
-  "release_hash": "1c8f7f57b6b8658f2e5acc3325daf63cc5f023504b44c576032f6233d9eda4d8",
+  "release_hash": "ab8b20a696b9b1996495f23a3e413cc33a67b6861efa184c64742e0f310c6326",
   "release_version": "0.6.0",
   "schema_version": "fabops-release-manifest-v1",
   "simulator_version": "fabtwin-m1.0.0",
-  "source_git_commit": "c02d445a30a4e6d308eded06aee4b7fe4cab70f6",
+  "source_git_commit": "6824ca11198a7aa7b192d561fe01ccf7071a2e6d",
   "source_git_commit_semantics": "Commit containing the release source before generated manifest/README identity metadata; later metadata commits do not change canonical release inputs."
 }
