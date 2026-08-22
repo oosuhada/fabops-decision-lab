@@ -14,7 +14,7 @@ const overview = {source: "synthetic", source_timestamp: "2026-01-01T00:00:00Z",
 const detail = {source: "inferred", case: fabCase, rca: {projection, candidates: [{candidate_id: "chamber:ETCH-01-A", candidate_type: "chamber", score: .9, score_components: {}, supporting_evidence: [{type: "alarm"}], contradicting_evidence: [], recommended_action: "inspect"}]}, trace: {projection, affected_lots: [fabCase.lot_id], process_path: [{lot_id: fabCase.lot_id, process_run_id: "run-1", step_id: "ETCH", equipment_id: "ETCH-01", chamber_id: "ETCH-01-A", recipe_id: "R-v2"}]}, evidence_series: {measurements: [{event_id: "evt-1", lot_id: fabCase.lot_id, process_run_id: "run-1", step_id: "ETCH", sensor_name: "temperature", value: 12, unit: "normalized-unit", equipment_id: "ETCH-01", chamber_id: "ETCH-01-A", event_time: "2026-01-01T00:01:00Z"}], inspections: []}, audit: []};
 const advisory = {source: "inferred-advisory", llm_enabled: false, result: {provider: "deterministic-advisory-v1.1.0", status: "ready", classification: "physical_excursion", claims: [{claim: "supported", supported_by: [{type: "alarm"}], contradicted_by: []}], counter_evidence: [], recommended_next_step: "inspect chamber", tool_calls: [{tool: "get_excursion_summary", status: "ok"}], errors: []}};
 const evaluation = {source: "generated-evaluation-evidence", versions: {detector: "spc-ewma-v1.0.0", projection: "rca-graph-v1.0.0", advisory: "deterministic-advisory-v1.1.0"}, metrics: {detector: {fault_recall: 1, false_alarms_per_simulated_day: 0}, rca: {top1_accuracy: 1, mrr: 1, false_causal_attribution_rate: 0}}, limitations: ["synthetic only"]};
-const replay = {source: "synthetic-replay", event_count: 3, detection_checkpoint: 3, projection, outbox_count: 3, quarantine_count: 0, delivery_status_counts: {on_time: 3, late: 0, out_of_order: 0}, external_services: {postgres: true, redpanda: true, neo4j: true, external_llm: "disabled-not-required"}, integration: {status: "verified", compose_config_verified: true, postgres_runtime_verified: true, redpanda_runtime_verified: true, neo4j_runtime_verified: true, container_integration_verified: true, reason: null}};
+const replay = {source: "synthetic-replay", event_count: 3, detection_checkpoint: 3, projection, outbox_count: 3, quarantine_count: 0, delivery_status_counts: {on_time: 3, late: 0, out_of_order: 0}, external_services: {postgres: true, redpanda: true, neo4j: true, external_llm: "disabled-not-required"}, integration: {status: "verified", compose_config_verified: true, postgres_runtime_verified: true, redpanda_runtime_verified: true, neo4j_runtime_verified: true, container_integration_verified: true, reason: null}, release: {release_version: "0.6.0", release_hash: "a".repeat(64), source_git_commit: "b".repeat(40), manifest_available: true}};
 
 describe("FabOps workbench", () => {
   beforeEach(() => {
@@ -32,6 +32,7 @@ describe("FabOps workbench", () => {
     expect(await screen.findByRole("heading", {name: "Yield excursion triage queue"})).toBeInTheDocument();
     expect(screen.getAllByText("LOT-00002").length).toBeGreaterThan(0);
     expect(screen.getByText("3", {selector: ".metric-cell strong"})).toBeInTheDocument();
+    expect(screen.getByText("RELEASE 0.6.0")).toBeInTheDocument();
   });
 
   it("coordinates evidence graph selection and exposes no equipment execution control", async () => {

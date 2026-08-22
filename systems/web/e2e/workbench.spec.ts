@@ -3,6 +3,7 @@ import {expect, test} from "@playwright/test";
 test("API-backed engineering decision workbench stays consistent across overview, evidence and approval", async ({page}) => {
   await page.goto("/");
   await expect(page.getByRole("heading", {name: "Yield excursion triage queue"})).toBeVisible();
+  await expect(page.getByText("RELEASE 0.6.0")).toBeVisible();
   await expect(page.getByText("373", {exact: true}).first()).toBeVisible();
   const firstCase = page.getByRole("button", {name: /^CASE-/}).first();
   await firstCase.click();
@@ -23,6 +24,7 @@ test("API-backed engineering decision workbench stays consistent across overview
 
   await page.getByRole("button", {name: /Replay & Operations/i}).click();
   await expect(page.getByText("373", {exact: true}).first()).toBeVisible();
+  await expect(page.getByRole("heading", {name: "Portfolio release 0.6.0"})).toBeVisible();
   await expect(page.getByText(/Container integration (verified|degraded|unverified)/)).toBeVisible();
   await expect(page.getByText(/Docker daemon unavailable in current audit/)).toHaveCount(0);
 });

@@ -197,6 +197,14 @@ export function ReplayOperations({replay}: {replay: ReplayResponse}) {
       {label: "Outbox", value: replay.outbox_count},
       {label: "Quarantine", value: replay.quarantine_count},
     ]} />
+    <section className="panel">
+      <header><div><span className="eyebrow">Release identity</span><h2>Portfolio release {replay.release.release_version}</h2></div></header>
+      <dl className="property-list">
+        <div><dt>Canonical hash</dt><dd><code>{replay.release.release_hash}</code></dd></div>
+        <div><dt>Source commit</dt><dd>{replay.release.source_git_commit?.slice(0, 12) ?? "pending manifest"}</dd></div>
+        <div><dt>Manifest</dt><dd>{replay.release.manifest_available ? "generated" : "pending"}</dd></div>
+      </dl>
+    </section>
     <div className="two-column">
       <section className="panel"><header><div><span className="eyebrow">Delivery behavior</span><h2>Accepted event status</h2></div></header>
         <dl className="property-list">{Object.entries(replay.delivery_status_counts).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl>

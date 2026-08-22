@@ -12,12 +12,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from services.rca.cqrs import RankRootCausesQuery, TraceAffectedLotsQuery
+from services.release import RELEASE_VERSION, load_release_identity
 from services.workflow.state_machine import AuthorizationError, InvalidTransitionError
 from systems.api.runtime import LocalRuntime, build_runtime
 
 app = FastAPI(
     title="FabOps Decision Lab API",
-    version="0.4.0",
+    version=RELEASE_VERSION,
     description="Deterministic local portfolio API. It does not control real fab equipment.",
 )
 app.add_middleware(
@@ -95,17 +96,27 @@ def _workflow_call(callable_: Any) -> dict[str, Any]:
 
 @app.get("/health")
 def health(runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dict[str, Any]:
-    return runtime.health_status()
+    return {**runtime.health_status(), "release": load_release_identity()}
 
 
 @app.get("/health/live")
 def liveness() -> dict[str, Any]:
-    return {"status": "alive", "service": "fabops-api", "equipment_control_enabled": False}
+    return {
+        "status": "alive",
+        "service": "fabops-api",
+        "equipment_control_enabled": False,
+        "release": load_release_identity(),
+    }
 
 
 @app.get("/health/ready")
 def readiness(runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dict[str, Any]:
-    return runtime.health_status()
+    return {**runtime.health_status(), "release": load_release_identity()}
+
+
+@app.get("/api/release")
+def release_identity() -> dict[str, Any]:
+    return {"source": "generated-release-manifest", **load_release_identity()}
 
 
 @app.get("/api/overview")
@@ -297,5 +308,6 @@ def replay_status(runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dic
             "external_llm": "disabled-not-required",
         },
         "integration": runtime.integration_status(),
+        "release": load_release_identity(),
     }
 
