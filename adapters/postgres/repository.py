@@ -262,3 +262,30 @@ class PostgresRepository:
                 row = connection.execute(f"SELECT count(*) AS count FROM {table}").fetchone()
                 result[name] = int(row["count"])
         return result
+
+
+class ReadOnlyPostgresRepository(PostgresRepository):
+    """PostgreSQL adapter that enforces read-only transactions at the server boundary.
+
+    This is intentionally stricter than simply relying on the public proxy to block
+    mutation routes. Even if a write-capable repository method is called accidentally,
+    PostgreSQL rejects the statement inside a READ ONLY transaction.
+    """
+
+    @contextmanager
+    def transaction(self) -> Iterator[Connection[Any]]:
+        active = _ACTIVE_CONNECTION.get()
+        if active is not None:
+            yield active
+            return
+        with psycopg.connect(self.config.dsn, row_factory=dict_row) as connection:
+            connection.execute("SET TRANSACTION READ ONLY")
+            token = _ACTIVE_CONNECTION.set(connection)
+            try:
+                yield connection
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+            finally:
+                _ACTIVE_CONNECTION.reset(token)

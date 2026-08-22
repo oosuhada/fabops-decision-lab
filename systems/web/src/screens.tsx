@@ -357,10 +357,11 @@ export function OperationsOverview({overview, onSelectCase}: {overview: Overview
   const classificationTotal = Math.max(1, overview.metrics.physical_excursions + overview.metrics.sensor_bias_cases + overview.metrics.data_quality_cases);
   const averageYield = overview.cases.filter((item) => item.mean_yield != null).reduce((sum, item) => sum + (item.mean_yield ?? 0), 0) / Math.max(1, overview.cases.filter((item) => item.mean_yield != null).length);
   const maxAnomaly = Math.max(...overview.cases.map((item) => item.anomaly_score), 1);
+  const databaseBacked = overview.source === "postgresql-read-only";
   return <div className="screen-stack">
     <section className="surface-header">
       <div><span className="eyebrow">Operations overview</span><h1>Yield excursion triage queue</h1></div>
-      <div className="badge-row"><ProvenanceBadge kind="synthetic" /><ProjectionBadge projection={overview.projection} /></div>
+      <div className="badge-row">{databaseBacked ? <span className="source-mode-chip">POSTGRESQL READ-ONLY</span> : <span className="source-mode-chip">PREVIEW DATA</span>}<ProvenanceBadge kind="synthetic" /><ProjectionBadge projection={overview.projection} /></div>
     </section>
     <MetricStrip items={[
       {label: "Active cases", value: overview.metrics.active_cases, detail: "deterministic case engine"},

@@ -297,10 +297,6 @@ export default function App() {
     <header className="global-header">
       <div className="brand-mark">FO</div>
       <div className="brand-copy"><strong>FabOps</strong><span>Decision intelligence for yield excursions</span></div>
-      <div className="locale-switch" role="group" aria-label="Language">
-        <button type="button" aria-pressed={locale === "en"} onClick={() => setLocale("en")}>EN</button>
-        <button type="button" aria-pressed={locale === "ko"} onClick={() => setLocale("ko")}>한국어</button>
-      </div>
       <div className="deployment-identity-strip" aria-label="Deployment identity">
         <div className="deployment-identity-strip__primary">
           <span>{primaryDeploymentLabel}</span>
@@ -317,6 +313,10 @@ export default function App() {
           <strong>READ-ONLY</strong>
           <small>bounded AI · no equipment control</small>
         </div>
+      </div>
+      <div className="locale-switch" role="group" aria-label="Language">
+        <button type="button" aria-pressed={locale === "en"} onClick={() => setLocale("en")}>EN</button>
+        <button type="button" aria-pressed={locale === "ko"} onClick={() => setLocale("ko")}>한국어</button>
       </div>
     </header>
     <div className="workspace-context" aria-label="Current workspace context">

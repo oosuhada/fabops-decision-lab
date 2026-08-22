@@ -15,6 +15,8 @@ const KO_EXACT: Record<string, string> = {
   "PUBLIC PREVIEW": "공개 프리뷰",
   "READ-ONLY": "읽기 전용",
   "READ-ONLY PREVIEW": "읽기 전용 프리뷰",
+  "PREVIEW DATA": "프리뷰 데이터",
+  "POSTGRESQL READ-ONLY": "POSTGRESQL 읽기 전용",
   "bounded AI · no equipment control": "제한된 범위의 AI · 장비 제어 없음",
   "human authority": "사람이 최종 권한 보유",
   "no equipment control": "장비 제어 없음",

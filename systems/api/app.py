@@ -19,13 +19,15 @@ from services.narration.demo import DemoPolicyError, DemoSessionPolicy, demo_pol
 from services.rca.cqrs import RankRootCausesQuery, TraceAffectedLotsQuery
 from services.release import RELEASE_VERSION, load_deployment_identity, load_release_identity
 from services.workflow.state_machine import AuthorizationError, InvalidTransitionError
-from systems.api.runtime import LocalRuntime, build_runtime
+from systems.api.runtime import DatabaseReadOnlyRuntime, IntegrationRuntime, LocalRuntime, build_runtime
 
 app = FastAPI(
     title="FabOps Decision Lab API",
     version=RELEASE_VERSION,
-    description="Deterministic local portfolio API. It does not control real fab equipment.",
+    description="Deterministic/read-only portfolio API. It does not control real fab equipment.",
 )
+
+Runtime = LocalRuntime | IntegrationRuntime | DatabaseReadOnlyRuntime
 
 
 def _cors_origins_from_env() -> list[str]:
@@ -74,7 +76,7 @@ async def correlation_middleware(request: Request, call_next: Any) -> Any:
         return response
 
 
-def get_runtime() -> LocalRuntime:
+def get_runtime() -> Runtime:
     return app.state.runtime
 
 
@@ -101,7 +103,7 @@ def actor_headers(
 
 
 @contextmanager
-def case_telemetry(runtime: LocalRuntime, case_id: str) -> Iterator[None]:
+def case_telemetry(runtime: Runtime, case_id: str) -> Iterator[None]:
     case = runtime.case_repository.get_case(case_id)
     causal_trace_id = case_id
     if case is not None:
@@ -160,7 +162,7 @@ def _workflow_call(callable_: Any) -> dict[str, Any]:
 
 
 @app.get("/health")
-def health(runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dict[str, Any]:
+def health(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
     return {**runtime.health_status(), "release": load_release_identity()}
 
 
@@ -175,7 +177,7 @@ def liveness() -> dict[str, Any]:
 
 
 @app.get("/health/ready")
-def readiness(runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dict[str, Any]:
+def readiness(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
     return {**runtime.health_status(), "release": load_release_identity()}
 
 
@@ -190,11 +192,11 @@ def deployment_identity() -> dict[str, Any]:
 
 
 @app.get("/api/overview")
-def overview(runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dict[str, Any]:
+def overview(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
     cases = runtime.case_repository.list_cases()
     projection = asdict(runtime.projection.status())
     return {
-        "source": "synthetic",
+        "source": "postgresql-read-only" if runtime.runtime_mode == "database-readonly" else "synthetic",
         "source_timestamp": max(item.event["event_time"] for item in runtime.event_repository.all_events()),
         "projection": projection,
         "metrics": {
@@ -210,12 +212,12 @@ def overview(runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dict[str
 
 
 @app.get("/api/cases")
-def list_cases(runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dict[str, Any]:
+def list_cases(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
     return {"source": "inferred", "items": runtime.case_repository.list_cases()}
 
 
 @app.get("/api/cases/{case_id}")
-def get_case(case_id: str, runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dict[str, Any]:
+def get_case(case_id: str, runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
     case = runtime.case_repository.get_case(case_id)
     if case is None:
         raise HTTPException(status_code=404, detail="case not found")
@@ -236,7 +238,7 @@ def get_case(case_id: str, runtime: Annotated[LocalRuntime, Depends(get_runtime)
 
 
 @app.get("/api/cases/{case_id}/replay-trace")
-def get_case_replay_trace(case_id: str, runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dict[str, Any]:
+def get_case_replay_trace(case_id: str, runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
     case = runtime.case_repository.get_case(case_id)
     if case is None:
         raise HTTPException(status_code=404, detail="case not found")
@@ -364,7 +366,7 @@ def get_case_replay_trace(case_id: str, runtime: Annotated[LocalRuntime, Depends
 
 
 @app.get("/api/cases/{case_id}/advisory")
-def advisory(case_id: str, runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dict[str, Any]:
+def advisory(case_id: str, runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
     with case_telemetry(runtime, case_id):
         try:
             result = runtime.advisory.advise(case_id)
@@ -374,7 +376,7 @@ def advisory(case_id: str, runtime: Annotated[LocalRuntime, Depends(get_runtime)
 
 
 @app.get("/api/decision-cockpit")
-def decision_cockpit(runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dict[str, Any]:
+def decision_cockpit(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
     with runtime.telemetry.operation("decision.cockpit"):
         return DecisionSupportService(runtime).cockpit()
 
@@ -393,7 +395,7 @@ def narration_status() -> dict[str, Any]:
 @app.get("/api/cases/{case_id}/decision-brief")
 def decision_brief(
     case_id: str,
-    runtime: Annotated[LocalRuntime, Depends(get_runtime)],
+    runtime: Annotated[Runtime, Depends(get_runtime)],
     audience: str = "manager",
 ) -> dict[str, Any]:
     if audience not in {"manager", "engineer"}:
@@ -430,7 +432,7 @@ def create_demo_session() -> dict[str, Any]:
 def demo_narration(
     body: DemoNarrationRequest,
     request: Request,
-    runtime: Annotated[LocalRuntime, Depends(get_runtime)],
+    runtime: Annotated[Runtime, Depends(get_runtime)],
     demo_session: Annotated[str | None, Header(alias="X-FabOps-Demo-Session")] = None,
 ) -> dict[str, Any]:
     policy = get_demo_policy()
@@ -466,7 +468,7 @@ def demo_narration(
 @app.post("/api/internal/narration/precompute")
 def precompute_narration(
     body: NarrationPrecomputeRequest,
-    runtime: Annotated[LocalRuntime, Depends(get_runtime)],
+    runtime: Annotated[Runtime, Depends(get_runtime)],
     internal_token: Annotated[str | None, Header(alias="X-FabOps-Internal-Token")] = None,
 ) -> dict[str, Any]:
     expected = os.getenv("FABOPS_INTERNAL_NARRATION_TOKEN", "")
@@ -500,7 +502,7 @@ def request_evidence(
     case_id: str,
     body: EvidenceRequest,
     identity: Annotated[tuple[str, str], Depends(actor_headers)],
-    runtime: Annotated[LocalRuntime, Depends(get_runtime)],
+    runtime: Annotated[Runtime, Depends(get_runtime)],
 ) -> dict[str, Any]:
     role, actor = identity
     with case_telemetry(runtime, case_id):
@@ -513,7 +515,7 @@ def propose_action(
     case_id: str,
     body: ProposalRequest,
     identity: Annotated[tuple[str, str], Depends(actor_headers)],
-    runtime: Annotated[LocalRuntime, Depends(get_runtime)],
+    runtime: Annotated[Runtime, Depends(get_runtime)],
 ) -> dict[str, Any]:
     role, actor = identity
     with case_telemetry(runtime, case_id):
@@ -526,7 +528,7 @@ def approve_action(
     case_id: str,
     body: DecisionRequest,
     identity: Annotated[tuple[str, str], Depends(actor_headers)],
-    runtime: Annotated[LocalRuntime, Depends(get_runtime)],
+    runtime: Annotated[Runtime, Depends(get_runtime)],
 ) -> dict[str, Any]:
     role, actor = identity
     with case_telemetry(runtime, case_id):
@@ -539,7 +541,7 @@ def reject_action(
     case_id: str,
     body: DecisionRequest,
     identity: Annotated[tuple[str, str], Depends(actor_headers)],
-    runtime: Annotated[LocalRuntime, Depends(get_runtime)],
+    runtime: Annotated[Runtime, Depends(get_runtime)],
 ) -> dict[str, Any]:
     role, actor = identity
     with case_telemetry(runtime, case_id):
@@ -552,7 +554,7 @@ def close_case(
     case_id: str,
     body: CloseRequest,
     identity: Annotated[tuple[str, str], Depends(actor_headers)],
-    runtime: Annotated[LocalRuntime, Depends(get_runtime)],
+    runtime: Annotated[Runtime, Depends(get_runtime)],
 ) -> dict[str, Any]:
     role, actor = identity
     with case_telemetry(runtime, case_id):
@@ -561,7 +563,7 @@ def close_case(
 
 
 @app.get("/api/evaluation")
-def evaluation(runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dict[str, Any]:
+def evaluation(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
     release_path = Path("evidence/release/evaluation-summary.json")
     if release_path.exists():
         release = json.loads(release_path.read_text(encoding="utf-8"))
@@ -669,7 +671,7 @@ def evaluation(runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dict[s
 
 
 @app.get("/api/replay")
-def replay_status(runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dict[str, Any]:
+def replay_status(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
     stored = runtime.event_repository.all_events()
     status = runtime.projection.status()
     return {

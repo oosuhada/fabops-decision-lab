@@ -13,20 +13,29 @@ preview proxy on the Mac mini. The proxy forwards only `GET` and `HEAD` to an
 isolated candidate Web origin at `127.0.0.1:8250`; other HTTP methods are
 rejected with `405` before they can reach the candidate application.
 
-The candidate composition is separate from the active M8 application:
+The candidate composition is separate from the active M8 application and has an
+explicit data-source switch:
 
-- candidate API: `127.0.0.1:8240`, local deterministic runtime,
+- `FABOPS_DATA_SOURCE=preview`: candidate API uses its local deterministic
+  preview fixture,
+- `FABOPS_DATA_SOURCE=database`: candidate API reads the persisted FabOps
+  PostgreSQL source through server-enforced read-only transactions,
+- candidate API: `127.0.0.1:8240`,
 - candidate Web: `127.0.0.1:8250`,
 - candidate Compose project: `fabops-decision-lab-preview-v07`,
 - current M8 API/Web remain on `8210`/`8220`,
-- the current M8 PostgreSQL, Redpanda and Neo4j containers are not shared with
-  the candidate runtime.
+- Redpanda and Neo4j are not shared with the candidate runtime. In database mode
+  the candidate rebuilds its RCA projection in memory from PostgreSQL reads.
 
 The active M8 application images, API/Web containers, database schema and demo
 database are not rebuilt, redeployed, restarted or reset by candidate-preview
-updates. PostgreSQL, Redpanda and Neo4j remain private to the original FabOps
-Compose network. Public narration is deterministic fallback in this candidate
-so anonymous GET traffic cannot consume local-LLM capacity or Vertex budget.
+updates. PostgreSQL, Redpanda and Neo4j remain private and have no public host
+ports. Database mode attaches only the candidate API to the private M8 network;
+the candidate Web and public ingress are not attached to it. The PostgreSQL
+adapter starts every transaction with `SET TRANSACTION READ ONLY`, and the
+database-backed preview workflow service rejects all state mutations. Public
+narration remains independently bounded by the public demo policy and cache-only
+ordinary GET path.
 
 The current UI still renders its workflow controls. In the public read-only
 preview those controls are intentionally non-functional because their POST
@@ -97,7 +106,9 @@ calling `X-FabOps-Role` authentication.
 
 ## Data and actuation claim boundary
 
-All process/events/cases shown by the portfolio are synthetic, while anomaly
-classification, RCA, recommendations and evaluation results are inferred or
-computed from those synthetic fixtures. No Samsung/internal-fab data is used.
+All process/events/cases currently persisted by FabOps are synthetic portfolio
+data, including when `FABOPS_DATA_SOURCE=database` reads them from PostgreSQL.
+The database switch changes the storage/source path, not the provenance claim.
+Anomaly classification, RCA, recommendations and evaluation results are inferred
+or computed from those synthetic records. No Samsung/internal-fab data is used.
 There is no real equipment-control capability in the application or this preview.

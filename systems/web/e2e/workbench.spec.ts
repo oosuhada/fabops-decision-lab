@@ -312,6 +312,14 @@ test("locale, accordion and pin action semantics persist across routes and respo
     return {offset: button.left - toolbar.left};
   });
   expect(pinAlignment.offset).toBeLessThanOrEqual(12);
+  const headerGeometry = await page.evaluate(() => {
+    const header = document.querySelector(".global-header")!.getBoundingClientRect();
+    const deployment = document.querySelector(".deployment-identity-strip")!.getBoundingClientRect();
+    const locale = document.querySelector(".locale-switch")!.getBoundingClientRect();
+    return {headerRight: header.right, deploymentRight: deployment.right, localeLeft: locale.left, localeRight: locale.right};
+  });
+  expect(headerGeometry.localeLeft).toBeGreaterThanOrEqual(headerGeometry.deploymentRight - 1);
+  expect(headerGeometry.localeRight).toBeLessThanOrEqual(headerGeometry.headerRight + 1);
 
   const investigate = page.getByLabel("Section 2, Investigate");
   await expect(investigate).toHaveAttribute("aria-expanded", "true");
@@ -342,8 +350,30 @@ test("locale, accordion and pin action semantics persist across routes and respo
   await expect(page.getByLabel("2절, 조사·분석")).toHaveAttribute("aria-expanded", "false");
 
   await page.setViewportSize({width: 1024, height: 768});
+  await page.goto("/OperationsQueue");
+  await expect(page.getByRole("heading", {name: "수율 이상 분류 큐"})).toBeVisible();
   await expect(page.locator(".locale-switch")).toBeVisible();
+  const operationsGeometry = await page.evaluate(() => {
+    const surface = document.querySelector("#work-surface")!.getBoundingClientRect();
+    const grid = document.querySelector(".overview-visual-grid")!.getBoundingClientRect();
+    const inspector = document.querySelector(".evidence-inspector-slot")!.getBoundingClientRect();
+    return {surfaceRight: surface.right, gridRight: grid.right, inspectorLeft: inspector.left, columns: getComputedStyle(document.querySelector(".overview-visual-grid")!).gridTemplateColumns};
+  });
+  expect(operationsGeometry.gridRight).toBeLessThanOrEqual(operationsGeometry.surfaceRight + 1);
+  expect(operationsGeometry.surfaceRight).toBeLessThanOrEqual(operationsGeometry.inspectorLeft + 1);
+  expect(operationsGeometry.columns.split(" ").length).toBe(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1)).toBe(false);
+
+  await page.setViewportSize({width: 1440, height: 900});
+  await page.goto("/ShiftHandoff");
+  const handoffTitle = page.getByRole("heading", {name: "다음 엔지니어가 먼저 확인할 사항"});
+  await expect(handoffTitle).toBeVisible();
+  const handoffTitleGeometry = await handoffTitle.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const lineHeight = Number.parseFloat(getComputedStyle(element).lineHeight);
+    return {height: rect.height, lineHeight};
+  });
+  expect(handoffTitleGeometry.height).toBeLessThanOrEqual(handoffTitleGeometry.lineHeight * 1.35);
 
   await page.emulateMedia({reducedMotion: "reduce"});
   await page.setViewportSize({width: 390, height: 844});

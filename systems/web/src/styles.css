@@ -111,6 +111,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, [tabindex]:fo
 .provenance-synthetic { background: #eef5ff; border-color: #a8c4e8; color: #285e9c; }
 .provenance-inferred, .provenance-evaluation { background: #f2eefb; border-color: #c9b7e8; color: #69499b; }
 .provenance-real-public { background: #edf7ef; border-color: #afd0b7; color: #2c7040; }
+.source-mode-chip { display: inline-flex; align-items: center; min-height: 23px; padding: 3px 7px; border: 1px solid #9dc4c7; border-radius: 3px; background: #edf8f7; color: #2b676a; font-size: 9px; font-weight: 850; letter-spacing: .05em; }
 .projection-badge.is-fresh { color: var(--success); border-color: #a9cfb9; background: #f0f8f3; }
 .projection-badge.is-stale { color: var(--warning); border-color: #d9c18f; background: #fff9e9; }
 .classification-physical_excursion { color: #8a3535; background: #fff0f0; border-color: #e0abab; }
@@ -452,12 +453,14 @@ body {
 .work-surface {
   grid-column: 3;
   padding: 22px;
+  container-name: work-surface;
+  container-type: inline-size;
   background:
     radial-gradient(circle at 5% 2%, rgba(67, 151, 189, .08), transparent 24%),
     linear-gradient(#f2f5f7, #edf1f4);
 }
 
-.screen-stack { gap: 16px; max-width: 1460px; }
+.screen-stack { width: 100%; min-width: 0; gap: 16px; max-width: 1460px; }
 .panel, .surface-header {
   border-color: #d6dee6;
   border-radius: 12px;
@@ -497,7 +500,7 @@ body {
 .pane-pin-toolbar--dark button { border-color: rgba(132,170,194,.32); background: rgba(255,255,255,.07); color: #c8d8e3; }
 .pane-pin-toolbar button[aria-pressed="true"] { border-color: #4d9db4; background: #e8f6f8; color: #286a7b; }
 .pane-pin-toolbar--dark button[aria-pressed="true"] { background: rgba(74,190,196,.18); color: #9de0df; }
-.locale-switch { margin-left: auto; display: inline-flex; align-items: center; gap: 2px; border: 1px solid #334859; border-radius: 7px; padding: 2px; background: #0f2434; }
+.locale-switch { flex: 0 0 auto; margin-left: 0; display: inline-flex; align-items: center; gap: 2px; border: 1px solid #334859; border-radius: 7px; padding: 2px; background: #0f2434; }
 .locale-switch button { min-height: 24px; border: 0; border-radius: 5px; padding: 3px 8px; background: transparent; color: #9fb3c2; font-size: 8px; font-weight: 800; cursor: pointer; }
 .locale-switch button[aria-pressed="true"] { background: #eef8f8; color: #245f6d; }
 .locale-switch button:focus-visible { outline: 2px solid #72cad2; outline-offset: 2px; }
@@ -828,12 +831,6 @@ html[data-locale="ko"] body { word-break: keep-all; overflow-wrap: break-word; }
 }
 
 @media (max-width: 1180px) {
-  .app-shell { grid-template-columns: 200px minmax(0, 1fr); grid-template-rows: 64px 40px calc(100vh - 104px); }
-  .left-rail { grid-column: 1; }
-  .work-surface { grid-column: 2; }
-  .workbench-resize-handle { display: none; }
-  .evidence-inspector-slot { display: contents; }
-  .evidence-inspector { top: 104px; }
   .header-status .status-chip:nth-child(2), .header-status .status-chip:nth-child(3) { display: none; }
   .decision-spotlight { grid-template-columns: 1fr; }
   .decision-spotlight__evidence { border-top: 1px solid #dbe4ea; border-left: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -1913,4 +1910,28 @@ body::before {
   .shift-handoff-summary > div { border-bottom: 1px solid #e0e7eb; }
   .shift-handoff-list > ol > li { grid-template-columns: 54px minmax(0,1fr); }
   .shift-handoff-evidence,.shift-handoff-next { grid-column: 2; }
+}
+
+/* Workbench panels change the usable canvas without changing viewport width.
+   These container queries make route layouts react to the actual work surface,
+   so a pinned inspector never overlays Operations Queue or forces handoff copy
+   into an artificial extra line. */
+@container work-surface (max-width: 1000px) {
+  .overview-visual-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .glass-visual-card--anomaly { grid-column: 1 / -1; }
+  .shift-handoff-hero { grid-template-columns: 1fr; align-items: stretch; }
+  .shift-handoff-source { min-width: 0; }
+  .shift-handoff-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .shift-handoff-summary > div:nth-child(3) { border-right: 0; }
+  .shift-handoff-list > ol > li { grid-template-columns: 70px minmax(0, 1.3fr) minmax(0, 1fr); }
+  .shift-handoff-next { grid-column: 2 / -1; }
+}
+
+@container work-surface (max-width: 680px) {
+  .overview-visual-grid { grid-template-columns: 1fr; gap: 9px; }
+  .glass-visual-card--anomaly { grid-column: auto; }
+  .shift-handoff-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .shift-handoff-list > ol > li { grid-template-columns: 54px minmax(0, 1fr); }
+  .shift-handoff-evidence,
+  .shift-handoff-next { grid-column: 2; }
 }

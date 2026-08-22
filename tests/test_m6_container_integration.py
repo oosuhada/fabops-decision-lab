@@ -3,10 +3,11 @@ from __future__ import annotations
 import os
 import uuid
 
+import psycopg
 import pytest
 
 from adapters.neo4j import Neo4jConfig, Neo4jDriverProjectionAdapter
-from adapters.postgres import PostgresConfig, PostgresRepository
+from adapters.postgres import PostgresConfig, PostgresRepository, ReadOnlyPostgresRepository
 from adapters.redpanda.adapter import RedpandaConfig, RedpandaEventBusAdapter
 from services.detection.service import DeterministicDetector
 from services.ingestion.service import IngestionService
@@ -54,6 +55,21 @@ def test_postgres_is_authoritative_and_duplicate_delivery_has_zero_case_audit_ou
     after = repository.counts()
     assert result == "duplicate_noop"
     assert after == before
+
+
+def test_read_only_postgres_adapter_rejects_mutation_at_database_boundary() -> None:
+    repository = ReadOnlyPostgresRepository(PostgresConfig(os.environ["FABOPS_POSTGRES_DSN"]))
+    assert repository.healthcheck() is True
+    before = repository.counts()
+    with pytest.raises(psycopg.errors.ReadOnlySqlTransaction):
+        repository.append_audit(
+            {
+                "case_id": "READ-ONLY-PROBE",
+                "event": "preview.read_only_probe",
+                "actor_id": "integration-test",
+            }
+        )
+    assert repository.counts() == before
 
 
 def test_postgres_quarantine_write_is_transactional() -> None:

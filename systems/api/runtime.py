@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from adapters.neo4j import Neo4jConfig, Neo4jDriverProjectionAdapter
-from adapters.postgres import PostgresConfig, PostgresRepository
+from adapters.postgres import PostgresConfig, PostgresRepository, ReadOnlyPostgresRepository
 from adapters.redpanda.adapter import RedpandaConfig, RedpandaEventBusAdapter
 from services.advisory.provider import DeterministicAdvisoryProvider
 from services.advisory.tools import ToolRegistry
@@ -18,7 +18,7 @@ from services.observability.telemetry import TelemetryRecorder
 from services.rca.cqrs import RcaQueryService
 from services.rca.graph import InMemoryGraphProjection
 from services.rca.projection import RcaProjectionWorker
-from services.workflow.state_machine import CaseWorkflowService
+from services.workflow.state_machine import AuthorizationError, CaseWorkflowService
 from simulator.config import SimulatorConfig, load_config
 from simulator.fabtwin import FabTwinSimulator
 
@@ -76,6 +76,7 @@ class LocalRuntime:
             "status": "ready" if ready else "degraded",
             "ready": ready,
             "runtime_mode": self.runtime_mode,
+            "data_source": "preview",
             "source_of_truth": {
                 "configured": "in-memory-local-adapter" if self.runtime_mode == "local" else "postgresql",
                 "production_authority": "postgresql",
@@ -160,8 +161,111 @@ class IntegrationRuntime:
             "status": "ready" if ready else "degraded",
             "ready": ready,
             "runtime_mode": self.runtime_mode,
+            "data_source": "database",
             "source_of_truth": {
                 "configured": "postgresql",
+                "production_authority": "postgresql",
+                "ready": source_ready,
+                "production_verified": bool(integration["postgres_runtime_verified"]),
+            },
+            "projection": projection_payload,
+            "advisory": {"available": advisory_ready, "external_llm_required": False, "external_llm_state": "disabled-optional"},
+            "integration": integration,
+            "equipment_control_enabled": False,
+        }
+
+
+class ReadOnlyWorkflowService:
+    """Fail closed for every workflow mutation in database-backed preview mode."""
+
+    @staticmethod
+    def _deny() -> None:
+        raise AuthorizationError("database-backed preview is read-only")
+
+    def request_evidence(self, *_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        self._deny()
+
+    def propose_action(self, *_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        self._deny()
+
+    def approve(self, *_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        self._deny()
+
+    def reject(self, *_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        self._deny()
+
+    def close(self, *_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        self._deny()
+
+    def check_timeouts(self) -> list[str]:
+        self._deny()
+
+
+@dataclass
+class DatabaseReadOnlyRuntime:
+    config: SimulatorConfig
+    seed: int
+    event_repository: ReadOnlyPostgresRepository
+    case_repository: ReadOnlyPostgresRepository
+    quarantine: ReadOnlyPostgresRepository
+    detector: DeterministicDetector
+    ingestion: IngestionService
+    graph: InMemoryGraphProjection
+    projection: RcaProjectionWorker
+    queries: RcaQueryService
+    tools: ToolRegistry
+    advisory: DeterministicAdvisoryProvider
+    workflow: ReadOnlyWorkflowService
+    telemetry: TelemetryRecorder
+    runtime_mode: str = "database-readonly"
+
+    def integration_status(self) -> dict[str, Any]:
+        postgres_ready = self.event_repository.healthcheck()
+        return {
+            "status": "verified" if postgres_ready else "degraded",
+            "compose_config_verified": True,
+            "postgres_runtime_verified": postgres_ready,
+            "redpanda_runtime_verified": False,
+            "neo4j_runtime_verified": False,
+            "container_integration_verified": postgres_ready,
+            "required_dependencies": ["postgres"],
+            "read_only": True,
+            "reason": None if postgres_ready else "configured PostgreSQL source is unavailable",
+        }
+
+    def health_status(self) -> dict[str, Any]:
+        integration = self.integration_status()
+        try:
+            event_count = len(self.event_repository.all_events())
+            detection_checkpoint = self.event_repository.checkpoint("detection")
+            projection = self.projection.status()
+            source_ready = event_count > 0 and detection_checkpoint == event_count
+            projection_payload = {
+                "projection_version": projection.projection_version,
+                "source_checkpoint": projection.source_checkpoint,
+                "projection_checkpoint": projection.projection_checkpoint,
+                "lag_events": projection.lag_events,
+                "stale": projection.stale,
+            }
+        except Exception as exc:  # noqa: BLE001 - readiness must remain descriptive
+            source_ready = False
+            projection_payload = {
+                "projection_version": "rca-graph-v1.0.0",
+                "source_checkpoint": 0,
+                "projection_checkpoint": 0,
+                "lag_events": 0,
+                "stale": True,
+                "error_classification": type(exc).__name__,
+            }
+        advisory_ready = len(self.tools.names) == 5
+        ready = source_ready and not projection_payload["stale"] and advisory_ready and bool(integration["postgres_runtime_verified"])
+        return {
+            "status": "ready" if ready else "degraded",
+            "ready": ready,
+            "runtime_mode": self.runtime_mode,
+            "data_source": "database",
+            "source_of_truth": {
+                "configured": "postgresql-read-only",
                 "production_authority": "postgresql",
                 "ready": source_ready,
                 "production_verified": bool(integration["postgres_runtime_verified"]),
@@ -287,7 +391,49 @@ def build_integration_runtime(seed: int = 42, profile: str = "test", telemetry: 
     return runtime
 
 
-def build_runtime() -> LocalRuntime | IntegrationRuntime:
+def build_database_readonly_runtime(seed: int = 42, profile: str = "test", telemetry: TelemetryRecorder | None = None) -> DatabaseReadOnlyRuntime:
+    postgres_dsn = os.environ.get("FABOPS_POSTGRES_DSN")
+    if not postgres_dsn:
+        raise RuntimeError("database preview requires FABOPS_POSTGRES_DSN")
+
+    config = load_config(profile)
+    recorder = telemetry or TelemetryRecorder()
+    repository = ReadOnlyPostgresRepository(PostgresConfig(postgres_dsn))
+    if not repository.healthcheck():
+        raise RuntimeError("configured PostgreSQL source is unavailable")
+
+    graph = InMemoryGraphProjection()
+    projection = RcaProjectionWorker(repository, graph, telemetry=recorder)
+    projection.rebuild()
+    detector = DeterministicDetector(repository, telemetry=recorder)
+    ingestion = IngestionService(repository, repository, repository, detector.consume, telemetry=recorder, transaction_factory=repository.transaction)
+    queries = RcaQueryService(graph, repository, projection, telemetry=recorder)
+    tools = ToolRegistry(repository, graph, queries, telemetry=recorder)
+    advisory = DeterministicAdvisoryProvider(tools, telemetry=recorder)
+    return DatabaseReadOnlyRuntime(
+        config,
+        seed,
+        repository,
+        repository,
+        repository,
+        detector,
+        ingestion,
+        graph,
+        projection,
+        queries,
+        tools,
+        advisory,
+        ReadOnlyWorkflowService(),
+        recorder,
+    )
+
+
+def build_runtime() -> LocalRuntime | IntegrationRuntime | DatabaseReadOnlyRuntime:
+    data_source = os.environ.get("FABOPS_DATA_SOURCE", "preview").strip().lower()
+    if data_source == "database":
+        return build_database_readonly_runtime()
+    if data_source not in {"preview", "local"}:
+        raise ValueError(f"unsupported FABOPS_DATA_SOURCE: {data_source}")
     mode = os.environ.get("FABOPS_RUNTIME_MODE", "local").strip().lower()
     if mode == "local":
         return build_local_runtime()
