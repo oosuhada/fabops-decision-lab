@@ -1,0 +1,200 @@
+services:
+  api:
+    environment:
+      FABOPS_DATA_SOURCE: database
+      FABOPS_LIVE_ENABLED: "true"
+      FABOPS_POSTGRES_DSN: postgresql://fabops:${FABOPS_LIVE_POSTGRES_PASSWORD:?FABOPS_LIVE_POSTGRES_PASSWORD must be set}@live-postgres:5432/fabops
+    depends_on:
+      live-init:
+        condition: service_completed_successfully
+
+  live-postgres:
+    profiles: ["live"]
+    image: postgres:16-alpine
+    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 512m
+    environment:
+      POSTGRES_DB: fabops
+      POSTGRES_USER: fabops
+      POSTGRES_PASSWORD: ${FABOPS_LIVE_POSTGRES_PASSWORD:?FABOPS_LIVE_POSTGRES_PASSWORD must be set}
+    volumes:
+      - ${FABOPS_LIVE_DATA_ROOT:?FABOPS_LIVE_DATA_ROOT must be set}/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fabops -d fabops"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    networks: [preview]
+
+  live-redpanda:
+    profiles: ["live"]
+    image: redpandadata/redpanda:v24.3.18
+    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 512m
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - 384M
+      - --reserve-memory
+      - 0M
+      - --node-id
+      - "0"
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr
+      - PLAINTEXT://live-redpanda:9092
+    volumes:
+      - ${FABOPS_LIVE_DATA_ROOT:?FABOPS_LIVE_DATA_ROOT must be set}/redpanda:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health --exit-when-healthy"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    networks: [preview]
+
+  live-redpanda-init:
+    profiles: ["live"]
+    image: redpandadata/redpanda:v24.3.18
+    restart: "no"
+    cpus: 0.2
+    mem_limit: 128m
+    depends_on:
+      live-redpanda:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - >-
+        rpk topic create fabops.events.v1 --brokers live-redpanda:9092 || true;
+        rpk topic create fabops.events.dlq.v1 --brokers live-redpanda:9092 || true
+    networks: [preview]
+
+  live-neo4j:
+    profiles: ["live"]
+    image: neo4j:5.26-community
+    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 640m
+    environment:
+      NEO4J_AUTH: neo4j/${FABOPS_LIVE_NEO4J_PASSWORD:?FABOPS_LIVE_NEO4J_PASSWORD must be set}
+      FABOPS_NEO4J_PASSWORD: ${FABOPS_LIVE_NEO4J_PASSWORD:?FABOPS_LIVE_NEO4J_PASSWORD must be set}
+      NEO4J_server_memory_heap_initial__size: 192m
+      NEO4J_server_memory_heap_max__size: 320m
+      NEO4J_server_memory_pagecache_size: 96m
+    volumes:
+      - ${FABOPS_LIVE_DATA_ROOT:?FABOPS_LIVE_DATA_ROOT must be set}/neo4j:/data
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p \"$$FABOPS_NEO4J_PASSWORD\" 'RETURN 1' >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    networks: [preview]
+
+  live-init:
+    profiles: ["live"]
+    build:
+      context: ${FABOPS_PUBLIC_SOURCE_ROOT:?FABOPS_PUBLIC_SOURCE_ROOT must be set}
+      dockerfile: infra/macmini/Dockerfile.api
+      args:
+        FABOPS_RELEASE_VERSION: ${FABOPS_CANDIDATE_LABEL:-0.6.0-v0.8-live-candidate}
+        FABOPS_RELEASE_HASH: ${FABOPS_BASE_RELEASE_HASH:-ab8b20a696b9b1996495f23a3e413cc33a67b6861efa184c64742e0f310c6326}
+        FABOPS_DEPLOY_GIT_SHA: ${FABOPS_PUBLIC_GIT_SHA}
+        FABOPS_BASE_RELEASE_VERSION: ${FABOPS_BASE_RELEASE_VERSION:-0.6.0}
+        FABOPS_DEPLOYMENT_KIND: candidate
+        FABOPS_DEPLOYMENT_CHANNEL: public-preview
+        FABOPS_CANDIDATE_LABEL: ${FABOPS_CANDIDATE_LABEL:-0.6.0-v0.8-live-candidate}
+        FABOPS_DEPLOYMENT_HASH: candidate-${FABOPS_PUBLIC_GIT_SHA}
+    restart: "no"
+    cpus: 0.4
+    mem_limit: 384m
+    depends_on:
+      live-postgres:
+        condition: service_healthy
+      live-redpanda-init:
+        condition: service_completed_successfully
+      live-neo4j:
+        condition: service_healthy
+    environment: &live-integration-environment
+      FABOPS_RUNTIME_MODE: integration
+      FABOPS_POSTGRES_DSN: postgresql://fabops:${FABOPS_LIVE_POSTGRES_PASSWORD}@live-postgres:5432/fabops
+      FABOPS_REDPANDA_BOOTSTRAP: live-redpanda:9092
+      FABOPS_REDPANDA_TOPIC: fabops.events.v1
+      FABOPS_REDPANDA_DLQ_TOPIC: fabops.events.dlq.v1
+      FABOPS_REDPANDA_GROUP: fabops-preview-live-bootstrap-v1
+      FABOPS_NEO4J_URI: bolt://live-neo4j:7687
+      FABOPS_NEO4J_USER: neo4j
+      FABOPS_NEO4J_PASSWORD: ${FABOPS_LIVE_NEO4J_PASSWORD}
+      FABOPS_LIVE_SEED: ${FABOPS_LIVE_SEED:-42}
+      FABOPS_LIVE_PROFILE: ${FABOPS_LIVE_PROFILE:-test}
+    command: ["/bin/sh", "-ec", "python -m adapters.postgres.migrate && python -m systems.live_worker.bootstrap"]
+    networks: [preview]
+
+  live-simulator:
+    profiles: ["live"]
+    build:
+      context: ${FABOPS_PUBLIC_SOURCE_ROOT:?FABOPS_PUBLIC_SOURCE_ROOT must be set}
+      dockerfile: infra/macmini/Dockerfile.api
+      args:
+        FABOPS_RELEASE_VERSION: ${FABOPS_CANDIDATE_LABEL:-0.6.0-v0.8-live-candidate}
+        FABOPS_RELEASE_HASH: ${FABOPS_BASE_RELEASE_HASH:-ab8b20a696b9b1996495f23a3e413cc33a67b6861efa184c64742e0f310c6326}
+        FABOPS_DEPLOY_GIT_SHA: ${FABOPS_PUBLIC_GIT_SHA}
+        FABOPS_BASE_RELEASE_VERSION: ${FABOPS_BASE_RELEASE_VERSION:-0.6.0}
+        FABOPS_DEPLOYMENT_KIND: candidate
+        FABOPS_DEPLOYMENT_CHANNEL: public-preview
+        FABOPS_CANDIDATE_LABEL: ${FABOPS_CANDIDATE_LABEL:-0.6.0-v0.8-live-candidate}
+        FABOPS_DEPLOYMENT_HASH: candidate-${FABOPS_PUBLIC_GIT_SHA}
+    restart: unless-stopped
+    cpus: 0.25
+    mem_limit: 256m
+    depends_on:
+      live-init:
+        condition: service_completed_successfully
+    environment:
+      FABOPS_REDPANDA_BOOTSTRAP: live-redpanda:9092
+      FABOPS_REDPANDA_TOPIC: fabops.events.v1
+      FABOPS_REDPANDA_DLQ_TOPIC: fabops.events.dlq.v1
+      FABOPS_LIVE_SEED: ${FABOPS_LIVE_SEED:-42}
+      FABOPS_LIVE_PROFILE: ${FABOPS_LIVE_PROFILE:-test}
+      FABOPS_LIVE_TIME_ACCELERATION: ${FABOPS_LIVE_TIME_ACCELERATION:-720}
+    command: ["python", "-m", "systems.live_worker.main"]
+    networks: [preview]
+
+  stream-worker:
+    profiles: ["live"]
+    build:
+      context: ${FABOPS_PUBLIC_SOURCE_ROOT:?FABOPS_PUBLIC_SOURCE_ROOT must be set}
+      dockerfile: infra/macmini/Dockerfile.api
+      args:
+        FABOPS_RELEASE_VERSION: ${FABOPS_CANDIDATE_LABEL:-0.6.0-v0.8-live-candidate}
+        FABOPS_RELEASE_HASH: ${FABOPS_BASE_RELEASE_HASH:-ab8b20a696b9b1996495f23a3e413cc33a67b6861efa184c64742e0f310c6326}
+        FABOPS_DEPLOY_GIT_SHA: ${FABOPS_PUBLIC_GIT_SHA}
+        FABOPS_BASE_RELEASE_VERSION: ${FABOPS_BASE_RELEASE_VERSION:-0.6.0}
+        FABOPS_DEPLOYMENT_KIND: candidate
+        FABOPS_DEPLOYMENT_CHANNEL: public-preview
+        FABOPS_CANDIDATE_LABEL: ${FABOPS_CANDIDATE_LABEL:-0.6.0-v0.8-live-candidate}
+        FABOPS_DEPLOYMENT_HASH: candidate-${FABOPS_PUBLIC_GIT_SHA}
+    restart: unless-stopped
+    cpus: 0.4
+    mem_limit: 384m
+    depends_on:
+      live-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *live-integration-environment
+      FABOPS_REDPANDA_GROUP: fabops-preview-live-stream-v1
+    command: ["python", "-m", "systems.stream_worker.main"]
+    networks: [preview]
+
+networks:
+  preview:
+    name: fabops-decision-lab-preview-v07_private
+    driver: bridge
