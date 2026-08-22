@@ -289,3 +289,7 @@ tests/          deterministic regression and architecture gates
 ## License / attribution note
 
 Dependency and reference attribution state is generated in `evidence/m6/attribution-audit.json`. This repository does not claim third-party dataset ownership or proprietary fab lineage.
+
+## Topics
+
+[`semiconductor`](https://github.com/topics/semiconductor) · [`semiconductor-manufacturing`](https://github.com/topics/semiconductor-manufacturing) · [`industrial-ai`](https://github.com/topics/industrial-ai) · [`yield-analysis`](https://github.com/topics/yield-analysis) · [`root-cause-analysis`](https://github.com/topics/root-cause-analysis) · [`decision-support`](https://github.com/topics/decision-support) · [`evidence-based`](https://github.com/topics/evidence-based) · [`event-driven-architecture`](https://github.com/topics/event-driven-architecture) · [`cqrs`](https://github.com/topics/cqrs) · [`postgresql`](https://github.com/topics/postgresql) · [`neo4j`](https://github.com/topics/neo4j) · [`redpanda`](https://github.com/topics/redpanda) · [`fastapi`](https://github.com/topics/fastapi) · [`react`](https://github.com/topics/react) · [`python`](https://github.com/topics/python) · [`typescript`](https://github.com/topics/typescript) · [`observability`](https://github.com/topics/observability) · [`human-in-the-loop`](https://github.com/topics/human-in-the-loop) · [`digital-twin`](https://github.com/topics/digital-twin) · [`anomaly-detection`](https://github.com/topics/anomaly-detection)
