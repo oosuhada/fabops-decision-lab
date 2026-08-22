@@ -169,7 +169,16 @@ def verify(output: Path) -> dict[str, Any]:
                 "ruff",
                 [uv, "run", "ruff", "check", "services", "systems/api", "adapters", "simulator", "evaluation", "tests"],
             ),
-            _run("python-regression", [uv, "run", "pytest", "-q"], timeout=600),
+            # test_m6_final_gate consumes this canonical-verification artifact,
+            # so running it before the artifact is written creates a circular
+            # dependency after any failed verification. Run the rest of the
+            # regression suite first, then execute the final-gate test after a
+            # provisional canonical result has been written below.
+            _run(
+                "python-regression",
+                [uv, "run", "pytest", "-q", "--ignore=tests/test_m6_final_gate.py"],
+                timeout=600,
+            ),
             _run(
                 "held-out-release-evaluation",
                 [uv, "run", "python", "-m", "evaluation.release_eval", "--output", str(temp_release), "--check"],
@@ -259,6 +268,17 @@ def verify(output: Path) -> dict[str, Any]:
             },
         }
         output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(result, indent=2, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")
+
+        # Resolve the canonical-evidence -> M6-final-gate dependency in a
+        # second phase. At this point build_gate() can read a truthful
+        # provisional canonical result derived from all preceding checks.
+        final_gate_step = _run(
+            "m6-final-gate",
+            [uv, "run", "pytest", "-q", "tests/test_m6_final_gate.py"],
+        )
+        result["steps"].append(final_gate_step)
+        result["passed"] = bool(result["passed"] and final_gate_step["exit_code"] == 0)
         output.write_text(json.dumps(result, indent=2, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")
         return result
 

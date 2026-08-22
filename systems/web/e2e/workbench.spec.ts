@@ -165,7 +165,11 @@ test("Semiconductor Forensics design grammar stays consistent across routes", as
   for (const route of routes) {
     await page.setViewportSize({width: 1440, height: 1000});
     await page.goto(route.path);
-    await expect(page.locator(".app-shell")).toBeVisible();
+    // Canonical verification can run this browser suite while Docker/build
+    // checks are competing for CPU. Wait for the API-backed boot screen to
+    // resolve instead of treating the default 5 s assertion window as a
+    // product failure.
+    await expect(page.locator(".app-shell")).toBeVisible({timeout: 15_000});
     await ensureDesktopPanesPinned(page);
     await expect(page.locator(route.ready)).toBeVisible();
     const workspaceContext = page.getByLabel("Current workspace context");
