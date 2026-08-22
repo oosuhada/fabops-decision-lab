@@ -12,8 +12,8 @@ milestone is marked `IN PROGRESS` while implementation is active.
 | M4 Governed Workflow & Workbench | PASSED | `evidence/m4-gate.json` |
 | M5 Evaluation & Release Gates | PASSED | `evidence/m5-gate.json` |
 | M6 Reliability & Portfolio Release | PASSED | `evidence/m6-gate.json` |
-| M7 Mac mini Deployment | IN PROGRESS | `evidence/m7-gate.json` |
-| M8 Burn-in & Recovery Proof | NOT STARTED | `evidence/m8/soak-manifest.json` |
+| M7 Mac mini Deployment | PASSED | `evidence/m7-gate.json` |
+| M8 Burn-in & Recovery Proof | IN PROGRESS | `evidence/m8/soak-manifest.json` |
 
 ### M6 execution ledger
 
@@ -32,8 +32,15 @@ milestone is marked `IN PROGRESS` while implementation is active.
 |---|---|---|
 | M7-A Mac mini Remote Preflight | PASSED | `evidence/m7/host-inventory.redacted.json` |
 | M7-B Deployment Package | PASSED | `docs/operations/MAC_MINI_DEPLOYMENT.md`, `infra/macmini/docker-compose.yml` |
-| M7-C Actual Deployment & Runtime Verification | IN PROGRESS | `evidence/m7/deployment-summary.json`, `evidence/m7/container-integration-summary.json` |
-| M7-D Backup / Restore / Rollback | NOT STARTED | `evidence/m7/backup-restore-summary.json`, `evidence/m7/rollback-summary.json` |
+| M7-C Actual Deployment & Runtime Verification | PASSED | `evidence/m7/deployment-summary.json`, `evidence/m7/container-integration-summary.json`, `evidence/m7/existing-services-impact.json` |
+| M7-D Backup / Restore / Rollback | PASSED | `evidence/m7/backup-restore-summary.json`, `evidence/m7/rollback-summary.json`, `evidence/m7-gate.json` |
+
+### M8 execution ledger
+
+| Sub-gate | Status | Evidence |
+|---|---|---|
+| M8-A 24h Burn-in Collector Setup | IN PROGRESS | `evidence/m8/soak-manifest.json` |
+| M8-B 24h Burn-in Audit & Recovery Proof | NOT STARTED | future completed soak summary and recovery audit evidence |
 
 ## Execution discipline
 

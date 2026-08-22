@@ -1,0 +1,34 @@
+{
+  "schema_version": "m7-existing-services-impact-v1",
+  "captured_at": "2026-08-22T14:19:56Z",
+  "status": "passed",
+  "passed": true,
+  "before_snapshot_source": "evidence/m7/host-inventory.redacted.json",
+  "after": {
+    "containers": {
+      "askoosu-app": "Up (healthy)",
+      "askoosu-postgres": "Up (healthy)",
+      "codemate-postgres-17": "Up",
+      "instagram-orbstack-backend-1": "Up",
+      "instagram-orbstack-frontend-1": "Up",
+      "instagram-orbstack-meilisearch-1": "Up",
+      "instagram-orbstack-postgres-1": "Up (healthy)",
+      "ontology-dashboard-macmini-backend-1": "Up (healthy)",
+      "ontology-dashboard-macmini-frontend-1": "Up (healthy)",
+      "ontology-dashboard-macmini-live-ingestor-1": "Up",
+      "ontology-dashboard-macmini-postgres-1": "Up (healthy)",
+      "ontology-dashboard-macmini-redis-1": "Up (healthy)"
+    },
+    "dev_flow_dashboard_launchd_loaded": true,
+    "cloudflared_launchd_loaded": true
+  },
+  "checks": {
+    "all_preexisting_container_names_still_present": true,
+    "ontology_dashboard_healthy": true,
+    "dev_flow_dashboard_still_loaded": true,
+    "cloudflared_still_loaded": true,
+    "ontology_oosu_dev_modified": false,
+    "unrelated_database_contents_modified": false,
+    "unrelated_container_runtime_replaced": false
+  }
+}
