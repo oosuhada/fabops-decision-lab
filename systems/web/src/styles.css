@@ -500,7 +500,7 @@ body {
 .pane-pin-toolbar--dark button { border-color: rgba(132,170,194,.32); background: rgba(255,255,255,.07); color: #c8d8e3; }
 .pane-pin-toolbar button[aria-pressed="true"] { border-color: #4d9db4; background: #e8f6f8; color: #286a7b; }
 .pane-pin-toolbar--dark button[aria-pressed="true"] { background: rgba(74,190,196,.18); color: #9de0df; }
-.locale-switch { flex: 0 0 auto; margin-left: 0; display: inline-flex; align-items: center; gap: 2px; border: 1px solid #334859; border-radius: 7px; padding: 2px; background: #0f2434; }
+.locale-switch { flex: 0 0 auto; margin-left: auto; display: inline-flex; align-items: center; gap: 2px; border: 1px solid #334859; border-radius: 7px; padding: 2px; background: #0f2434; }
 .locale-switch button { min-height: 24px; border: 0; border-radius: 5px; padding: 3px 8px; background: transparent; color: #9fb3c2; font-size: 8px; font-weight: 800; cursor: pointer; }
 .locale-switch button[aria-pressed="true"] { background: #eef8f8; color: #245f6d; }
 .locale-switch button:focus-visible { outline: 2px solid #72cad2; outline-offset: 2px; }
