@@ -1,0 +1,38 @@
+FROM python:3.13-slim
+
+ARG FABOPS_RELEASE_VERSION=0.6.0
+ARG FABOPS_RELEASE_HASH
+ARG FABOPS_DEPLOY_GIT_SHA
+
+LABEL org.opencontainers.image.title="FabOps Decision Lab API" \
+      org.opencontainers.image.version="${FABOPS_RELEASE_VERSION}" \
+      org.opencontainers.image.revision="${FABOPS_DEPLOY_GIT_SHA}" \
+      com.oosu.fabops.release-hash="${FABOPS_RELEASE_HASH}"
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_PROJECT_ENVIRONMENT=/app/.venv \
+    PATH="/app/.venv/bin:$PATH"
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir uv==0.8.13
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --locked --dev --no-install-project
+
+COPY adapters ./adapters
+COPY contracts ./contracts
+COPY evaluation ./evaluation
+COPY evidence ./evidence
+COPY services ./services
+COPY simulator ./simulator
+COPY systems ./systems
+COPY tests ./tests
+COPY pyproject.toml uv.lock ./
+
+RUN uv sync --locked --dev
+
+EXPOSE 8000
+
+CMD ["uvicorn", "systems.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
