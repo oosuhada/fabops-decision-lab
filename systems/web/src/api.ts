@@ -1,4 +1,4 @@
-import type {AdvisoryResponse, CaseDetailResponse, CaseReplayTraceResponse, DecisionBriefResponse, DecisionCockpitResponse, DemoSessionResponse, DeploymentIdentityResponse, EvaluationResponse, NarrationIntent, NarrationStatusResponse, OverviewResponse, ReplayResponse} from "./types";
+import type {AdvisoryResponse, CaseDetailResponse, CaseReplayTraceResponse, DecisionBriefResponse, DecisionCockpitResponse, DemoSessionResponse, DeploymentIdentityResponse, EvaluationResponse, LiveStatusResponse, NarrationIntent, NarrationStatusResponse, OverviewResponse, PredictiveSnapshot, ReplayResponse} from "./types";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
 
@@ -15,6 +15,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   deploymentIdentity: () => request<DeploymentIdentityResponse>("/api/deployment-identity"),
+  liveStatus: () => request<LiveStatusResponse>("/api/live/status"),
+  predictions: () => request<PredictiveSnapshot & {source: string}>("/api/predictions"),
+  liveStreamUrl: () => `${API_BASE}/api/live/stream`,
   decisionCockpit: () => request<DecisionCockpitResponse>("/api/decision-cockpit"),
   decisionBrief: (caseId: string, audience: "manager" | "engineer") => request<DecisionBriefResponse>(`/api/cases/${caseId}/decision-brief?audience=${audience}`),
   demoSession: () => request<DemoSessionResponse>("/api/demo/session"),

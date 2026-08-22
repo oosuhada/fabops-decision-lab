@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hmac
 import json
 import os
@@ -12,10 +13,12 @@ from typing import Annotated, Any, Iterator, Literal
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.responses import StreamingResponse
 
 from services.decision import DecisionSupportService
 from services.narration import NarrationService
 from services.narration.demo import DemoPolicyError, DemoSessionPolicy, demo_policy_from_env
+from services.prediction import PredictiveIntelligenceService
 from services.rca.cqrs import RankRootCausesQuery, TraceAffectedLotsQuery
 from services.release import RELEASE_VERSION, load_deployment_identity, load_release_identity
 from services.workflow.state_machine import AuthorizationError, InvalidTransitionError
@@ -78,6 +81,38 @@ async def correlation_middleware(request: Request, call_next: Any) -> Any:
 
 def get_runtime() -> Runtime:
     return app.state.runtime
+
+
+def _refresh_projection(runtime: Runtime) -> None:
+    """Catch a long-lived API process up with newly persisted source events."""
+    try:
+        runtime.projection.catch_up()
+    except Exception:  # noqa: BLE001 - endpoint payloads still expose stale/degraded state
+        return
+
+
+def _live_status(runtime: Runtime) -> dict[str, Any]:
+    _refresh_projection(runtime)
+    stored = runtime.event_repository.all_events()
+    cases = runtime.case_repository.list_cases()
+    latest = stored[-1].event if stored else None
+    prediction = PredictiveIntelligenceService(runtime.event_repository, runtime.case_repository).snapshot()
+    live_enabled = os.getenv("FABOPS_LIVE_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+    return {
+        "schema_version": "fabops-live-status-v1",
+        "mode": "continuous" if live_enabled else "snapshot",
+        "live_enabled": live_enabled,
+        "runtime_mode": runtime.runtime_mode,
+        "transport": "server-sent-events",
+        "read_only": runtime.runtime_mode == "database-readonly",
+        "event_count": len(stored),
+        "case_count": len(cases),
+        "latest_event_time": latest.get("event_time") if latest else None,
+        "latest_event_type": latest.get("event_type") if latest else None,
+        "latest_lot_id": latest.get("lot_id") if latest else None,
+        "projection": asdict(runtime.projection.status()),
+        "prediction": prediction,
+    }
 
 
 def get_narration_service() -> NarrationService:
@@ -191,8 +226,51 @@ def deployment_identity() -> dict[str, Any]:
     return load_deployment_identity()
 
 
+@app.get("/api/live/status")
+def live_status(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
+    return _live_status(runtime)
+
+
+@app.get("/api/predictions")
+def predictions(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
+    _refresh_projection(runtime)
+    return {"source": "transparent-online-baseline", **PredictiveIntelligenceService(runtime.event_repository, runtime.case_repository).snapshot()}
+
+
+@app.get("/api/live/stream")
+async def live_stream(runtime: Annotated[Runtime, Depends(get_runtime)]) -> StreamingResponse:
+    async def events() -> Iterator[str]:
+        previous_signature: tuple[Any, ...] | None = None
+        heartbeat = 0
+        while True:
+            snapshot = await asyncio.to_thread(_live_status, runtime)
+            top_sensor = snapshot["prediction"]["top_sensor_forecasts"][:1]
+            top_risk = top_sensor[0]["risk_score"] if top_sensor else None
+            signature = (
+                snapshot["event_count"],
+                snapshot["case_count"],
+                snapshot["projection"]["projection_checkpoint"],
+                snapshot["latest_event_time"],
+                top_risk,
+            )
+            if signature != previous_signature:
+                previous_signature = signature
+                yield f"event: fabops-update\ndata: {json.dumps(snapshot, separators=(',', ':'))}\n\n"
+            elif heartbeat % 10 == 0:
+                yield f"event: heartbeat\ndata: {json.dumps({'event_count': snapshot['event_count']})}\n\n"
+            heartbeat += 1
+            await asyncio.sleep(1.0)
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+    )
+
+
 @app.get("/api/overview")
 def overview(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
+    _refresh_projection(runtime)
     cases = runtime.case_repository.list_cases()
     projection = asdict(runtime.projection.status())
     return {
@@ -218,6 +296,7 @@ def list_cases(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, A
 
 @app.get("/api/cases/{case_id}")
 def get_case(case_id: str, runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
+    _refresh_projection(runtime)
     case = runtime.case_repository.get_case(case_id)
     if case is None:
         raise HTTPException(status_code=404, detail="case not found")
@@ -367,6 +446,7 @@ def get_case_replay_trace(case_id: str, runtime: Annotated[Runtime, Depends(get_
 
 @app.get("/api/cases/{case_id}/advisory")
 def advisory(case_id: str, runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
+    _refresh_projection(runtime)
     with case_telemetry(runtime, case_id):
         try:
             result = runtime.advisory.advise(case_id)
@@ -377,6 +457,7 @@ def advisory(case_id: str, runtime: Annotated[Runtime, Depends(get_runtime)]) ->
 
 @app.get("/api/decision-cockpit")
 def decision_cockpit(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
+    _refresh_projection(runtime)
     with runtime.telemetry.operation("decision.cockpit"):
         return DecisionSupportService(runtime).cockpit()
 
@@ -672,6 +753,7 @@ def evaluation(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, A
 
 @app.get("/api/replay")
 def replay_status(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
+    _refresh_projection(runtime)
     stored = runtime.event_repository.all_events()
     status = runtime.projection.status()
     return {

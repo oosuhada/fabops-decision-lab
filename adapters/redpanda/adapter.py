@@ -108,3 +108,57 @@ class RedpandaEventBusAdapter:
             consumer.close()
             self.last_consume_count = consumed
 
+    def subscribe_forever(
+        self,
+        topic: str,
+        handler: Callable[[dict[str, Any]], None],
+        stop_requested: Callable[[], bool],
+    ) -> None:
+        """Consume continuously until the owning worker requests shutdown."""
+        consumer = Consumer(
+            {
+                "bootstrap.servers": self.config.bootstrap_servers,
+                "group.id": self.config.group_id,
+                "auto.offset.reset": self.config.auto_offset_reset,
+                "enable.auto.commit": False,
+            }
+        )
+        consumed = 0
+        consumer.subscribe([topic])
+        try:
+            while not stop_requested():
+                message = consumer.poll(0.5)
+                if message is None:
+                    continue
+                if message.error():
+                    if message.error().code() == KafkaError._PARTITION_EOF:
+                        continue
+                    raise RuntimeError(f"Redpanda consumer error: {message.error()}")
+                raw_key = message.key()
+                self.consumed_keys.append(raw_key.decode("utf-8") if raw_key else None)
+                try:
+                    event = json.loads(message.value().decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    self._publish_bytes(self.config.dlq_topic, raw_key or b"invalid", message.value())
+                    self.dlq_published_count += 1
+                    consumer.commit(message=message, asynchronous=False)
+                    consumed += 1
+                    continue
+                failure: Exception | None = None
+                for _attempt in range(self.config.max_attempts):
+                    try:
+                        handler(event)
+                        failure = None
+                        break
+                    except Exception as exc:  # noqa: BLE001 - retry and DLQ are the transport boundary
+                        failure = exc
+                if failure is not None:
+                    self._publish_bytes(self.config.dlq_topic, raw_key or b"failed", message.value())
+                    self.dlq_published_count += 1
+                elif self.config.commit_on_success:
+                    consumer.commit(message=message, asynchronous=False)
+                consumed += 1
+        finally:
+            consumer.close()
+            self.last_consume_count = consumed
+

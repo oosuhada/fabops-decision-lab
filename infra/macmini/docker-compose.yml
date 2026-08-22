@@ -10,6 +10,7 @@ x-release-labels: &release-labels
 
 x-api-environment: &api-environment
   FABOPS_RUNTIME_MODE: integration
+  FABOPS_LIVE_ENABLED: ${FABOPS_LIVE_ENABLED:-false}
   FABOPS_DEPLOYMENT_KIND: official
   FABOPS_DEPLOYMENT_CHANNEL: official
   FABOPS_POSTGRES_DSN: postgresql://fabops:${FABOPS_POSTGRES_PASSWORD:?FABOPS_POSTGRES_PASSWORD must be set}@postgres:5432/fabops
@@ -137,6 +138,62 @@ services:
         condition: service_healthy
     environment: *api-environment
     command: ["/bin/sh", "-ec", "python -m adapters.postgres.migrate && python -m evaluation.m7_init --check"]
+    networks: [private]
+
+  live-simulator:
+    profiles: ["live"]
+    build:
+      context: ../..
+      dockerfile: infra/macmini/Dockerfile.api
+      args:
+        FABOPS_RELEASE_VERSION: ${FABOPS_RELEASE_VERSION:-0.6.0}
+        FABOPS_RELEASE_HASH: ${FABOPS_RELEASE_HASH}
+        FABOPS_DEPLOY_GIT_SHA: ${FABOPS_DEPLOY_GIT_SHA}
+        FABOPS_BASE_RELEASE_VERSION: ${FABOPS_RELEASE_VERSION:-0.6.0}
+        FABOPS_DEPLOYMENT_KIND: official
+        FABOPS_DEPLOYMENT_CHANNEL: official
+    labels: *release-labels
+    restart: unless-stopped
+    cpus: 0.35
+    mem_limit: 256m
+    depends_on:
+      redpanda-init:
+        condition: service_completed_successfully
+    environment:
+      FABOPS_REDPANDA_BOOTSTRAP: redpanda:9092
+      FABOPS_REDPANDA_TOPIC: fabops.events.v1
+      FABOPS_REDPANDA_DLQ_TOPIC: fabops.events.dlq.v1
+      FABOPS_LIVE_SEED: ${FABOPS_LIVE_SEED:-42}
+      FABOPS_LIVE_PROFILE: ${FABOPS_LIVE_PROFILE:-test}
+      FABOPS_LIVE_TIME_ACCELERATION: ${FABOPS_LIVE_TIME_ACCELERATION:-720}
+    command: ["python", "-m", "systems.live_worker.main"]
+    networks: [private]
+
+  stream-worker:
+    profiles: ["live"]
+    build:
+      context: ../..
+      dockerfile: infra/macmini/Dockerfile.api
+      args:
+        FABOPS_RELEASE_VERSION: ${FABOPS_RELEASE_VERSION:-0.6.0}
+        FABOPS_RELEASE_HASH: ${FABOPS_RELEASE_HASH}
+        FABOPS_DEPLOY_GIT_SHA: ${FABOPS_DEPLOY_GIT_SHA}
+        FABOPS_BASE_RELEASE_VERSION: ${FABOPS_RELEASE_VERSION:-0.6.0}
+        FABOPS_DEPLOYMENT_KIND: official
+        FABOPS_DEPLOYMENT_CHANNEL: official
+    labels: *release-labels
+    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 384m
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    environment:
+      <<: *api-environment
+      FABOPS_REDPANDA_GROUP: fabops-live-stream-v1
+      FABOPS_LIVE_SEED: ${FABOPS_LIVE_SEED:-42}
+      FABOPS_LIVE_PROFILE: ${FABOPS_LIVE_PROFILE:-test}
+    command: ["python", "-m", "systems.stream_worker.main"]
     networks: [private]
 
   api:

@@ -39,6 +39,62 @@ export interface OverviewResponse {
   cases: FabCase[];
 }
 
+export interface SensorForecast {
+  chamber_id: string;
+  sensor_name: string;
+  step_id: string;
+  observations: number;
+  last_value: number;
+  expected_value: number;
+  ewma: number;
+  trend_per_measurement: number;
+  volatility: number;
+  forecast_next: number[];
+  drift_direction: "up" | "down" | "stable" | string;
+  risk_score: number;
+  risk_band: "HIGH" | "WATCH" | "NORMAL" | string;
+  latest_event_time: string;
+}
+
+export interface CaseRiskForecast {
+  case_id: string;
+  lot_id: string;
+  classification: string;
+  risk_score: number;
+  risk_band: "HIGH" | "WATCH" | "NORMAL" | string;
+  components: {anomaly: number; yield_gap: number; sensor_drift: number};
+}
+
+export interface PredictiveSnapshot {
+  schema_version: string;
+  model: {
+    version: string;
+    kind: string;
+    trained_model: boolean;
+    calibrated: boolean;
+    probability: boolean;
+    forecast_horizon_measurements: number;
+  };
+  top_sensor_forecasts: SensorForecast[];
+  case_risks: CaseRiskForecast[];
+}
+
+export interface LiveStatusResponse {
+  schema_version: string;
+  mode: "continuous" | "snapshot" | string;
+  live_enabled: boolean;
+  runtime_mode: string;
+  transport: string;
+  read_only: boolean;
+  event_count: number;
+  case_count: number;
+  latest_event_time: string | null;
+  latest_event_type: string | null;
+  latest_lot_id: string | null;
+  projection: ProjectionStatus;
+  prediction: PredictiveSnapshot;
+}
+
 export interface RcaCandidate {
   candidate_id: string;
   candidate_type: string;

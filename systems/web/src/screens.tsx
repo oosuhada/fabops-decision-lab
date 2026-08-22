@@ -8,7 +8,7 @@ import {AuthorityChain} from "./features/governance/AuthorityChain";
 import {WaferInspectionContext} from "./features/inspection/WaferInspectionContext";
 import {PresentationRenderer} from "./features/narration/PresentationRenderer";
 import {DecisionProvenanceGraph} from "./features/provenance/DecisionProvenanceGraph";
-import type {AdvisoryResponse, CaseDetailResponse, CaseReplayTraceResponse, DecisionBriefResponse, DecisionCockpitResponse, DecisionPacket, EvaluationResponse, FabCase, MeasurementPoint, NarrationIntent, NarrationStatusResponse, OverviewResponse, ProjectionStatus, ReplayResponse} from "./types";
+import type {AdvisoryResponse, CaseDetailResponse, CaseReplayTraceResponse, DecisionBriefResponse, DecisionCockpitResponse, DecisionPacket, EvaluationResponse, FabCase, LiveStatusResponse, MeasurementPoint, NarrationIntent, NarrationStatusResponse, OverviewResponse, ProjectionStatus, ReplayResponse} from "./types";
 
 function priorityClass(band: string) {
   if (band === "HIGH") return "decision-priority is-high";
@@ -230,11 +230,12 @@ function SignalKpis({casePoints, stepPoints, sensor, step}: {casePoints: Measure
   </div>;
 }
 
-export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, selectedCaseId, onOpenCase, onOpenDecision}: {
+export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, liveStatus, selectedCaseId, onOpenCase, onOpenDecision}: {
   cockpit: DecisionCockpitResponse;
   detail: CaseDetailResponse | null;
   projection: ProjectionStatus;
   sourceTimestamp: string;
+  liveStatus: LiveStatusResponse | null;
   selectedCaseId: string | null;
   onOpenCase: (caseId: string) => void;
   onOpenDecision: (caseId: string) => void;
@@ -251,6 +252,8 @@ export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, s
   ].filter((value, index, values) => values.indexOf(value) === index) : [];
   const topInspection = matchingDetail?.evidence_series.inspections[0] ?? null;
   const topProcess = matchingDetail?.trace.process_path[0] ?? null;
+  const topForecast = liveStatus?.prediction.top_sensor_forecasts[0] ?? null;
+  const topCaseRisk = liveStatus?.prediction.case_risks[0] ?? null;
   return <div className="screen-stack decision-cockpit">
     <section className="cockpit-hero">
       <div className="cockpit-hero__intro">
@@ -264,6 +267,12 @@ export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, s
         <div><span>Decision authority</span><strong>HUMAN</strong><small>AI wording cannot decide</small></div>
         <div className="cockpit-trust"><span>Execution boundary</span><strong>NONE</strong><small>NO EQUIPMENT CONTROL</small></div>
       </div>
+    </section>
+    <section className={`live-intelligence-strip ${liveStatus?.live_enabled ? "is-live" : "is-snapshot"}`} aria-label="Live operational intelligence">
+      <div><span>Runtime</span><strong>{liveStatus?.live_enabled ? "LIVE" : "SNAPSHOT"}</strong><small>{liveStatus?.transport ?? "SSE pending"}</small></div>
+      <div><span>Event ledger</span><strong>{liveStatus?.event_count ?? "—"}</strong><small>{liveStatus?.latest_lot_id ?? "no live lot"} · {liveStatus?.latest_event_type?.replaceAll(".v1", "") ?? "no event"}</small></div>
+      <div><span>Highest drift watch</span><strong>{topForecast ? `${topForecast.chamber_id} / ${topForecast.sensor_name}` : "—"}</strong><small>{topForecast ? `${topForecast.risk_band} · ${(topForecast.risk_score * 100).toFixed(0)} risk score` : "forecast unavailable"}</small></div>
+      <div><span>Predictive case risk</span><strong>{topCaseRisk?.lot_id ?? "—"}</strong><small>{topCaseRisk ? `${topCaseRisk.risk_band} · ${(topCaseRisk.risk_score * 100).toFixed(0)} risk score` : "no active forecast"}</small></div>
     </section>
     <section className="evidence-authority-matrix" aria-label="Evidence authority separation">
       <article><span>OBSERVED</span><strong>Source records</strong><small>Event, measurement, inspection</small></article>
@@ -353,11 +362,12 @@ export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, s
   </div>;
 }
 
-export function OperationsOverview({overview, onSelectCase}: {overview: OverviewResponse; onSelectCase: (caseId: string) => void}) {
+export function OperationsOverview({overview, liveStatus, onSelectCase}: {overview: OverviewResponse; liveStatus: LiveStatusResponse | null; onSelectCase: (caseId: string) => void}) {
   const classificationTotal = Math.max(1, overview.metrics.physical_excursions + overview.metrics.sensor_bias_cases + overview.metrics.data_quality_cases);
   const averageYield = overview.cases.filter((item) => item.mean_yield != null).reduce((sum, item) => sum + (item.mean_yield ?? 0), 0) / Math.max(1, overview.cases.filter((item) => item.mean_yield != null).length);
   const maxAnomaly = Math.max(...overview.cases.map((item) => item.anomaly_score), 1);
   const databaseBacked = overview.source === "postgresql-read-only";
+  const topForecasts = liveStatus?.prediction.top_sensor_forecasts.slice(0, 4) ?? [];
   return <div className="screen-stack">
     <section className="surface-header">
       <div><span className="eyebrow">Operations overview</span><h1>Yield excursion triage queue</h1></div>
@@ -370,6 +380,22 @@ export function OperationsOverview({overview, onSelectCase}: {overview: Overview
       {label: "Data quality", value: overview.metrics.data_quality_cases, detail: "no fab action"},
       {label: "Events", value: overview.metrics.event_count, detail: "source event log"},
     ]} />
+    <section className="panel live-operations-panel">
+      <header><div><span className="eyebrow">Live + predictive intelligence</span><h2>{liveStatus?.live_enabled ? "Continuous fab runtime" : "Runtime-ready snapshot"}</h2></div><small>{liveStatus?.prediction.model.version ?? "prediction service loading"}</small></header>
+      <div className="live-operations-grid">
+        <article><span>Stream state</span><strong>{liveStatus?.live_enabled ? "CONTINUOUS" : "PAUSED"}</strong><small>{liveStatus?.event_count ?? overview.metrics.event_count} events · {liveStatus?.case_count ?? overview.cases.length} cases</small></article>
+        <article><span>Latest source event</span><strong>{liveStatus?.latest_lot_id ?? "—"}</strong><small>{liveStatus?.latest_event_time ?? overview.source_timestamp}</small></article>
+        <article><span>Forecast contract</span><strong>{liveStatus?.prediction.model.trained_model ? "TRAINED" : "TRANSPARENT BASELINE"}</strong><small>{liveStatus?.prediction.model.calibrated ? "calibrated" : "not calibrated · not probability"}</small></article>
+      </div>
+      <div className="forecast-watchlist">
+        {topForecasts.length ? topForecasts.map((forecast) => <article key={`${forecast.chamber_id}:${forecast.sensor_name}`}>
+          <div><span>{forecast.step_id} · {forecast.chamber_id}</span><strong>{forecast.sensor_name}</strong></div>
+          <div><span>EWMA {forecast.ewma.toFixed(2)}</span><span>trend {forecast.trend_per_measurement >= 0 ? "+" : ""}{forecast.trend_per_measurement.toFixed(3)}</span></div>
+          <div><b>{forecast.risk_band}</b><strong>{(forecast.risk_score * 100).toFixed(0)}</strong><small>risk score</small></div>
+          <div className="forecast-horizon"><span>next</span>{forecast.forecast_next.map((value, index) => <b key={index}>{value.toFixed(2)}</b>)}</div>
+        </article>) : <p className="muted">Sensor forecasts appear as soon as measurement history is available.</p>}
+      </div>
+    </section>
     <section className="overview-visual-grid">
       <article className="glass-visual-card glass-visual-card--yield">
         <div className="visual-card-head"><div><span className="eyebrow">Portfolio pulse</span><strong>Yield health</strong></div><small>synthetic case mean</small></div>
