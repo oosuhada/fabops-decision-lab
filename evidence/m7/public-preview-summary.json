@@ -1,0 +1,73 @@
+{
+  "schema_version": "m7-public-preview-summary-v1",
+  "captured_at": "2026-08-23T08:27:15+09:00",
+  "status": "passed",
+  "hostname": "fabops-preview.oosu.dev",
+  "access_mode": "public-read-only",
+  "origin": "127.0.0.1:8220",
+  "preview_proxy": {
+    "bind": "127.0.0.1:8230",
+    "image": "nginx:1.27-alpine",
+    "restart_policy": "unless-stopped",
+    "restart_count_at_verification": 0,
+    "cpu_limit": 0.2,
+    "memory_limit_mib": 96,
+    "allowed_methods": ["GET", "HEAD"],
+    "blocked_mutation_status": 405,
+    "rate_limit": "30 requests/second per connecting client key with burst 60",
+    "security_headers": [
+      "X-Content-Type-Options: nosniff",
+      "X-Frame-Options: DENY",
+      "Referrer-Policy: strict-origin-when-cross-origin",
+      "Permissions-Policy: camera=(), microphone=(), geolocation=()",
+      "X-FabOps-Preview-Mode: read-only"
+    ]
+  },
+  "release_version": "0.6.0",
+  "release_hash": "ab8b20a696b9b1996495f23a3e413cc33a67b6861efa184c64742e0f310c6326",
+  "deployed_git_sha": "2a3df187294706afb397f0cf8072c0f3ddcc2f23",
+  "cloudflare_tunnel_used": true,
+  "existing_tunnel_modified": true,
+  "ontology_oosu_dev_modified": false,
+  "cloudflare_change": {
+    "config_path": "~/.cloudflared/config.yml",
+    "config_backup_path": "~/.cloudflared/backups/config.yml.20260822T232138Z",
+    "config_mode": "0600",
+    "config_before_sha256": "97a035328afaf773e0bfc20f9ce313ecd775ead6b65c7a56c8714e7d2495559d",
+    "config_after_sha256": "67d2f1c7d8b8bcc0db9df1d27b6e0fd08e30bdf3456b760338c5ecf530741146",
+    "candidate_ingress_validation_passed": true,
+    "dns_route_created": true,
+    "cloudflared_reloaded_only": true,
+    "ontology_hostname_rule_count_before": 2,
+    "ontology_hostname_rule_count_after": 2,
+    "credentials_recorded": false
+  },
+  "web_verified": true,
+  "api_verified": true,
+  "browser_verified": true,
+  "external_browser_verified": true,
+  "browser_verification": {
+    "client": "Playwright Chromium on MacBook Air",
+    "result": "1 passed",
+    "normal_public_dns_resolvers_verified": ["1.1.1.1", "8.8.8.8"],
+    "macbook_negative_dns_cache_observed": true,
+    "temporary_browser_host_resolver_override_used": true
+  },
+  "public_mutation_enabled": false,
+  "public_mutation_safety_status": "blocked at the dedicated preview ingress; representative POST returned 405 before application routing",
+  "postgres_public": false,
+  "redpanda_public": false,
+  "neo4j_public": false,
+  "github_homepage_updated": true,
+  "github_homepage_url": "https://fabops-preview.oosu.dev",
+  "m8_soak_interrupted": false,
+  "m8_application_containers_restarted": false,
+  "m8_release_changed": false,
+  "limitations": [
+    "The 0.6.0 UI still displays workflow mutation controls; in this preview they fail by design because non-GET/HEAD methods are blocked.",
+    "X-FabOps-Role and X-FabOps-Actor are client assertions, not production authentication.",
+    "This is not an open interactive public demo; post-M8 server-enforced demo policy and isolated resettable synthetic state are still required.",
+    "Cloudflare Access owner-only policy authority was not available locally; Tailscale Serve was disabled at the tailnet control plane, so the safe implemented alternative is public read-only ingress.",
+    "The MacBook system resolver retained an earlier NXDOMAIN cache during capture even though 1.1.1.1 and 8.8.8.8 resolved the new public hostname."
+  ]
+}

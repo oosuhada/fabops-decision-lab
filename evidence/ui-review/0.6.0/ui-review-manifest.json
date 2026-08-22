@@ -1,0 +1,72 @@
+{
+  "schema_version": "ui-review-manifest-v1",
+  "release_version": "0.6.0",
+  "release_hash": "ab8b20a696b9b1996495f23a3e413cc33a67b6861efa184c64742e0f310c6326",
+  "deployed_git_sha": "2a3df187294706afb397f0cf8072c0f3ddcc2f23",
+  "captured_at": "2026-08-23T08:26:50+09:00",
+  "preview_access_mode": "public-read-only",
+  "preview_hostname": "fabops-preview.oosu.dev",
+  "browser": "Playwright Chromium on MacBook Air outside the Mac mini container network",
+  "browser_dns_note": "Public resolvers 1.1.1.1 and 8.8.8.8 resolved the hostname. Capture used a temporary Chromium host-resolver override because the MacBook system resolver retained the earlier NXDOMAIN negative cache.",
+  "checks": {
+    "page_loaded_through_hostname": true,
+    "css_js_assets_loaded": true,
+    "same_origin_api_loaded": true,
+    "synthetic_inferred_labels_visible": true,
+    "release_0_6_0_visible_on_desktop": true,
+    "release_hash_api_identity_consistent": true,
+    "ground_truth_exposed": false,
+    "mutation_post_blocked_with_405": true,
+    "secrets_captured": false
+  },
+  "screenshots": [
+    {
+      "path": "evidence/ui-review/0.6.0/desktop-1440x1000-operations-overview.png",
+      "screen": "Operations Overview",
+      "viewport": {"width": 1440, "height": 1000},
+      "sha256": "a3e7484e404a4954b9ba19560d54541fb6811cdae70cf113d6304d38d4168c91"
+    },
+    {
+      "path": "evidence/ui-review/0.6.0/desktop-1440x1000-excursion-case.png",
+      "screen": "Excursion Case",
+      "viewport": {"width": 1440, "height": 1000},
+      "sha256": "3ca5511c600003f1bff3d0a4758fd18cc9c1167f908f65c79183a0a6b0eed6dc"
+    },
+    {
+      "path": "evidence/ui-review/0.6.0/desktop-1440x1000-evidence-graph.png",
+      "screen": "Evidence Graph",
+      "viewport": {"width": 1440, "height": 1000},
+      "sha256": "4c3f7ffd2d6a761e79160702599e4744372ec646649afe6fbc89c3cff3b9cd10"
+    },
+    {
+      "path": "evidence/ui-review/0.6.0/desktop-1440x1000-decision-approval.png",
+      "screen": "Decision & Approval",
+      "viewport": {"width": 1440, "height": 1000},
+      "sha256": "fc8ab8c2032eefee387c60d2623fca669e9109384c9aa4f3ea90ab1973a779c2"
+    },
+    {
+      "path": "evidence/ui-review/0.6.0/desktop-1440x1000-evaluation-lab.png",
+      "screen": "Evaluation Lab",
+      "viewport": {"width": 1440, "height": 1000},
+      "sha256": "9464c23ef6a0b9a79b5e5ee37678e61a3b1074e118de2e7f3acf27e3d45a7fe9"
+    },
+    {
+      "path": "evidence/ui-review/0.6.0/desktop-1440x1000-replay-operations.png",
+      "screen": "Replay & Operations",
+      "viewport": {"width": 1440, "height": 1000},
+      "sha256": "1ce343a179d7fbd97575153c428480fa97de62fa6e206340e4d40e3814a583cc"
+    },
+    {
+      "path": "evidence/ui-review/0.6.0/responsive-1280x800-operations-overview.png",
+      "screen": "Operations Overview",
+      "viewport": {"width": 1280, "height": 800},
+      "sha256": "f376b04c1ecc1432b7c46b949ded2511a3f270639bb2c8fb6e1b2ac4aa10a71d"
+    },
+    {
+      "path": "evidence/ui-review/0.6.0/responsive-390x844-operations-overview.png",
+      "screen": "Operations Overview",
+      "viewport": {"width": 390, "height": 844},
+      "sha256": "41f7cc228b5f9cc206a207ab53ba3ea2f233f3ee60ac76ac6d955c73248adc96"
+    }
+  ]
+}

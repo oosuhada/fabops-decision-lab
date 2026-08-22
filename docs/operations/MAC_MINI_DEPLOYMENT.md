@@ -108,4 +108,16 @@ The browser test is expected to mutate only the FabOps governed demo workflow. T
 
 ## Public ingress boundary
 
-Do not alter `ontology.oosu.dev`, its tunnel route, or any unrelated Cloudflare configuration. A future `fabops.oosu.dev` route requires separate hostname/tunnel authority verification. Until that is available, M7 can pass with localhost/Tailscale-SSH deployment while public ingress remains the sole explicitly `UNVERIFIED` boundary.
+The original M7 deployment deliberately stopped at localhost/Tailscale-SSH and
+recorded public ingress as `UNVERIFIED`. During the active M8 burn-in, a separate
+`fabops-preview.oosu.dev` **read-only** ingress was later added without rebuilding
+or restarting the FabOps application containers. It routes through a dedicated
+localhost-only preview proxy that forwards `GET`/`HEAD` and rejects mutating
+methods before they reach the 0.6.0 Web/API stack.
+
+`ontology.oosu.dev` remains unchanged, and PostgreSQL, Redpanda and Neo4j remain
+private. The preview is not the full interactive approval workflow because the
+deployed application still trusts client-supplied portfolio role headers rather
+than an external authenticated principal. See `docs/operations/PUBLIC_DEMO.md`
+and `evidence/m7/public-preview-summary.json` for the current security boundary
+and post-M8 hardening requirements.
