@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from services.advisory.tools import ToolRegistry
+from services.observability.telemetry import TelemetryRecorder
+from services.reliability import Bulkhead, CircuitBreaker
 
 ADVISORY_VERSION = "deterministic-advisory-v1.1.0"
 
@@ -42,20 +44,38 @@ class ExternalLlmConfig:
 class ExternalLlmAdvisoryProvider:
     """Optional provider boundary; no credential is required for the core workflow."""
 
-    def __init__(self, config: ExternalLlmConfig) -> None:
+    def __init__(
+        self,
+        config: ExternalLlmConfig,
+        circuit_breaker: CircuitBreaker | None = None,
+        bulkhead: Bulkhead | None = None,
+    ) -> None:
         self.config = config
+        self.circuit_breaker = circuit_breaker or CircuitBreaker()
+        self.bulkhead = bulkhead or Bulkhead(max_concurrency=2)
 
     def advise(self, case_id: str) -> dict[str, Any]:
         if not self.config.api_key_present:
             raise RuntimeError("external LLM provider is disabled: no credential configured")
-        raise NotImplementedError("external LLM transport is intentionally not invoked by the local portfolio gate")
+        return self.bulkhead.call(
+            lambda: self.circuit_breaker.call(
+                lambda: (_ for _ in ()).throw(NotImplementedError("external LLM transport is intentionally not invoked by the local portfolio gate"))
+            )
+        )
 
 
 class DeterministicAdvisoryProvider:
-    def __init__(self, tools: ToolRegistry) -> None:
+    def __init__(self, tools: ToolRegistry, telemetry: TelemetryRecorder | None = None) -> None:
         self.tools = tools
+        self.telemetry = telemetry
 
     def advise(self, case_id: str) -> dict[str, Any]:
+        if self.telemetry is not None:
+            with self.telemetry.operation("advisory.advise", case_id=case_id, advisory_version=ADVISORY_VERSION):
+                return self._advise(case_id)
+        return self._advise(case_id)
+
+    def _advise(self, case_id: str) -> dict[str, Any]:
         tool_calls: list[dict[str, Any]] = []
         errors: list[dict[str, str]] = []
 

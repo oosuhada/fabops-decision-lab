@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
 from services.ingestion.ports import CaseRepositoryPort
+from services.observability.telemetry import TelemetryRecorder
 
 POLICY_VERSION = "workflow-policy-v1.0.0"
 ALLOWED_PROPOSAL_ROLES = {"process_engineer", "yield_engineer", "fde"}
@@ -44,11 +45,13 @@ class CaseWorkflowService:
         token_issuer: ApprovalTokenIssuer | None = None,
         clock: Callable[[], datetime] | None = None,
         proposal_timeout: timedelta = timedelta(hours=4),
+        telemetry: TelemetryRecorder | None = None,
     ) -> None:
         self.cases = cases
         self.token_issuer = token_issuer or ApprovalTokenIssuer(b"local-fixture-key-not-for-production")
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.proposal_timeout = proposal_timeout
+        self.telemetry = telemetry
 
     def _get(self, case_id: str) -> dict[str, Any]:
         case = self.cases.get_case(case_id)
@@ -79,6 +82,8 @@ class CaseWorkflowService:
         case["evidence_request"] = {"reason": reason, "requested_by": actor_id, "requested_at": self.clock().isoformat()}
         self.cases.upsert_case(case)
         self._audit(case_id, "case.evidence_requested", actor_id, role, {"reason": reason})
+        if self.telemetry is not None:
+            self.telemetry.emit("workflow.request_evidence", case_id=case_id, outcome="updated")
         return case
 
     def propose_action(
@@ -113,6 +118,8 @@ class CaseWorkflowService:
         }
         self.cases.upsert_case(case)
         self._audit(case_id, "action.proposed", actor_id, role, case["proposed_action"])
+        if self.telemetry is not None:
+            self.telemetry.emit("workflow.action_proposed", case_id=case_id, outcome="updated")
         return case
 
     def approve(self, case_id: str, actor_id: str, role: str, reason: str) -> dict[str, Any]:
@@ -135,6 +142,8 @@ class CaseWorkflowService:
         }
         self.cases.upsert_case(case)
         self._audit(case_id, "action.approved", actor_id, role, {"action_id": action_id, "reason": reason, "approval_token": token})
+        if self.telemetry is not None:
+            self.telemetry.emit("workflow.action_approved", case_id=case_id, policy_version=POLICY_VERSION, approval_token=token, outcome="updated")
         return case
 
     def reject(self, case_id: str, actor_id: str, role: str, reason: str) -> dict[str, Any]:
@@ -147,6 +156,8 @@ class CaseWorkflowService:
         case["rejection"] = {"rejected_by": actor_id, "role": role, "reason": reason, "rejected_at": self.clock().isoformat()}
         self.cases.upsert_case(case)
         self._audit(case_id, "action.rejected", actor_id, role, {"reason": reason})
+        if self.telemetry is not None:
+            self.telemetry.emit("workflow.action_rejected", case_id=case_id, outcome="updated")
         return case
 
     def close(self, case_id: str, actor_id: str, role: str, outcome: str) -> dict[str, Any]:
@@ -157,6 +168,8 @@ class CaseWorkflowService:
         case["closure"] = {"outcome": outcome, "closed_by": actor_id, "closed_at": self.clock().isoformat()}
         self.cases.upsert_case(case)
         self._audit(case_id, "case.closed", actor_id, role, {"outcome": outcome})
+        if self.telemetry is not None:
+            self.telemetry.emit("workflow.case_closed", case_id=case_id, workflow_outcome=outcome, outcome="updated")
         return case
 
     def check_timeouts(self) -> list[str]:

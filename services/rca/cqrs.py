@@ -4,7 +4,8 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from services.ingestion.ports import CaseRepositoryPort
-from services.rca.graph import InMemoryGraphProjection
+from services.observability.telemetry import TelemetryRecorder
+from services.rca.graph import GraphProjectionPort
 from services.rca.projection import RcaProjectionWorker
 from services.rca.ranking import TransparentRcaRanker
 
@@ -39,13 +40,27 @@ class RcaCommandHandler:
 
 
 class RcaQueryService:
-    def __init__(self, graph: InMemoryGraphProjection, cases: CaseRepositoryPort, worker: RcaProjectionWorker) -> None:
+    def __init__(
+        self,
+        graph: GraphProjectionPort,
+        cases: CaseRepositoryPort,
+        worker: RcaProjectionWorker,
+        telemetry: TelemetryRecorder | None = None,
+    ) -> None:
         self.graph = graph
         self.cases = cases
         self.worker = worker
         self.ranker = TransparentRcaRanker(graph)
+        self.telemetry = telemetry
 
     def execute(self, query: TraceAffectedLotsQuery | RankRootCausesQuery | ProjectionStatusQuery) -> dict[str, Any]:
+        if self.telemetry is not None:
+            case_id = getattr(query, "case_id", None)
+            with self.telemetry.operation("rca.query", case_id=case_id, query_type=type(query).__name__, projection_version=self.worker.status().projection_version):
+                return self._execute(query)
+        return self._execute(query)
+
+    def _execute(self, query: TraceAffectedLotsQuery | RankRootCausesQuery | ProjectionStatusQuery) -> dict[str, Any]:
         status = asdict(self.worker.status())
         if isinstance(query, ProjectionStatusQuery):
             return {"projection": status}

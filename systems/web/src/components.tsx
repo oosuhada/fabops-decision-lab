@@ -7,7 +7,7 @@ export function ProvenanceBadge({kind}: {kind: "synthetic" | "inferred" | "real-
 }
 
 export function WorkbenchState({kind, title, detail, action}: {
-  kind: "loading" | "empty" | "error" | "stale" | "degraded" | "unauthorized";
+  kind: "loading" | "empty" | "error" | "stale" | "degraded" | "unauthorized" | "ok";
   title: string;
   detail: string;
   action?: ReactNode;

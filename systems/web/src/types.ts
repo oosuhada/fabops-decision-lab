@@ -129,6 +129,15 @@ export interface ReplayResponse {
   outbox_count: number;
   quarantine_count: number;
   delivery_status_counts: Record<string, number>;
-  external_services: Record<string, string>;
+  external_services: Record<string, string | boolean>;
+  integration: {
+    status: "verified" | "degraded" | "unverified" | string;
+    compose_config_verified: boolean;
+    postgres_runtime_verified: boolean;
+    redpanda_runtime_verified: boolean;
+    neo4j_runtime_verified: boolean;
+    container_integration_verified: boolean;
+    reason?: string | null;
+  };
 }
 

@@ -4,17 +4,25 @@ from statistics import mean
 from typing import Any, Callable
 
 from services.ingestion.ports import CaseRepositoryPort
+from services.observability.telemetry import TelemetryRecorder
 from services.rca.cqrs import RankRootCausesQuery, RcaQueryService, TraceAffectedLotsQuery
-from services.rca.graph import InMemoryGraphProjection
+from services.rca.graph import GraphProjectionPort
 
 Tool = Callable[[str], dict[str, Any]]
 
 
 class ToolRegistry:
-    def __init__(self, cases: CaseRepositoryPort, graph: InMemoryGraphProjection, queries: RcaQueryService) -> None:
+    def __init__(
+        self,
+        cases: CaseRepositoryPort,
+        graph: GraphProjectionPort,
+        queries: RcaQueryService,
+        telemetry: TelemetryRecorder | None = None,
+    ) -> None:
         self.cases = cases
         self.graph = graph
         self.queries = queries
+        self.telemetry = telemetry
         self._tools: dict[str, Tool] = {
             "get_excursion_summary": self.get_excursion_summary,
             "compare_chamber_baselines": self.compare_chamber_baselines,
@@ -32,6 +40,9 @@ class ToolRegistry:
     def call(self, name: str, case_id: str) -> dict[str, Any]:
         if name not in self._tools:
             raise KeyError(f"unsupported advisory tool: {name}")
+        if self.telemetry is not None:
+            with self.telemetry.operation("advisory.tool_call", case_id=case_id, tool=name):
+                return self._tools[name](case_id)
         return self._tools[name](case_id)
 
     def _case(self, case_id: str) -> dict[str, Any]:

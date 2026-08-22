@@ -1,0 +1,26 @@
+{
+  "approval_token_raw_present": false,
+  "causal_trace_id": "0e085478-6b85-5e14-b398-8a10d2753951",
+  "correlation_id": "m6-evidence-correlation",
+  "exporter": "in-memory-json",
+  "external_collector_required": false,
+  "ground_truth_present": false,
+  "operations": [
+    "advisory.advise",
+    "advisory.tool_call",
+    "case.materialized",
+    "detection.consume",
+    "ingestion.ingest",
+    "projection.project_event",
+    "rca.query",
+    "workflow.action_approved",
+    "workflow.action_proposed",
+    "workflow.case_closed"
+  ],
+  "otel_trace_id": "0e0854786b855e14b3988a10d2753951",
+  "record_count": 1138,
+  "required_operations_present": true,
+  "schema_version": "m6-telemetry-reliability-v1",
+  "selected_trace_record_count": 105,
+  "service_name": "fabops-api"
+}

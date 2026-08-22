@@ -182,6 +182,12 @@ export function EvaluationLab({evaluation}: {evaluation: EvaluationResponse}) {
 }
 
 export function ReplayOperations({replay}: {replay: ReplayResponse}) {
+  const integration = replay.integration;
+  const integrationState = integration.container_integration_verified
+    ? {kind: "ok" as const, title: "Container integration verified", detail: "M6 evidence verifies PostgreSQL, Redpanda and Neo4j runtime integration. This is verification state, not a claim that Docker is currently running."}
+    : integration.status === "degraded"
+      ? {kind: "degraded" as const, title: "Container integration degraded", detail: integration.reason ?? "One or more configured integration dependencies are unavailable."}
+      : {kind: "degraded" as const, title: "Container integration unverified", detail: integration.reason ?? "No successful container-backed verification evidence is available yet."};
   return <div className="screen-stack">
     <section className="surface-header"><div><span className="eyebrow">Replay & operations</span><h1>Deterministic pipeline state</h1></div><ProjectionBadge projection={replay.projection} /></section>
     <MetricStrip items={[
@@ -197,7 +203,7 @@ export function ReplayOperations({replay}: {replay: ReplayResponse}) {
       </section>
       <section className="panel"><header><div><span className="eyebrow">External adapters</span><h2>Verification status</h2></div></header>
         <dl className="property-list">{Object.entries(replay.external_services).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl>
-        <WorkbenchState kind="degraded" title="Docker daemon unavailable in current audit" detail="Core ports are contract-tested locally. Docker-backed Postgres/Redpanda/Neo4j verification remains separately marked." />
+        <WorkbenchState {...integrationState} />
       </section>
     </div>
   </div>;

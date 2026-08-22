@@ -1,0 +1,55 @@
+{
+  "actual_equipment_control": false,
+  "api_restart_verified": true,
+  "commands": [
+    {
+      "command": "docker compose --env-file infra/.env -f infra/docker-compose.yml config --quiet",
+      "duration_seconds": 0.054,
+      "exit_code": 0
+    },
+    {
+      "command": "docker compose --env-file infra/.env -f infra/docker-compose.yml up -d --build",
+      "duration_seconds": 17.796,
+      "exit_code": 0
+    },
+    {
+      "command": "docker compose --env-file infra/.env -f infra/docker-compose.yml exec -T -e FABOPS_CONTAINER_INTEGRATION=1 api uv run pytest -q tests/test_m6_container_integration.py",
+      "duration_seconds": 6.685,
+      "exit_code": 0
+    },
+    {
+      "command": "docker compose --env-file infra/.env -f infra/docker-compose.yml restart api",
+      "duration_seconds": 0.554,
+      "exit_code": 0
+    },
+    {
+      "command": "docker compose --env-file infra/.env -f infra/docker-compose.yml down",
+      "duration_seconds": 6.209,
+      "exit_code": 0
+    }
+  ],
+  "compose_config_verified": true,
+  "container_integration_verified": true,
+  "docker_daemon_available": true,
+  "generated_at": "2026-08-22T13:04:25.929502+00:00",
+  "host_port_policy": "PostgreSQL, Redpanda and Neo4j are private to the Compose network; API/Web bind to 127.0.0.1 only",
+  "integration_test_exit_code": 0,
+  "integration_test_result": "4 passed",
+  "neo4j_runtime_verified": true,
+  "postgres_runtime_verified": true,
+  "projection_role": "Neo4j rebuildable projection; non-authoritative",
+  "reason": null,
+  "redpanda_runtime_verified": true,
+  "reproduction_commands": [
+    "docker info",
+    "docker compose --env-file infra/.env -f infra/docker-compose.yml config --quiet",
+    "docker compose --env-file infra/.env -f infra/docker-compose.yml up -d --build",
+    "docker compose --env-file infra/.env -f infra/docker-compose.yml exec -T -e FABOPS_CONTAINER_INTEGRATION=1 api uv run pytest -q tests/test_m6_container_integration.py",
+    "docker compose --env-file infra/.env -f infra/docker-compose.yml restart api",
+    "docker compose --env-file infra/.env -f infra/docker-compose.yml down"
+  ],
+  "schema_version": "m6-container-integration-v1",
+  "source_of_truth": "PostgreSQL",
+  "status": "verified",
+  "transport_role": "Redpanda/Kafka at-least-once transport with idempotent source handling"
+}

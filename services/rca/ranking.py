@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from services.rca.graph import GraphNode, InMemoryGraphProjection
+from services.rca.graph import GraphNode, GraphProjectionPort
 
 RCA_VERSION = "transparent-rca-v1.0.0"
 
@@ -23,7 +23,7 @@ class RootCauseCandidate:
 
 
 class TransparentRcaRanker:
-    def __init__(self, graph: InMemoryGraphProjection) -> None:
+    def __init__(self, graph: GraphProjectionPort) -> None:
         self.graph = graph
 
     def _nodes_for_lot(self, kind: str, lot_id: str) -> list[GraphNode]:

@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 import json
+import uuid
+from contextlib import contextmanager
 from dataclasses import asdict
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Iterator
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from services.rca.cqrs import RankRootCausesQuery, TraceAffectedLotsQuery
 from services.workflow.state_machine import AuthorizationError, InvalidTransitionError
-from systems.api.runtime import LocalRuntime, build_local_runtime
+from systems.api.runtime import LocalRuntime, build_runtime
 
 app = FastAPI(
     title="FabOps Decision Lab API",
@@ -23,9 +25,24 @@ app.add_middleware(
     allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
     allow_credentials=False,
     allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "X-FabOps-Role", "X-FabOps-Actor"],
+    allow_headers=["Content-Type", "X-FabOps-Role", "X-FabOps-Actor", "X-Correlation-ID", "X-FabOps-Trace-ID", "traceparent"],
+    expose_headers=["X-Correlation-ID", "X-FabOps-Trace-ID"],
 )
-app.state.runtime = build_local_runtime()
+app.state.runtime = build_runtime()
+
+
+@app.middleware("http")
+async def correlation_middleware(request: Request, call_next: Any) -> Any:
+    runtime = get_runtime()
+    trace_header = request.headers.get("traceparent") or request.headers.get("X-FabOps-Trace-ID")
+    correlation_header = request.headers.get("X-Correlation-ID")
+    fallback = f"request:{request.method}:{request.url.path}:{uuid.uuid4()}"
+    with runtime.telemetry.bind_request(trace_header, correlation_header, fallback) as context:
+        with runtime.telemetry.operation("http.request", method=request.method, path=request.url.path):
+            response = await call_next(request)
+        response.headers["X-Correlation-ID"] = context.correlation_id
+        response.headers["X-FabOps-Trace-ID"] = context.trace_id
+        return response
 
 
 def get_runtime() -> LocalRuntime:
@@ -37,6 +54,14 @@ def actor_headers(
     actor: Annotated[str, Header(alias="X-FabOps-Actor")] = "local-portfolio-user",
 ) -> tuple[str, str]:
     return role, actor
+
+
+@contextmanager
+def case_telemetry(runtime: LocalRuntime, case_id: str) -> Iterator[None]:
+    case = runtime.case_repository.get_case(case_id)
+    causal_trace_id = str((case or {}).get("causal_trace_id") or case_id)
+    with runtime.telemetry.bind_causal_trace(causal_trace_id):
+        yield
 
 
 class EvidenceRequest(BaseModel):
@@ -70,13 +95,17 @@ def _workflow_call(callable_: Any) -> dict[str, Any]:
 
 @app.get("/health")
 def health(runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dict[str, Any]:
-    status = runtime.projection.status()
-    return {
-        "status": "ok" if not status.stale else "degraded",
-        "external_llm_required": False,
-        "equipment_control_enabled": False,
-        "projection": asdict(status),
-    }
+    return runtime.health_status()
+
+
+@app.get("/health/live")
+def liveness() -> dict[str, Any]:
+    return {"status": "alive", "service": "fabops-api", "equipment_control_enabled": False}
+
+
+@app.get("/health/ready")
+def readiness(runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dict[str, Any]:
+    return runtime.health_status()
 
 
 @app.get("/api/overview")
@@ -109,38 +138,29 @@ def get_case(case_id: str, runtime: Annotated[LocalRuntime, Depends(get_runtime)
     case = runtime.case_repository.get_case(case_id)
     if case is None:
         raise HTTPException(status_code=404, detail="case not found")
-    ranking = runtime.queries.execute(RankRootCausesQuery(case_id))
-    trace = runtime.queries.execute(TraceAffectedLotsQuery(case_id))
-    lot_id = case["lot_id"]
-    measurements = [
-        node.properties
-        for node in runtime.graph.nodes("Measurement")
-        if node.properties.get("lot_id") == lot_id
-    ]
-    inspections = [
-        node.properties
-        for node in runtime.graph.nodes("Inspection")
-        if node.properties.get("lot_id") == lot_id
-    ]
-    return {
-        "source": "inferred",
-        "case": case,
-        "rca": ranking,
-        "trace": trace,
-        "evidence_series": {
-            "measurements": measurements,
-            "inspections": inspections,
-        },
-        "audit": [record for record in runtime.case_repository.audit_log() if record["case_id"] == case_id],
-    }
+    with case_telemetry(runtime, case_id):
+        ranking = runtime.queries.execute(RankRootCausesQuery(case_id))
+        trace = runtime.queries.execute(TraceAffectedLotsQuery(case_id))
+        lot_id = case["lot_id"]
+        measurements = [node.properties for node in runtime.graph.nodes("Measurement") if node.properties.get("lot_id") == lot_id]
+        inspections = [node.properties for node in runtime.graph.nodes("Inspection") if node.properties.get("lot_id") == lot_id]
+        return {
+            "source": "inferred",
+            "case": case,
+            "rca": ranking,
+            "trace": trace,
+            "evidence_series": {"measurements": measurements, "inspections": inspections},
+            "audit": [record for record in runtime.case_repository.audit_log() if record["case_id"] == case_id],
+        }
 
 
 @app.get("/api/cases/{case_id}/advisory")
 def advisory(case_id: str, runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dict[str, Any]:
-    try:
-        result = runtime.advisory.advise(case_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="case not found") from exc
+    with case_telemetry(runtime, case_id):
+        try:
+            result = runtime.advisory.advise(case_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="case not found") from exc
     return {"source": "inferred-advisory", "llm_enabled": False, "result": result}
 
 
@@ -152,7 +172,8 @@ def request_evidence(
     runtime: Annotated[LocalRuntime, Depends(get_runtime)],
 ) -> dict[str, Any]:
     role, actor = identity
-    case = _workflow_call(lambda: runtime.workflow.request_evidence(case_id, actor, role, body.reason))
+    with case_telemetry(runtime, case_id):
+        case = _workflow_call(lambda: runtime.workflow.request_evidence(case_id, actor, role, body.reason))
     return {"source": "inferred-workflow", "case": case}
 
 
@@ -164,7 +185,8 @@ def propose_action(
     runtime: Annotated[LocalRuntime, Depends(get_runtime)],
 ) -> dict[str, Any]:
     role, actor = identity
-    case = _workflow_call(lambda: runtime.workflow.propose_action(case_id, actor, role, body.action_type, body.target, body.rationale))
+    with case_telemetry(runtime, case_id):
+        case = _workflow_call(lambda: runtime.workflow.propose_action(case_id, actor, role, body.action_type, body.target, body.rationale))
     return {"source": "inferred-workflow", "case": case}
 
 
@@ -176,7 +198,8 @@ def approve_action(
     runtime: Annotated[LocalRuntime, Depends(get_runtime)],
 ) -> dict[str, Any]:
     role, actor = identity
-    case = _workflow_call(lambda: runtime.workflow.approve(case_id, actor, role, body.reason))
+    with case_telemetry(runtime, case_id):
+        case = _workflow_call(lambda: runtime.workflow.approve(case_id, actor, role, body.reason))
     return {"source": "inferred-workflow", "case": case}
 
 
@@ -188,7 +211,8 @@ def reject_action(
     runtime: Annotated[LocalRuntime, Depends(get_runtime)],
 ) -> dict[str, Any]:
     role, actor = identity
-    case = _workflow_call(lambda: runtime.workflow.reject(case_id, actor, role, body.reason))
+    with case_telemetry(runtime, case_id):
+        case = _workflow_call(lambda: runtime.workflow.reject(case_id, actor, role, body.reason))
     return {"source": "inferred-workflow", "case": case}
 
 
@@ -200,7 +224,8 @@ def close_case(
     runtime: Annotated[LocalRuntime, Depends(get_runtime)],
 ) -> dict[str, Any]:
     role, actor = identity
-    case = _workflow_call(lambda: runtime.workflow.close(case_id, actor, role, body.outcome))
+    with case_telemetry(runtime, case_id):
+        case = _workflow_call(lambda: runtime.workflow.close(case_id, actor, role, body.outcome))
     return {"source": "inferred-workflow", "case": case}
 
 
@@ -230,7 +255,7 @@ def evaluation(runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dict[s
         "versions": {
             "detector": runtime.detector.config.version,
             "projection": runtime.projection.status().projection_version,
-            "advisory": "deterministic-advisory-v1.0.0",
+            "advisory": "deterministic-advisory-v1.1.0",
         },
         "metrics": {
             "detector": {
@@ -266,10 +291,11 @@ def replay_status(runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dic
             for key in ("on_time", "late", "out_of_order")
         },
         "external_services": {
-            "postgres": "contract-only-local-gate",
-            "redpanda": "contract-only-local-gate",
-            "neo4j": "contract-only-local-gate",
+            "postgres": runtime.integration_status()["postgres_runtime_verified"],
+            "redpanda": runtime.integration_status()["redpanda_runtime_verified"],
+            "neo4j": runtime.integration_status()["neo4j_runtime_verified"],
             "external_llm": "disabled-not-required",
         },
+        "integration": runtime.integration_status(),
     }
 
