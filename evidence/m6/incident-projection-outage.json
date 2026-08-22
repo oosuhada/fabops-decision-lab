@@ -1,0 +1,32 @@
+{
+  "commands": [
+    {
+      "command": "docker compose ... up -d --build",
+      "duration_seconds": 29.867,
+      "exit_code": 0
+    },
+    {
+      "command": "docker compose ... stop neo4j",
+      "duration_seconds": 5.269,
+      "exit_code": 0
+    },
+    {
+      "command": "docker compose ... start neo4j",
+      "duration_seconds": 0.15,
+      "exit_code": 0
+    }
+  ],
+  "degraded_detected": true,
+  "equipment_control_affected": false,
+  "generated_at": "2026-08-22T13:13:22.396456+00:00",
+  "healthy_before": true,
+  "incident": "Neo4j projection dependency unavailable",
+  "neo4j_verified_during_outage": false,
+  "outage_detection_seconds": 0.053,
+  "postgres_remained_authoritative": true,
+  "recovered": true,
+  "recovery_seconds_after_start": 11.805,
+  "schema_version": "m6-incident-projection-outage-v1",
+  "scope": "isolated local M6 Compose stack",
+  "source_of_truth_affected": false
+}

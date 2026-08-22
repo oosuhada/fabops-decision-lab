@@ -2,7 +2,7 @@
   "benchmark_version": "m6-local-benchmark-v1",
   "command": "uv run python -m evaluation.m6_benchmark --output-dir evidence/m6 --samples 5",
   "event_count_per_sample": 373,
-  "generated_at": "2026-08-22T12:54:05.845070+00:00",
+  "generated_at": "2026-08-22T13:14:44.273935+00:00",
   "machine_architecture": "arm64",
   "measurement_scope": "fresh Python process restoring local deterministic snapshot and rebuilding in-memory projection",
   "neo4j_process_recovery_measured": false,
@@ -25,15 +25,15 @@
   },
   "rto_ms": {
     "definition": "subprocess start through recovered snapshot parse after projection rebuild",
-    "p50": 63.177083,
-    "p95": 66.2369748,
-    "p99": 66.25046136,
+    "p50": 62.266458,
+    "p95": 64.1764752,
+    "p99": 64.53322864,
     "samples": [
-      66.253833,
-      63.177083,
-      61.609917,
-      63.077708,
-      66.169542
+      64.622417,
+      62.392708,
+      61.700708,
+      62.266458,
+      61.300958
     ]
   },
   "sample_count": 5,
