@@ -78,10 +78,12 @@ services:
     depends_on:
       redpanda:
         condition: service_healthy
-    entrypoint: ["/bin/sh", "-ec"]
-    command: >-
-      rpk topic create fabops.events.v1 --brokers redpanda:9092 || true;
-      rpk topic create fabops.events.dlq.v1 --brokers redpanda:9092 || true
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - >-
+        rpk topic create fabops.events.v1 --brokers redpanda:9092 || true;
+        rpk topic create fabops.events.dlq.v1 --brokers redpanda:9092 || true
     networks: [private]
 
   neo4j:

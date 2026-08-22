@@ -46,3 +46,13 @@ def test_macmini_operational_scripts_and_same_origin_web_exist() -> None:
     nginx = (ROOT / "infra/macmini/nginx.conf").read_text(encoding="utf-8")
     assert "proxy_pass http://api:8000" in nginx
     assert "VITE_API_URL: \"\"" in COMPOSE
+
+
+def test_redpanda_init_executes_both_topic_creation_commands_in_one_shell() -> None:
+    block = _service_block("redpanda-init")
+    assert "entrypoint:" in block
+    assert "- /bin/sh" in block
+    assert "- -ec" in block
+    assert "rpk topic create fabops.events.v1" in block
+    assert "rpk topic create fabops.events.dlq.v1" in block
+    assert "command:" not in block
