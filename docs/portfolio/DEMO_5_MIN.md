@@ -23,6 +23,8 @@ Show the case queue and highlight different classifications:
 - sensor bias suspected,
 - data-quality incident.
 
+State that the deterministic simulator/evaluation keeps all six synthetic fault families **F1–F6** connected to the replay/evaluation story rather than presenting a single cherry-picked case.
+
 Point to source timestamp, projection freshness and provenance labels.
 
 ## 1:30–2:20 — Excursion Case and Evidence Graph

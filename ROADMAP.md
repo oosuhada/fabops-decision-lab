@@ -11,7 +11,9 @@ milestone is marked `IN PROGRESS` while implementation is active.
 | M3 Traceability, CQRS & RCA | PASSED | `evidence/m3-gate.json` |
 | M4 Governed Workflow & Workbench | PASSED | `evidence/m4-gate.json` |
 | M5 Evaluation & Release Gates | PASSED | `evidence/m5-gate.json` |
-| M6 Reliability & Portfolio Release | IN PROGRESS | `evidence/m6-gate.json` |
+| M6 Reliability & Portfolio Release | PASSED | `evidence/m6-gate.json` |
+| M7 Mac mini Deployment | IN PROGRESS | `evidence/m7-gate.json` |
+| M8 Burn-in & Recovery Proof | NOT STARTED | `evidence/m8/soak-manifest.json` |
 
 ### M6 execution ledger
 
@@ -21,8 +23,8 @@ milestone is marked `IN PROGRESS` while implementation is active.
 | M6-B Performance, SLI/SLO & Recovery | PASSED | `evidence/m6/performance-summary.json`, `evidence/m6/recovery-summary.json`, `docs/operations/SLO.md` |
 | M6-C Runnable Stack & Infrastructure | PASSED | `evidence/m6/integration-summary.json` |
 | M6-D Security, Fitness & Operations | PASSED | `evidence/m6/architecture-fitness-summary.json`, `evidence/m6/attribution-audit.json`, `evidence/m6/incident-projection-outage.json` |
-| M6-E Portfolio Release | IN PROGRESS | `evidence/release/release-manifest.json`, `evidence/m6/canonical-verification.json` |
-| M6-F Git Hygiene & Final Local Gate | NOT STARTED | `evidence/m6-gate.json` |
+| M6-E Portfolio Release | PASSED | `evidence/release/release-manifest.json`, `evidence/m6/canonical-verification.json` |
+| M6-F Git Hygiene & Final Local Gate | PASSED | `evidence/m6-gate.json` |
 
 ## Execution discipline
 
