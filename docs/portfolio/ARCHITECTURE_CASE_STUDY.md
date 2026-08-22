@@ -96,11 +96,11 @@ RCA contradicting-evidence coverage is `0.42857`. The fixture often provides eno
 
 ### Local reliability/performance profile
 
-- ingestion throughput: about `25,104 events/s`
-- ingest→detection p95: about `0.0489 ms`
+- ingestion throughput: about `23,755 events/s`
+- ingest→detection p95: about `0.0518 ms`
 - replay completeness: `1.0`
 - duplicate side-effect rate: `0.0`
-- local subprocess recovery RTO p95: about `64.176 ms`
+- local subprocess recovery RTO p95: about `69.537 ms`
 - local snapshot-scope RPO: `0 events`
 
 These are developer-machine measurements of a bounded synthetic test profile, not real-fab or production-capacity claims.

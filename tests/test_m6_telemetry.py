@@ -15,7 +15,11 @@ def test_api_propagates_causal_trace_and_operational_correlation_without_sensiti
     client = TestClient(app)
     case = runtime.case_repository.list_cases()[0]
     case_id = case["case_id"]
-    causal_trace_id = case["causal_trace_id"]
+    causal_trace_id = next(
+        str(item.event["trace_id"])
+        for item in runtime.event_repository.all_events()
+        if item.event.get("lot_id") == case["lot_id"] and item.event.get("trace_id")
+    )
     correlation_id = "m6-test-correlation"
     headers = {"X-Correlation-ID": correlation_id, "X-FabOps-Trace-ID": canonical_trace_id(causal_trace_id)}
     request_record_start = len(runtime.telemetry.records())

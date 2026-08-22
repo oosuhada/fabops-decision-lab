@@ -79,10 +79,10 @@ Contrast liveness with readiness.
 
 Review the local benchmark and carefully scope it:
 
-- ~25k events/s local deterministic ingestion,
+- ~23.8k events/s local deterministic ingestion,
 - sub-millisecond ingest→detector latency,
 - 0-event projection lag after rebuild,
-- local subprocess RTO p95 ~64 ms,
+- local subprocess RTO p95 ~69.5 ms,
 - snapshot-scope RPO 0.
 
 Explicitly state that these are not production database/broker/graph capacity metrics.

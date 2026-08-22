@@ -2,7 +2,7 @@
   "benchmark_version": "m6-local-benchmark-v1",
   "command": "uv run python -m evaluation.m6_benchmark --output-dir evidence/m6 --samples 5",
   "event_count_per_sample": 373,
-  "generated_at": "2026-08-22T13:14:44.273935+00:00",
+  "generated_at": "2026-08-22T13:27:33.859223+00:00",
   "machine_architecture": "arm64",
   "measurement_scope": "fresh Python process restoring local deterministic snapshot and rebuilding in-memory projection",
   "neo4j_process_recovery_measured": false,
@@ -11,7 +11,10 @@
   "profile": "test",
   "python_version": "3.13.14",
   "redpanda_process_recovery_measured": false,
-  "release_candidate": null,
+  "release_candidate": {
+    "release_hash": "99b2e59ae8994ad482925e2889cf99f0cfde9c6a97443a75e8bf3b60765aabd8",
+    "release_version": "0.6.0"
+  },
   "rpo_events": {
     "definition": "events present in persisted local snapshot but absent after recovery",
     "max": 0,
@@ -25,15 +28,15 @@
   },
   "rto_ms": {
     "definition": "subprocess start through recovered snapshot parse after projection rebuild",
-    "p50": 62.266458,
-    "p95": 64.1764752,
-    "p99": 64.53322864,
+    "p50": 68.519917,
+    "p95": 69.5368168,
+    "p99": 69.53716336,
     "samples": [
-      64.622417,
-      62.392708,
-      61.700708,
-      62.266458,
-      61.300958
+      66.931417,
+      65.747708,
+      69.53725,
+      69.535084,
+      68.519917
     ]
   },
   "sample_count": 5,

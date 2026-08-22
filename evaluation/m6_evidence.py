@@ -64,7 +64,11 @@ def generate(output_dir: Path) -> dict[str, Any]:
     runtime = build_local_runtime(telemetry=telemetry)
     case = runtime.case_repository.list_cases()[0]
     case_id = str(case["case_id"])
-    causal_trace_id = str(case["causal_trace_id"])
+    causal_trace_id = next(
+        str(item.event["trace_id"])
+        for item in runtime.event_repository.all_events()
+        if item.event.get("lot_id") == case["lot_id"] and item.event.get("trace_id")
+    )
     correlation_id = "m6-evidence-correlation"
     with telemetry.bind_causal_trace(causal_trace_id, correlation_id):
         runtime.queries.execute(RankRootCausesQuery(case_id))

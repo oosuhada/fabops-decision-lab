@@ -150,7 +150,6 @@ class DeterministicDetector:
             },
             "evidence_event_ids": sorted(item["event_id"] for item in anomalies),
             "data_quality_incidents": sorted(set(self.quality_incidents.get(lot_id, []))),
-            "causal_trace_id": self.lot_trace_ids.get(lot_id),
             "state": "detected",
         }
         created = self.cases.upsert_case(case)
