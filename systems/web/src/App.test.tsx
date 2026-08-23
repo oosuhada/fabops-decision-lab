@@ -79,6 +79,17 @@ describe("FabOps workbench", () => {
     expect(screen.queryByRole("button", {name: /execute equipment/i})).not.toBeInTheDocument();
   });
 
+  it("supports counter-evidence-first inspection without changing deterministic ranking", async () => {
+    render(<App />);
+    await screen.findByRole("heading", {name: "What needs a decision now?"});
+    fireEvent.click(screen.getByRole("button", {name: /Case Investigation/i}));
+    expect(await screen.findByRole("button", {name: "Counter-evidence first"})).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("Counter-evidence-first changes inspection order only.", {exact: false})).toBeInTheDocument();
+    expect(screen.getByRole("heading", {name: /Is chamber:ETCH-01-A the best explanation/i})).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", {name: "Counter-evidence first"}));
+    expect(screen.getByRole("button", {name: "Balanced order"})).toHaveAttribute("aria-pressed", "false");
+  });
+
   it("starts bounded AI narration only after an explicit intent click", async () => {
     const fetchMock = vi.mocked(fetch);
     render(<App />);

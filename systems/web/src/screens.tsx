@@ -330,6 +330,25 @@ export function ExcursionCase({detail, advisory}: {detail: CaseDetailResponse; a
   const top = detail.rca.candidates[0];
   const supportCount = top?.supporting_evidence.length ?? 0;
   const contradictCount = top?.contradicting_evidence.length ?? 0;
+  const [counterEvidenceFirst, setCounterEvidenceFirst] = useState(true);
+  const evidenceColumns = top ? [
+    {
+      kind: "support" as const,
+      title: "Supporting evidence",
+      count: supportCount,
+      items: top.supporting_evidence,
+      empty: "No explicit supporting evidence.",
+      bullet: "+",
+    },
+    {
+      kind: "contradict" as const,
+      title: "Contradicting evidence",
+      count: contradictCount,
+      items: top.contradicting_evidence,
+      empty: "No explicit contradiction recorded. Treat absence of contradiction as uncertainty, not proof.",
+      bullet: "−",
+    },
+  ].sort((left, right) => counterEvidenceFirst ? (left.kind === "contradict" ? -1 : 1) - (right.kind === "contradict" ? -1 : 1) : 0) : [];
   return <div className="screen-stack">
     <section className="case-hero">
       <div>
@@ -361,18 +380,15 @@ export function ExcursionCase({detail, advisory}: {detail: CaseDetailResponse; a
         </li>)}</ol>
       </section>
       <section className="panel evidence-panel">
-        <header><div><span className="eyebrow">Evidence ledger</span><h2>What supports — and weakens — the hypothesis?</h2></div></header>
+        <header><div><span className="eyebrow">Evidence ledger</span><h2>What supports — and weakens — the hypothesis?</h2></div><button className="counter-evidence-toggle" type="button" aria-pressed={counterEvidenceFirst} onClick={() => setCounterEvidenceFirst((current) => !current)}>{counterEvidenceFirst ? "Counter-evidence first" : "Balanced order"}</button></header>
         {top ? <>
           <div className="evidence-ledger-grid">
-            <div className="evidence-ledger-column evidence-ledger-column--support">
-              <h3>Supporting evidence <span>{supportCount}</span></h3>
-              {top.supporting_evidence.length ? <ul>{top.supporting_evidence.map((item, index) => <li key={`s-${index}`}><span className="evidence-bullet">+</span><p>{readableEvidence(item)}</p></li>)}</ul> : <p>No explicit supporting evidence.</p>}
-            </div>
-            <div className="evidence-ledger-column evidence-ledger-column--contradict">
-              <h3>Contradicting evidence <span>{contradictCount}</span></h3>
-              {top.contradicting_evidence.length ? <ul>{top.contradicting_evidence.map((item, index) => <li key={`c-${index}`}><span className="evidence-bullet">−</span><p>{readableEvidence(item)}</p></li>)}</ul> : <p>No explicit contradiction recorded. Treat absence of contradiction as uncertainty, not proof.</p>}
-            </div>
+            {evidenceColumns.map((column) => <div key={column.kind} className={`evidence-ledger-column evidence-ledger-column--${column.kind}`} data-evidence-order={column.kind}>
+              <h3>{column.title} <span>{column.count}</span></h3>
+              {column.items.length ? <ul>{column.items.map((item, index) => <li key={`${column.kind}-${index}`}><span className="evidence-bullet">{column.bullet}</span><p>{readableEvidence(item)}</p></li>)}</ul> : <p>{column.empty}</p>}
+            </div>)}
           </div>
+          <p className="counter-evidence-note">Counter-evidence-first changes inspection order only. It never changes the deterministic candidate ranking or recommendation.</p>
         </> : <WorkbenchState kind="empty" title="No ranked candidate" detail="The deterministic RCA service did not produce a supported candidate." />}
       </section>
     </div>
