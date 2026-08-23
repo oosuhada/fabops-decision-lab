@@ -1,6 +1,7 @@
 import {useMemo, useState} from "react";
 import {ClassificationBadge, MetricStrip, ProjectionBadge, ProvenanceBadge, WorkbenchState} from "./components";
 import {EvidenceGraphExplorer} from "./features/evidence/EvidenceGraphExplorer";
+import {DecisionBoundaryPanel, RcaExplainability} from "./features/explainability/RcaExplainability";
 import type {AdvisoryResponse, CaseDetailResponse, DecisionBriefResponse, DecisionCockpitResponse, DecisionPacket, EvaluationResponse, FabCase, MeasurementPoint, NarrationIntent, NarrationStatusResponse, OverviewResponse, ReplayResponse} from "./types";
 
 function priorityClass(band: string) {
@@ -374,6 +375,7 @@ export function ExcursionCase({detail, advisory}: {detail: CaseDetailResponse; a
         </> : <WorkbenchState kind="empty" title="No ranked candidate" detail="The deterministic RCA service did not produce a supported candidate." />}
       </section>
     </div>
+    <RcaExplainability candidates={detail.rca.candidates} />
     <section className="panel advisory-strip advisory-strip--decision">
       <div><span className="eyebrow">Evidence-grounded next step</span><h2>{advisory?.result.status === "ready" ? "Ready for human review" : advisory?.result.status ?? "loading"}</h2></div>
       <p>{advisory?.result.recommended_next_step ?? "Resolving evidence-grounded recommendation…"}</p>
@@ -466,6 +468,7 @@ export function DecisionApproval({detail, packet, advisory, busy, feedback, brie
       <header><div><span className="eyebrow">Option comparison</span><h2>Choose a stance, not an opaque AI answer</h2></div><small>Recommendation is deterministic · approval remains human-controlled</small></header>
       <DecisionOptionCards packet={packet} />
     </section> : null}
+    {packet ? <DecisionBoundaryPanel packet={packet} /> : null}
     <section className="panel grounded-brief">
       <header>
         <div><span className="eyebrow">Grounded decision brief</span><h2>{brief?.brief.headline ?? "Generating evidence-grounded wording…"}</h2></div>
