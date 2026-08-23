@@ -4,14 +4,14 @@ import {EvidenceInspector, WorkbenchState} from "./components";
 import {DecisionApproval, DecisionCockpit, EvaluationLab, EvidenceGraph, ExcursionCase, OperationsOverview, ReplayOperations, caseById} from "./screens";
 import type {AdvisoryResponse, CaseDetailResponse, DecisionBriefResponse, DecisionCockpitResponse, EvaluationResponse, OverviewResponse, ReplayResponse, ScreenId} from "./types";
 
-const navigation: Array<{id: ScreenId; label: string; short: string}> = [
-  {id: "cockpit", label: "Decision Cockpit", short: "DC"},
-  {id: "overview", label: "Operations Overview", short: "OV"},
-  {id: "case", label: "Excursion Case", short: "EC"},
-  {id: "graph", label: "Evidence Graph", short: "EG"},
-  {id: "decision", label: "Decision & Approval", short: "DA"},
-  {id: "evaluation", label: "Evaluation Lab", short: "EL"},
-  {id: "replay", label: "Replay & Operations", short: "RO"},
+const navigation: Array<{id: ScreenId; label: string; short: string; group: "Decide" | "Investigate" | "Trust"}> = [
+  {id: "cockpit", label: "Decision Cockpit", short: "01", group: "Decide"},
+  {id: "decision", label: "Decision & Approval", short: "02", group: "Decide"},
+  {id: "case", label: "Case Investigation", short: "03", group: "Investigate"},
+  {id: "graph", label: "Evidence Graph", short: "04", group: "Investigate"},
+  {id: "overview", label: "Operations Queue", short: "05", group: "Investigate"},
+  {id: "evaluation", label: "Model & Evidence", short: "06", group: "Trust"},
+  {id: "replay", label: "System Health", short: "07", group: "Trust"},
 ];
 
 export default function App() {
@@ -70,6 +70,7 @@ export default function App() {
   }, [briefAudience, screen, selectedCaseId]);
 
   const selectedCase = useMemo(() => overview ? caseById(overview.cases, selectedCaseId) : null, [overview, selectedCaseId]);
+  const selectedPacket = useMemo(() => cockpit?.queue.find((packet) => packet.case_id === selectedCaseId) ?? cockpit?.queue[0] ?? null, [cockpit, selectedCaseId]);
 
   function selectCase(caseId: string) {
     setSelectedCaseId(caseId);
@@ -117,6 +118,7 @@ export default function App() {
   else if (screen === "graph" && detail) workSurface = <EvidenceGraph detail={detail} selectedStep={selectedStep} onSelectStep={setSelectedStep} />;
   else if (screen === "decision" && detail) workSurface = <DecisionApproval
     detail={detail}
+    packet={selectedPacket}
     advisory={advisory}
     busy={busy}
     feedback={feedback}
@@ -131,32 +133,40 @@ export default function App() {
   else if (screen === "evaluation") workSurface = <EvaluationLab evaluation={evaluation} />;
   else workSurface = <ReplayOperations replay={replay} />;
 
+  const navGroups = ["Decide", "Investigate", "Trust"] as const;
+
   return <div className="app-shell">
     <header className="global-header">
-      <div className="brand-mark">FDL</div>
-      <div><strong>FabOps Decision Lab</strong><span>Evidence-Grounded Yield Excursion Triage</span></div>
+      <div className="brand-mark">FO</div>
+      <div className="brand-copy"><strong>FabOps</strong><span>Decision intelligence for yield excursions</span></div>
       <div className="header-status">
-        <span>UX 0.7 CANDIDATE</span>
-        <span>RELEASE {replay.release.release_version}</span>
-        <span>{replay.release.release_hash === "unreleased" ? "HASH PENDING" : replay.release.release_hash.slice(0, 12)}</span>
-        <span>GROUNDED NARRATION</span>
-        <span>NO EQUIPMENT CONTROL</span>
+        <span className="status-chip status-chip--candidate">0.7 CANDIDATE</span>
+        <span className="status-chip">SYNTHETIC</span>
+        <span className="status-chip">READ-ONLY PREVIEW</span>
+        <span className="status-chip status-chip--safe">NO TOOL CONTROL</span>
       </div>
     </header>
+    <div className="mobile-status-ribbon" aria-label="Release and provenance status">
+      <span>0.7 candidate</span><span>synthetic</span><span>read-only</span><span>{replay.release.release_version}</span>
+    </div>
     <aside className="left-rail" aria-label="Primary navigation">
-      <div className="nav-heading"><span>Workbench</span><strong>Engineering decision</strong></div>
-      <nav>{navigation.map((item) => <button key={item.id} className={screen === item.id ? "nav-item is-active" : "nav-item"} aria-current={screen === item.id ? "page" : undefined} onClick={() => setScreen(item.id)}>
-        <span>{item.short}</span><strong>{item.label}</strong>
-      </button>)}</nav>
+      <div className="nav-heading"><span>Decision workspace</span><strong>From exception to governed action</strong></div>
+      <nav>{navGroups.map((group) => <div className="nav-group" key={group}>
+        <span className="nav-group__label">{group}</span>
+        {navigation.filter((item) => item.group === group).map((item) => <button key={item.id} className={screen === item.id ? "nav-item is-active" : "nav-item"} aria-current={screen === item.id ? "page" : undefined} onClick={() => setScreen(item.id)}>
+          <span>{item.short}</span><strong>{item.label}</strong>
+        </button>)}
+      </div>)}</nav>
       <div className="case-object-list">
-        <span className="section-label">Case objects</span>
-        {overview.cases.slice(0, 7).map((item) => <button key={item.case_id} className={item.case_id === selectedCaseId ? "case-object is-active" : "case-object"} onClick={() => selectCase(item.case_id)}>
-          <span>{item.lot_id}</span><small>{item.classification.replaceAll("_", " ")}</small>
+        <span className="section-label">Open decisions</span>
+        {cockpit.queue.slice(0, 7).map((item) => <button key={item.case_id} className={item.case_id === selectedCaseId ? "case-object is-active" : "case-object"} onClick={() => openDecision(item.case_id)}>
+          <span><b className={`case-priority-dot case-priority-dot--${item.priority_band.toLowerCase()}`} />{item.lot_id}</span>
+          <small>{item.options.find((option) => option.option_id === item.recommended_option_id)?.label ?? item.classification.replaceAll("_", " ")}</small>
         </button>)}
       </div>
     </aside>
     <main id="work-surface" className="work-surface" tabIndex={-1}>{workSurface}</main>
-    <EvidenceInspector selectedCase={detail?.case ?? selectedCase} projection={overview.projection} sourceTimestamp={overview.source_timestamp} selectedStep={selectedStep} />
+    <EvidenceInspector selectedCase={detail?.case ?? selectedCase} selectedPacket={selectedPacket} projection={overview.projection} sourceTimestamp={overview.source_timestamp} selectedStep={selectedStep} />
   </div>;
 }
 

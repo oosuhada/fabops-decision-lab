@@ -1,5 +1,5 @@
 import type {ReactNode} from "react";
-import type {FabCase, ProjectionStatus} from "./types";
+import type {DecisionPacket, FabCase, ProjectionStatus} from "./types";
 
 export function ProvenanceBadge({kind}: {kind: "synthetic" | "inferred" | "real-public" | "evaluation"}) {
   const label = kind === "real-public" ? "REAL PUBLIC" : kind.toUpperCase();
@@ -40,17 +40,52 @@ export function ClassificationBadge({value}: {value: string}) {
   return <span className={`classification classification-${value}`}>{value.replaceAll("_", " ")}</span>;
 }
 
-export function EvidenceInspector({selectedCase, projection, sourceTimestamp, selectedStep}: {
+function packetEvidenceBalance(packet: DecisionPacket | null) {
+  const candidate = packet?.evidence.top_candidate;
+  if (!candidate) return {support: 0, contradict: 0, confidence: "UNRANKED"};
+  const support = candidate.supporting_evidence.length;
+  const contradict = candidate.contradicting_evidence.length;
+  const confidence = contradict > 0 ? "CONTESTED" : support >= 3 ? "SUPPORTED" : support > 0 ? "PARTIAL" : "THIN";
+  return {support, contradict, confidence};
+}
+
+export function EvidenceInspector({selectedCase, selectedPacket, projection, sourceTimestamp, selectedStep}: {
   selectedCase: FabCase | null;
+  selectedPacket: DecisionPacket | null;
   projection: ProjectionStatus | null;
   sourceTimestamp: string | null;
   selectedStep: string | null;
 }) {
+  const evidenceBalance = packetEvidenceBalance(selectedPacket);
+  const recommended = selectedPacket?.options.find((option) => option.option_id === selectedPacket.recommended_option_id);
   return <aside className="evidence-inspector" aria-label="Evidence inspector">
     <header>
-      <span className="eyebrow">Evidence inspector</span>
-      <strong>{selectedCase?.case_id ?? "No case selected"}</strong>
+      <span className="eyebrow">Decision context</span>
+      <strong>{selectedCase?.lot_id ?? "No case selected"}</strong>
+      <small>{selectedCase?.case_id ?? "Select a decision packet"}</small>
     </header>
+    {selectedPacket ? <section className="inspector-decision-card">
+      <span className={`decision-priority ${selectedPacket.priority_band === "HIGH" ? "is-high" : selectedPacket.priority_band === "VERIFY_DATA" ? "is-verify" : "is-medium"}`}>{selectedPacket.priority_band}</span>
+      <h3>Decision now</h3>
+      <p>{selectedPacket.decision_question}</p>
+      <div className="inspector-recommendation">
+        <span>Recommended</span>
+        <strong>{recommended?.label ?? selectedPacket.recommended_option_id}</strong>
+      </div>
+    </section> : null}
+    {selectedPacket ? <section>
+      <h3>Evidence balance</h3>
+      <div className={`evidence-balance evidence-balance--${evidenceBalance.confidence.toLowerCase()}`}>
+        <strong>{evidenceBalance.confidence}</strong>
+        <span>{evidenceBalance.support} supporting · {evidenceBalance.contradict} contradicting</span>
+      </div>
+      <dl className="property-list">
+        <div><dt>Top hypothesis</dt><dd>{selectedPacket.evidence.top_candidate?.candidate_id ?? "unranked"}</dd></div>
+        <div><dt>RCA score</dt><dd>{selectedPacket.evidence.top_candidate?.score.toFixed(2) ?? "—"}</dd></div>
+        <div><dt>Yield gap</dt><dd>{selectedPacket.impact.synthetic_yield_gap_percentage_points == null ? "—" : `${selectedPacket.impact.synthetic_yield_gap_percentage_points.toFixed(2)} pp`}</dd></div>
+        <div><dt>Affected scope</dt><dd>{selectedPacket.impact.affected_chamber_count} chambers</dd></div>
+      </dl>
+    </section> : null}
     <section>
       <h3>Provenance</h3>
       <div className="badge-row"><ProvenanceBadge kind="synthetic" /><ProvenanceBadge kind="inferred" /></div>
@@ -72,8 +107,8 @@ export function EvidenceInspector({selectedCase, projection, sourceTimestamp, se
       </dl>
     </section> : null}
     <footer>
-      <strong>No equipment mutation</strong>
-      <span>All actions in this workbench are governed proposals or diagnostic requests.</span>
+      <strong>Decision support only</strong>
+      <span>No equipment control. LLM wording cannot change classification, RCA ranking, accepted recommendation, authorization or case state.</span>
     </footer>
   </aside>;
 }
