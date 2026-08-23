@@ -239,9 +239,18 @@ class NarrationService:
             raise ValueError("narration audience mismatch")
         if payload.get("recommended_option_id") != packet["recommended_option_id"]:
             raise ValueError("narration changed deterministic recommendation")
-        referenced = set(payload.get("citations", []))
-        for section in payload.get("sections", []):
-            referenced.update(section.get("evidence_refs", []))
+        citations = payload.get("citations")
+        if not isinstance(citations, list) or any(not isinstance(reference, str) for reference in citations):
+            raise ValueError("narration citations must be a list of evidence-reference strings")
+        sections = payload.get("sections")
+        if not isinstance(sections, list) or any(not isinstance(section, dict) for section in sections):
+            raise ValueError("narration sections must be a list of objects")
+        referenced = set(citations)
+        for section in sections:
+            section_references = section.get("evidence_refs")
+            if not isinstance(section_references, list) or any(not isinstance(reference, str) for reference in section_references):
+                raise ValueError("narration section evidence_refs must be a list of strings")
+            referenced.update(section_references)
         unknown = {reference for reference in referenced if not reference_allowed(packet, reference)}
         if unknown:
             raise ValueError(f"narration contains unknown evidence refs: {sorted(unknown)}")

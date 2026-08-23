@@ -28,6 +28,7 @@ class FakeProvider:
         unknown_evidence: bool = False,
         forbidden_claim: bool = False,
         invalid_json: bool = False,
+        citation_objects: bool = False,
     ) -> None:
         if name is not None:
             self.name = name
@@ -36,6 +37,7 @@ class FakeProvider:
         self.unknown_evidence = unknown_evidence
         self.forbidden_claim = forbidden_claim
         self.invalid_json = invalid_json
+        self.citation_objects = citation_objects
         self.calls = 0
 
     def generate_json(self, system_prompt: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -61,7 +63,11 @@ class FakeProvider:
                     "evidence_refs": ["unknown.evidence"] if self.unknown_evidence else ["decision.recommended_option_id"],
                 }
             ],
-            "citations": ["decision.recommended_option_id"],
+            "citations": (
+                [{"id": "decision.recommended_option_id"}]
+                if self.citation_objects
+                else ["decision.recommended_option_id"]
+            ),
             "uncertainties": packet["uncertainties"],
             "limitations": ["synthetic only"],
         }
@@ -273,8 +279,9 @@ def test_all_provider_failures_fall_back_deterministically_with_same_recommendat
         FakeProvider(invalid_json=True),
         FakeProvider(unknown_evidence=True),
         FakeProvider(forbidden_claim=True),
+        FakeProvider(citation_objects=True),
     ],
-    ids=["invalid-json", "unknown-evidence", "forbidden-equipment-claim"],
+    ids=["invalid-json", "unknown-evidence", "forbidden-equipment-claim", "citation-object"],
 )
 def test_invalid_or_ungrounded_provider_output_is_discarded(provider: FakeProvider) -> None:
     runtime = build_local_runtime()
