@@ -29,6 +29,11 @@ The UI requests a brief only when a user opens `Decision & Approval`, and the
 API caches the same case/audience packet for a bounded TTL to avoid repeated
 generation.
 
+For a public deployment, opening the page does **not** imply provider generation.
+With `FABOPS_PUBLIC_NARRATION_CACHE_ONLY=true`, `GET /decision-brief` only reads
+an existing cache entry and otherwise returns deterministic wording. A live LLM
+call is available only through the bounded demo endpoint described below.
+
 ## MacBook Pro local model
 
 The existing Biz-CollabCraft PR-review gateway remains independent. FabOps does
@@ -52,9 +57,11 @@ than a normal API request. The PR-review environment already loads it under the
 identifier `local-review-qwen-next`; FabOps can share that loaded instance
 without creating a second model copy.
 
-For a future Mac mini v0.7 deployment, prefer a private Tailscale/SSH path or a
-separate authenticated FabOps gateway on the MacBook Pro. Do not bind the raw
-LM Studio API to the public internet.
+For a Mac mini v0.7 deployment, use a private Tailscale/SSH path and a separate
+authenticated FabOps gateway on the MacBook Pro. The public repository contains
+the generic gateway implementation in `services/narration/gateway.py`; real host
+bindings and runtime credentials belong to a private operations repository. Do
+not bind the raw LM Studio API to the public internet.
 
 ## Vertex AI fallback
 
@@ -62,7 +69,7 @@ Development configuration:
 
 ```bash
 export FABOPS_NARRATION_MODE=vertex
-export FABOPS_VERTEX_PROJECT=flai-oosuhada-20260506
+export FABOPS_VERTEX_PROJECT=your-gcp-project-id
 export FABOPS_VERTEX_LOCATION=global
 export FABOPS_VERTEX_MODEL=gemini-2.5-flash-lite
 ```
@@ -79,13 +86,40 @@ in a service-account key.
 
 ## Public preview policy
 
-The current `fabops-preview.oosu.dev` v0.6.0 preview remains read-only during M8
-and does not expose live paid generation.
+The public preview separates ordinary reads from live generation:
 
-If v0.7 is later made public, prefer pre-generated/cached grounded briefs for
-anonymous users, with server-side call budgets/rate limits. A public browser
-must never be able to select arbitrary providers, models, prompts or billing
-projects.
+- normal `GET`/`HEAD`: cache-only narration; a cache miss uses deterministic
+  wording and performs zero provider calls;
+- `POST /api/demo/narration`: the only public live-generation route;
+- request body contains only `case_id`, `audience` and a fixed intent enum;
+- no arbitrary prompt/provider/model/project selection is accepted;
+- a server-issued signed demo session is required;
+- session/IP limits and provider RPM/concurrency/daily token/request budgets are
+  enforced before network I/O;
+- local provider failure/circuit/budget exhaustion falls through to Vertex;
+- Vertex failure/circuit/budget exhaustion falls through to deterministic text.
+
+Allowed public intents are intentionally bounded to manager summary, engineer
+checklist, option trade-off comparison and counter-evidence review.
+
+The private operations repository owns the actual Mac mini/MacBook Pro addresses,
+Cloudflare ingress configuration, Vertex project binding, rollout/rollback and
+runtime secret locations. None of those runtime credentials are required to
+review or test this public repository.
+
+## Provider governance
+
+Each provider is wrapped by a fail-fast governor. Configurable controls include:
+
+- requests per minute;
+- max concurrent generations;
+- daily request budget;
+- conservative daily estimated-token budget;
+- max output tokens;
+- circuit-breaker failure threshold and cooldown.
+
+The governor never creates an unbounded queue. A blocked provider is skipped and
+the request falls through to the next provider/fallback immediately.
 
 ## Smoke checks
 
