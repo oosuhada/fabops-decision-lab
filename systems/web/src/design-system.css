@@ -93,6 +93,16 @@ button, textarea, input, select { font-size: var(--ds-type-control); }
 .panel > header h2,
 .advisory-strip h2 { margin: 2px 0 0; font-size: var(--ds-type-section-title); line-height: 1.3; font-weight: 680; }
 .panel > header small { color: var(--ds-text-muted); font-size: var(--ds-type-meta); line-height: 1.4; }
+.panel > h3 {
+  margin: var(--ds-space-4) var(--ds-panel-inset) var(--ds-space-2);
+}
+.panel > ul {
+  margin: 0 var(--ds-panel-inset) var(--ds-space-4);
+  padding-left: var(--ds-space-5);
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-type-caption);
+  line-height: var(--ds-line-body);
+}
 
 .surface-header {
   min-height: 76px;
@@ -234,7 +244,9 @@ td { min-height: 40px; padding: 10px var(--ds-space-3); }
 .evidence-inspector > header small { font-size: var(--ds-type-meta); }
 .evidence-inspector > section { padding: var(--ds-space-4); }
 .evidence-inspector h3,
-.panel h3 { margin: 0 0 var(--ds-space-2); font-size: var(--ds-type-meta); line-height: 1.35; }
+.panel h3 { font-size: var(--ds-type-meta); line-height: 1.35; }
+.evidence-inspector h3 { margin: 0 0 var(--ds-space-2); }
+.panel > h3 { margin: var(--ds-space-4) var(--ds-panel-inset) var(--ds-space-2); }
 .evidence-inspector .property-list { padding-inline: 0; padding-bottom: 0; }
 .evidence-inspector .property-list > div { grid-template-columns: minmax(106px, .78fr) minmax(0, 1.22fr); }
 .evidence-inspector footer { margin: var(--ds-space-4); padding: var(--ds-space-3); font-size: var(--ds-type-caption); line-height: 1.5; }

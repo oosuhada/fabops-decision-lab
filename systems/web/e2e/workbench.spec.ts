@@ -105,18 +105,33 @@ test("Foundry Glass design grammar stays consistent across routes", async ({page
         .filter((item) => Number.isFinite(item.size) && item.size < 10)
         .slice(0, 12);
       const panelHeaders = Array.from(document.querySelectorAll(".panel > header")).filter(visible);
+      const panelTextInsets = Array.from(document.querySelectorAll("main .panel *"))
+        .filter((element) => visible(element) && element.children.length === 0 && (element.textContent?.trim().length ?? 0) > 0)
+        .filter((element) => !element.closest("svg") && !["INPUT", "TEXTAREA", "OPTION"].includes(element.tagName))
+        .map((element) => {
+          const panel = element.closest(".panel");
+          if (!panel) return null;
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          const textRect = range.getBoundingClientRect();
+          const panelRect = panel.getBoundingClientRect();
+          return {text: element.textContent?.trim().slice(0, 40), inset: textRect.left - panelRect.left};
+        })
+        .filter((item): item is {text: string | undefined; inset: number} => item !== null && Number.isFinite(item.inset));
       return {
         overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
         minimumTextSize: Math.min(...textSizes, 100),
         undersized,
         headerPaddingLeft: panelHeaders.map((header) => Number.parseFloat(getComputedStyle(header).paddingLeft)),
         panelRadii: Array.from(document.querySelectorAll(".panel")).filter(visible).map((panel) => Number.parseFloat(getComputedStyle(panel).borderRadius)),
+        panelTextEdgeIssues: panelTextInsets.filter((item) => item.inset < 8).slice(0, 12),
       };
     });
     expect(desktopAudit.overflow, `${route.path} has desktop page overflow`).toBe(false);
     expect(desktopAudit.minimumTextSize, `${route.path} renders text below the 10px metadata floor: ${JSON.stringify(desktopAudit.undersized)}`).toBeGreaterThanOrEqual(10);
     expect(desktopAudit.headerPaddingLeft.every((value) => value >= 16), `${route.path} panel header inset drift`).toBe(true);
     expect(desktopAudit.panelRadii.every((value) => value >= 12), `${route.path} panel radius drift`).toBe(true);
+    expect(desktopAudit.panelTextEdgeIssues, `${route.path} has panel text against the left edge`).toEqual([]);
 
     await page.setViewportSize({width: 390, height: 844});
     await page.reload();
