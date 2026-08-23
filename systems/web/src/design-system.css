@@ -1,0 +1,393 @@
+/*
+ * FabOps Foundry Glass Design Grammar
+ * ------------------------------------
+ * This file is intentionally loaded after the legacy stylesheet and is the
+ * canonical visual contract for v0.7+.  The structure borrows the disciplined
+ * density of Foundry/Blueprint work surfaces while retaining the FabOps glass
+ * identity.  New UI should use these tokens instead of introducing ad-hoc
+ * pixel values in styles.css.
+ */
+
+:root {
+  /* 4px spacing grid */
+  --ds-space-1: 4px;
+  --ds-space-2: 8px;
+  --ds-space-3: 12px;
+  --ds-space-4: 16px;
+  --ds-space-5: 20px;
+  --ds-space-6: 24px;
+  --ds-space-8: 32px;
+
+  /* Compact but readable type scale. 10px is metadata-only floor. */
+  --ds-type-meta: 10px;
+  --ds-type-caption: 11px;
+  --ds-type-body: 12px;
+  --ds-type-control: 12px;
+  --ds-type-card-title: 14px;
+  --ds-type-section-title: 16px;
+  --ds-type-page-title: clamp(24px, 2.2vw, 32px);
+  --ds-type-display: clamp(30px, 3vw, 44px);
+  --ds-line-body: 1.55;
+
+  /* Geometry */
+  --ds-radius-control: 6px;
+  --ds-radius-card: 12px;
+  --ds-radius-panel: 14px;
+  --ds-radius-hero: 18px;
+  --ds-control-height: 36px;
+  --ds-row-height: 44px;
+  --ds-panel-inset: 16px;
+  --ds-panel-header-height: 56px;
+
+  /* Foundry-like neutral hierarchy with FabOps cyan interaction accents. */
+  --ds-canvas: #e9eef2;
+  --ds-surface: rgba(255, 255, 255, .82);
+  --ds-surface-solid: #fdfefe;
+  --ds-surface-subtle: rgba(246, 249, 251, .88);
+  --ds-surface-hover: rgba(232, 242, 247, .82);
+  --ds-border: rgba(122, 148, 166, .30);
+  --ds-border-strong: rgba(101, 132, 152, .48);
+  --ds-text: #172b3a;
+  --ds-text-secondary: #536a7a;
+  --ds-text-muted: #718695;
+  --ds-accent: #1d8299;
+  --ds-accent-soft: rgba(71, 190, 201, .12);
+  --ds-shadow-panel: 0 10px 28px rgba(26, 55, 72, .055), inset 0 1px rgba(255,255,255,.82);
+}
+
+html { color: var(--ds-text); background: var(--ds-canvas); }
+body { color: var(--ds-text); font-size: var(--ds-type-body); line-height: var(--ds-line-body); }
+button, textarea, input, select { font-size: var(--ds-type-control); }
+
+/* --------------------------------------------------------------------------
+   Page rhythm and shared surfaces
+   -------------------------------------------------------------------------- */
+
+.work-surface { padding: var(--ds-space-5); }
+.screen-stack { gap: var(--ds-space-4); max-width: 1440px; }
+
+.panel,
+.surface-header,
+.metric-strip,
+.case-hero,
+.console-toolbar,
+.glass-visual-card {
+  border-color: var(--ds-border);
+  box-shadow: var(--ds-shadow-panel);
+}
+
+.panel {
+  border-radius: var(--ds-radius-panel);
+  background: var(--ds-surface);
+  backdrop-filter: blur(20px) saturate(125%);
+  -webkit-backdrop-filter: blur(20px) saturate(125%);
+}
+
+.panel > header {
+  min-height: var(--ds-panel-header-height);
+  padding: var(--ds-space-3) var(--ds-panel-inset);
+  gap: var(--ds-space-3);
+  background: rgba(248, 250, 252, .82);
+}
+.panel > header > div { min-width: 0; }
+.panel > header h2,
+.advisory-strip h2 { margin: 2px 0 0; font-size: var(--ds-type-section-title); line-height: 1.3; font-weight: 680; }
+.panel > header small { color: var(--ds-text-muted); font-size: var(--ds-type-meta); line-height: 1.4; }
+
+.surface-header {
+  min-height: 76px;
+  padding: var(--ds-space-4) var(--ds-space-5);
+  border-radius: var(--ds-radius-panel);
+  background: var(--ds-surface);
+}
+.surface-header h1 { margin: 3px 0 0; font-size: var(--ds-type-page-title); line-height: 1.12; letter-spacing: -.025em; }
+
+.eyebrow,
+.section-label,
+.nav-group__label {
+  font-size: var(--ds-type-meta);
+  line-height: 1.2;
+  letter-spacing: .105em;
+  font-weight: 760;
+}
+
+.muted { color: var(--ds-text-muted); font-size: var(--ds-type-caption); line-height: 1.5; padding-inline: var(--ds-panel-inset); }
+
+/* --------------------------------------------------------------------------
+   Navigation and chrome
+   -------------------------------------------------------------------------- */
+
+.global-header { padding-inline: var(--ds-space-4); }
+.brand-copy strong { font-size: 15px; }
+.global-header .brand-copy span { font-size: var(--ds-type-meta); }
+.header-status .status-chip { font-size: var(--ds-type-meta); }
+.mobile-status-ribbon span { font-size: var(--ds-type-meta); }
+
+.nav-heading { padding: var(--ds-space-5) var(--ds-space-4) var(--ds-space-4); }
+.nav-heading strong { font-size: var(--ds-type-caption); }
+.left-rail nav { gap: var(--ds-space-3); padding-inline: var(--ds-space-2); }
+.nav-item { min-height: 40px; padding: 6px var(--ds-space-2); border-radius: var(--ds-radius-control); }
+.nav-item > strong { font-size: var(--ds-type-caption); }
+.nav-item > span { font-size: var(--ds-type-meta); }
+.case-object-list { padding: var(--ds-space-4) var(--ds-space-2); }
+.case-object { padding: var(--ds-space-2); border-radius: var(--ds-radius-control); }
+.case-object span { font-size: var(--ds-type-caption); }
+.case-object small { font-size: var(--ds-type-meta); line-height: 1.4; }
+
+/* --------------------------------------------------------------------------
+   Metrics, tables and property rows
+   -------------------------------------------------------------------------- */
+
+.metric-strip { border-radius: var(--ds-radius-card); }
+.metric-cell { min-height: 88px; padding: var(--ds-space-3) var(--ds-space-4); gap: var(--ds-space-1); }
+.metric-cell span { font-size: var(--ds-type-meta); }
+.metric-cell strong { font-size: 24px; line-height: 1.1; font-weight: 650; }
+.metric-cell small { color: var(--ds-text-muted); font-size: var(--ds-type-meta); line-height: 1.35; }
+
+.table-scroll { scrollbar-gutter: stable; }
+table { font-size: var(--ds-type-caption); line-height: 1.35; }
+th {
+  height: 36px;
+  padding: 0 var(--ds-space-3);
+  font-size: var(--ds-type-meta);
+  font-weight: 720;
+  background: rgba(239, 244, 247, .92);
+}
+td { min-height: 40px; padding: 10px var(--ds-space-3); }
+
+/* Property list contract: property data never touches a panel edge. */
+.property-list {
+  margin: 0;
+  padding: var(--ds-space-2) var(--ds-panel-inset) var(--ds-space-3);
+}
+.property-list > div {
+  min-height: var(--ds-row-height);
+  grid-template-columns: minmax(132px, .72fr) minmax(0, 1.28fr);
+  align-items: center;
+  gap: var(--ds-space-4);
+  padding: var(--ds-space-2) 0;
+  border-bottom: 1px solid rgba(132, 155, 171, .18);
+}
+.property-list > div:last-child { border-bottom: 0; }
+.property-list dt { color: var(--ds-text-secondary); font-size: var(--ds-type-caption); line-height: 1.4; }
+.property-list dd { color: var(--ds-text); font-size: var(--ds-type-caption); line-height: 1.45; font-weight: 640; }
+.property-list code { font-size: var(--ds-type-meta); line-height: 1.55; overflow-wrap: anywhere; word-break: break-word; }
+
+.release-identity-list { padding-top: var(--ds-space-3); padding-bottom: var(--ds-space-3); }
+.release-identity-list > div { min-height: 48px; }
+
+.version-grid { padding: var(--ds-space-2); gap: var(--ds-space-2); }
+.version-grid > div {
+  min-height: 72px;
+  padding: var(--ds-space-3);
+  border: 1px solid rgba(132,155,171,.20);
+  border-radius: var(--ds-radius-control);
+  background: var(--ds-surface-subtle);
+}
+.version-grid span { font-size: var(--ds-type-meta); }
+.version-grid strong { font-size: var(--ds-type-caption); line-height: 1.45; }
+
+.provenance,
+.projection-badge,
+.classification,
+.safety-chip,
+.decision-priority,
+.option-stance { font-size: var(--ds-type-meta); }
+
+.evidence-panel code,
+.lineage-node span,
+.lineage-node small,
+.series-caption { font-size: var(--ds-type-meta); }
+
+/* --------------------------------------------------------------------------
+   System health: same inset and type hierarchy as every other panel.
+   -------------------------------------------------------------------------- */
+
+.system-health-grid { gap: var(--ds-space-4); }
+.health-stat-list,
+.adapter-status-list { padding: var(--ds-space-3) var(--ds-panel-inset) var(--ds-panel-inset); }
+.health-stat-list > div {
+  min-height: 52px;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-bottom: 1px solid rgba(132,155,171,.18);
+}
+.health-stat-list span { font-size: var(--ds-type-caption); font-weight: 650; }
+.health-stat-list strong { font-size: 22px; font-weight: 650; }
+.health-stat-list i { left: var(--ds-space-3); right: var(--ds-space-3); }
+
+.adapter-status-list { gap: var(--ds-space-2); }
+.adapter-status-list > div {
+  min-height: 52px;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-radius: var(--ds-radius-card);
+}
+.adapter-status-list strong { font-size: var(--ds-type-caption); font-weight: 650; }
+.adapter-state { max-width: 52%; padding: 5px var(--ds-space-2); font-size: var(--ds-type-meta); }
+.health-card > .workbench-state { margin: 0 var(--ds-panel-inset) var(--ds-panel-inset); }
+
+/* --------------------------------------------------------------------------
+   Inspector and status surfaces
+   -------------------------------------------------------------------------- */
+
+.evidence-inspector > header { padding: var(--ds-space-4); gap: var(--ds-space-1); }
+.evidence-inspector > header strong { font-size: 17px; }
+.evidence-inspector > header small { font-size: var(--ds-type-meta); }
+.evidence-inspector > section { padding: var(--ds-space-4); }
+.evidence-inspector h3,
+.panel h3 { margin: 0 0 var(--ds-space-2); font-size: var(--ds-type-meta); line-height: 1.35; }
+.evidence-inspector .property-list { padding-inline: 0; padding-bottom: 0; }
+.evidence-inspector .property-list > div { grid-template-columns: minmax(106px, .78fr) minmax(0, 1.22fr); }
+.evidence-inspector footer { margin: var(--ds-space-4); padding: var(--ds-space-3); font-size: var(--ds-type-caption); line-height: 1.5; }
+
+.workbench-state { padding: var(--ds-space-3) var(--ds-space-4); border-radius: var(--ds-radius-card); }
+.workbench-state strong { font-size: var(--ds-type-card-title); }
+.workbench-state p { font-size: var(--ds-type-caption); line-height: 1.5; }
+
+/* --------------------------------------------------------------------------
+   Decision/case cards: normalize text hierarchy and control sizing.
+   -------------------------------------------------------------------------- */
+
+.decision-option,
+.hypothesis-card,
+.evidence-meter-card,
+.brief-provider-card,
+.recommendation-evidence > div,
+.case-hero__hypothesis,
+.evidence-ledger-column,
+.glass-visual-card,
+.signal-chart {
+  border-radius: var(--ds-radius-card);
+}
+
+.decision-option { padding: var(--ds-space-4); }
+.decision-option > strong { font-size: var(--ds-type-card-title); }
+.decision-option > p { font-size: var(--ds-type-caption); line-height: 1.55; }
+.decision-option footer { font-size: var(--ds-type-meta); }
+.decision-option footer b { font-size: var(--ds-type-meta); }
+
+.decision-queue-item { min-height: 84px; padding-block: var(--ds-space-3); }
+.decision-queue-item__identity strong { font-size: var(--ds-type-body); }
+.decision-queue-item__identity small,
+.decision-queue-item__question span,
+.decision-queue-item__evidence span,
+.decision-queue-item__impact span { font-size: var(--ds-type-meta); }
+.decision-queue-item__question strong { font-size: var(--ds-type-caption); line-height: 1.45; }
+.decision-queue-item__evidence strong { font-size: var(--ds-type-meta); }
+.cockpit-hero__status span,
+.cockpit-hero__status small,
+.recommended-callout > span,
+.decision-impact-grid span,
+.decision-impact-grid small,
+.hypothesis-card span,
+.evidence-meter-card span,
+.uncertainty-list > span,
+.hypothesis-card small,
+.evidence-meter-card small,
+.decision-header__guardrail span,
+.decision-header__guardrail small,
+.recommendation-evidence span,
+.recommendation-evidence small,
+.case-hero__hypothesis span,
+.case-hero__hypothesis small,
+.candidate-score small,
+.advisory-authority { font-size: var(--ds-type-meta); }
+
+.decision-spotlight__actions button,
+.decision-queue-item > button,
+.brief-intent-actions button,
+.action-grid button,
+.workbench-state button {
+  min-height: var(--ds-control-height);
+  border-radius: var(--ds-radius-control);
+  font-size: var(--ds-type-control);
+}
+
+.brief-summary-main p { font-size: var(--ds-type-body); line-height: 1.6; }
+.brief-audience-toggle button { font-size: var(--ds-type-caption); }
+.brief-summary-main > span,
+.brief-provider-card > span { font-size: var(--ds-type-meta); }
+.brief-provider-card strong { font-size: var(--ds-type-caption); }
+.brief-provider-card small,
+.brief-provider-card b,
+.brief-sections article small,
+.brief-meta,
+.brief-live-controls > div:first-child > small,
+.brief-live-controls small { font-size: var(--ds-type-meta); }
+.brief-sections article > strong { font-size: var(--ds-type-caption); }
+.brief-sections article p { font-size: var(--ds-type-caption); line-height: 1.55; }
+
+.candidate-list li { min-height: 58px; padding: var(--ds-space-3) var(--ds-space-4); }
+.candidate-list li span { font-size: var(--ds-type-meta); }
+.evidence-ledger-column li p { font-size: var(--ds-type-caption); line-height: 1.5; }
+.evidence-ledger-column > p { font-size: var(--ds-type-caption); line-height: 1.5; }
+
+/* --------------------------------------------------------------------------
+   Charts / console. Keep dense metadata readable; no 7px production text.
+   -------------------------------------------------------------------------- */
+
+.visual-card-head strong { font-size: var(--ds-type-card-title); }
+.visual-card-head small,
+.yield-health-ring span,
+.signal-chart__title span,
+.signal-chart__footer,
+.chamber-heatmap__cell small,
+.signal-chart--heatmap > p,
+.console-toolbar__scope span,
+.console-toolbar__readout span,
+.console-toolbar__readout small,
+.console-ledger-head small { font-size: var(--ds-type-meta); }
+.classification-legend > div,
+.anomaly-bars button > strong,
+.anomaly-bars button > span { font-size: var(--ds-type-caption); }
+.visual-card-foot,
+.console-live-status strong,
+.console-live-status small { font-size: var(--ds-type-meta); }
+.signal-chart__title strong,
+.console-ledger-head strong { font-size: var(--ds-type-card-title); }
+.signal-chart__title > b,
+.signal-legend > span,
+.chamber-heatmap__cell span { font-size: var(--ds-type-meta); }
+.chamber-heatmap__cell strong { font-size: var(--ds-type-body); }
+.signal-kpis span { font-size: var(--ds-type-meta); }
+.signal-kpis strong { font-size: 20px; }
+.console-filter-group button { min-height: 32px; padding: 6px var(--ds-space-3); font-size: var(--ds-type-meta); }
+.histogram-column i { font-size: var(--ds-type-meta); }
+
+/* Boot is part of the product, so it follows the same metadata floor. */
+.boot-panel__topline,
+.boot-panel__topline b,
+.boot-lockup span,
+.boot-telemetry span,
+.boot-telemetry small,
+.boot-panel footer { font-size: var(--ds-type-meta); }
+
+/* --------------------------------------------------------------------------
+   Responsive rules
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 1180px) {
+  .work-surface { padding: var(--ds-space-4); }
+}
+
+@media (max-width: 760px) {
+  .work-surface { padding: var(--ds-space-2); }
+  .screen-stack { gap: var(--ds-space-3); }
+  .panel > header { min-height: 52px; padding: var(--ds-space-3); }
+  .surface-header { min-height: 68px; padding: var(--ds-space-3) var(--ds-space-4); }
+  .surface-header h1 { font-size: 22px; }
+  .metric-cell { min-height: 80px; padding: var(--ds-space-3); }
+  .metric-cell strong { font-size: 21px; }
+  .property-list { padding-inline: var(--ds-space-3); }
+  .property-list > div { grid-template-columns: 1fr; gap: 3px; min-height: 54px; align-content: center; }
+  .property-list dd { font-size: var(--ds-type-caption); }
+  .health-stat-list,
+  .adapter-status-list { padding-inline: var(--ds-space-3); }
+  .health-card > .workbench-state { margin-inline: var(--ds-space-3); }
+  .adapter-status-list > div { align-items: flex-start; flex-direction: column; gap: var(--ds-space-2); }
+  .adapter-state { max-width: 100%; }
+  .evidence-inspector .property-list > div { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel, .decision-option, .lineage-node { transition: none !important; transform: none !important; }
+}
