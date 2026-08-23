@@ -82,7 +82,7 @@ services:
     image: neo4j:5.26-community
     restart: unless-stopped
     cpus: 0.5
-    mem_limit: 640m
+    mem_limit: 768m
     environment:
       NEO4J_AUTH: neo4j/${FABOPS_LIVE_NEO4J_PASSWORD:?FABOPS_LIVE_NEO4J_PASSWORD must be set}
       FABOPS_NEO4J_PASSWORD: ${FABOPS_LIVE_NEO4J_PASSWORD:?FABOPS_LIVE_NEO4J_PASSWORD must be set}
