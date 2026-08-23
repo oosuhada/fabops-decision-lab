@@ -229,6 +229,17 @@ class NarrationService:
             self._last_narration_source = source
 
     @staticmethod
+    def _reference_allowed(packet: dict[str, Any], reference: str, allowed: set[str]) -> bool:
+        if reference in allowed:
+            return True
+        prefix = "decision.options["
+        if reference.startswith(prefix) and reference.endswith("]"):
+            index_text = reference[len(prefix) : -1]
+            if index_text.isdigit():
+                return int(index_text) < len(packet.get("options", []))
+        return False
+
+    @staticmethod
     def _validate(packet: dict[str, Any], audience: str, payload: dict[str, Any]) -> dict[str, Any]:
         if payload.get("schema_version") != "decision-brief-v1":
             raise ValueError("narration schema_version mismatch")
@@ -247,7 +258,7 @@ class NarrationService:
         referenced = set(payload.get("citations", []))
         for section in payload.get("sections", []):
             referenced.update(section.get("evidence_refs", []))
-        unknown = referenced - allowed
+        unknown = {reference for reference in referenced if not NarrationService._reference_allowed(packet, reference, allowed)}
         if unknown:
             raise ValueError(f"narration contains unknown evidence refs: {sorted(unknown)}")
         text = " ".join(
