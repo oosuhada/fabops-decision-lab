@@ -48,7 +48,7 @@ describe("FabOps workbench", () => {
     expect(screen.getAllByText("Collect confirming metrology", {exact: false}).length).toBeGreaterThan(1);
     expect(screen.getByText("Prepare containment review", {exact: false})).toBeInTheDocument();
     expect(screen.getByText("READ-ONLY PREVIEW")).toBeInTheDocument();
-    expect(screen.getByText("0.6.0", {exact: true})).toBeInTheDocument();
+    expect(screen.getAllByText("BASE 0.6.0", {exact: true}).length).toBeGreaterThan(0);
   });
 
   it("coordinates evidence graph selection and exposes no equipment execution control", async () => {

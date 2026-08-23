@@ -141,13 +141,14 @@ export default function App() {
       <div className="brand-copy"><strong>FabOps</strong><span>Decision intelligence for yield excursions</span></div>
       <div className="header-status">
         <span className="status-chip status-chip--candidate">0.7 CANDIDATE</span>
+        <span className="status-chip">BASE {replay.release.release_version}</span>
         <span className="status-chip">SYNTHETIC</span>
         <span className="status-chip">READ-ONLY PREVIEW</span>
         <span className="status-chip status-chip--safe">NO TOOL CONTROL</span>
       </div>
     </header>
     <div className="mobile-status-ribbon" aria-label="Release and provenance status">
-      <span>0.7 candidate</span><span>synthetic</span><span>read-only</span><span>{replay.release.release_version}</span>
+      <span>0.7 candidate</span><span>base {replay.release.release_version}</span><span>synthetic</span><span>read-only</span>
     </div>
     <aside className="left-rail" aria-label="Primary navigation">
       <div className="nav-heading"><span>Decision workspace</span><strong>From exception to governed action</strong></div>

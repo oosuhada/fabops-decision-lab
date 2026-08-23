@@ -47,7 +47,7 @@ test("mobile decision cockpit keeps candidate, provenance and read-only identity
   await expect(ribbon).toContainText("0.7 candidate");
   await expect(ribbon).toContainText("synthetic");
   await expect(ribbon).toContainText("read-only");
-  await expect(ribbon).toContainText("0.6.0");
+  await expect(ribbon).toContainText("base 0.6.0");
   await expect(page.getByRole("button", {name: /Decision & Approval/i})).toBeVisible();
 });
 
