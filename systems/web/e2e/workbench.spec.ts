@@ -127,6 +127,8 @@ test("Foundry Glass design grammar stays consistent across routes", async ({page
         .filter((item): item is {text: string | undefined; inset: number} => item !== null && Number.isFinite(item.inset));
       return {
         overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+        headerBottom: document.querySelector(".global-header")?.getBoundingClientRect().bottom ?? 0,
+        workspaceContextTop: document.querySelector(".workspace-context")?.getBoundingClientRect().top ?? 0,
         workspaceContextHeight: document.querySelector(".workspace-context")?.getBoundingClientRect().height ?? 0,
         minimumTextSize: Math.min(...textSizes, 100),
         undersized,
@@ -136,6 +138,7 @@ test("Foundry Glass design grammar stays consistent across routes", async ({page
       };
     });
     expect(desktopAudit.overflow, `${route.path} has desktop page overflow`).toBe(false);
+    expect(desktopAudit.workspaceContextTop, `${route.path} workspace context overlaps the global header`).toBeGreaterThanOrEqual(desktopAudit.headerBottom);
     expect(desktopAudit.workspaceContextHeight, `${route.path} lost the compact workspace context bar`).toBeGreaterThanOrEqual(32);
     expect(desktopAudit.workspaceContextHeight, `${route.path} workspace context bar became oversized`).toBeLessThanOrEqual(40);
     expect(desktopAudit.minimumTextSize, `${route.path} renders text below the 10px metadata floor: ${JSON.stringify(desktopAudit.undersized)}`).toBeGreaterThanOrEqual(10);
@@ -146,8 +149,21 @@ test("Foundry Glass design grammar stays consistent across routes", async ({page
     await page.setViewportSize({width: 390, height: 844});
     await page.reload();
     await expect(page.locator(route.ready)).toBeVisible();
-    const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
-    expect(mobileOverflow, `${route.path} has mobile page overflow`).toBe(false);
+    const mobileAudit = await page.evaluate(() => {
+      const header = document.querySelector(".global-header")?.getBoundingClientRect();
+      const context = document.querySelector(".workspace-context")?.getBoundingClientRect();
+      const ribbon = document.querySelector(".mobile-status-ribbon")?.getBoundingClientRect();
+      return {
+        overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+        headerBottom: header?.bottom ?? 0,
+        contextTop: context?.top ?? 0,
+        contextBottom: context?.bottom ?? 0,
+        ribbonTop: ribbon?.top ?? 0,
+      };
+    });
+    expect(mobileAudit.overflow, `${route.path} has mobile page overflow`).toBe(false);
+    expect(mobileAudit.contextTop, `${route.path} mobile workspace context overlaps the global header`).toBeGreaterThanOrEqual(mobileAudit.headerBottom);
+    expect(mobileAudit.ribbonTop, `${route.path} mobile status ribbon overlaps the workspace context`).toBeGreaterThanOrEqual(mobileAudit.contextBottom);
   }
 
   await page.setViewportSize({width: 1440, height: 1000});

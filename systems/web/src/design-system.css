@@ -128,7 +128,7 @@ button, textarea, input, select { font-size: var(--ds-type-control); }
    -------------------------------------------------------------------------- */
 
 .app-shell {
-  grid-template-rows: 52px 36px calc(100vh - 88px);
+  grid-template-rows: 64px 40px calc(100vh - 104px);
 }
 .global-header { padding-inline: var(--ds-space-4); }
 .brand-copy strong { font-size: 15px; }
@@ -177,8 +177,8 @@ button, textarea, input, select { font-size: var(--ds-type-control); }
 .case-object small { font-size: var(--ds-type-meta); line-height: 1.4; }
 
 @media (max-width: 1100px) {
-  .app-shell { grid-template-rows: 64px 36px calc(100vh - 100px); }
-  .evidence-inspector { top: 100px; }
+  .app-shell { grid-template-rows: 64px 40px calc(100vh - 104px); }
+  .evidence-inspector { top: 104px; }
 }
 
 @media (max-width: 760px) {
