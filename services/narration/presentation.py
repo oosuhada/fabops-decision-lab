@@ -1,20 +1,41 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .grounding import reference_allowed
-
 
 PRESENTATION_BLOCK_TYPES = {
     "SummaryCard",
     "Checklist",
     "ComparisonCard",
     "EvidenceTable",
-    "Timeline",
-    "RiskMatrix",
-    "MiniGraph",
-    "ChartSpec",
 }
+
+_BLOCK_KEYS = {
+    "SummaryCard": {"type", "title", "body", "evidence_refs"},
+    "Checklist": {"type", "title", "items", "evidence_refs"},
+    "ComparisonCard": {"type", "title", "recommended_option_id", "options", "evidence_refs"},
+    "EvidenceTable": {"type", "title", "candidate_id", "rows", "evidence_refs"},
+}
+_FORBIDDEN_EXECUTABLE_KEYS = {
+    "html",
+    "javascript",
+    "script",
+    "tool",
+    "command",
+    "cypher",
+    "sql",
+    "shell",
+    "filesystem",
+    "url",
+    "href",
+    "src",
+    "provider",
+    "model",
+    "component",
+}
+_HTML_TAG = re.compile(r"</?[a-zA-Z][^>]*>")
 
 
 def _section_refs(brief: dict[str, Any]) -> list[str]:
@@ -126,6 +147,56 @@ def build_presentation_spec(packet: dict[str, Any], brief: dict[str, Any], inten
     return spec
 
 
+def _walk_presentation(value: Any) -> list[tuple[str | None, Any]]:
+    walked: list[tuple[str | None, Any]] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            walked.append((str(key), child))
+            walked.extend(_walk_presentation(child))
+    elif isinstance(value, list):
+        for child in value:
+            walked.extend(_walk_presentation(child))
+    return walked
+
+
+def _validate_no_executable_content(block: dict[str, Any]) -> None:
+    for key, value in _walk_presentation(block):
+        if key is not None and key.lower() in _FORBIDDEN_EXECUTABLE_KEYS:
+            raise ValueError("presentation block contains a forbidden executable field")
+        if isinstance(value, str) and (_HTML_TAG.search(value) or "javascript:" in value.lower()):
+            raise ValueError("presentation block contains forbidden HTML or JavaScript content")
+
+
+def _validate_comparison_block(packet: dict[str, Any], block: dict[str, Any]) -> None:
+    if block.get("recommended_option_id") != packet["recommended_option_id"]:
+        raise ValueError("presentation changed deterministic recommendation")
+    expected_options = [
+        {
+            "option_id": option["option_id"],
+            "label": option["label"],
+            "stance": option["stance"],
+            "tradeoff": option["tradeoff"],
+            "requires_human_approval": bool(option["requires_human_approval"]),
+        }
+        for option in packet["options"]
+    ]
+    if block.get("options") != expected_options:
+        raise ValueError("presentation changed deterministic decision options")
+
+
+def _validate_checklist_refs(packet: dict[str, Any], block: dict[str, Any], referenced: set[str]) -> None:
+    items = block.get("items")
+    if not isinstance(items, list) or len(items) > 8:
+        raise ValueError("presentation checklist items must be a bounded list")
+    for item in items:
+        if not isinstance(item, dict) or set(item) != {"label", "detail", "evidence_refs"}:
+            raise ValueError("presentation checklist item schema mismatch")
+        item_refs = item.get("evidence_refs")
+        if not isinstance(item_refs, list) or any(not isinstance(reference, str) for reference in item_refs):
+            raise ValueError("presentation checklist evidence_refs must be a list of strings")
+        referenced.update(item_refs)
+
+
 def validate_presentation_spec(packet: dict[str, Any], spec: dict[str, Any]) -> dict[str, Any]:
     if spec.get("schema_version") != "presentation-spec-v1":
         raise ValueError("presentation schema_version mismatch")
@@ -142,12 +213,20 @@ def validate_presentation_spec(packet: dict[str, Any], spec: dict[str, Any]) -> 
     for block in blocks:
         if not isinstance(block, dict) or block.get("type") not in PRESENTATION_BLOCK_TYPES:
             raise ValueError("presentation contains an unknown block type")
+        block_type = str(block["type"])
+        if set(block) != _BLOCK_KEYS[block_type]:
+            raise ValueError("presentation block schema mismatch")
+        if not isinstance(block.get("title"), str) or not block["title"].strip():
+            raise ValueError("presentation block title is required")
         references = block.get("evidence_refs", [])
         if not isinstance(references, list) or any(not isinstance(reference, str) for reference in references):
             raise ValueError("presentation evidence_refs must be a list of strings")
         referenced.update(references)
-        if any(key in block for key in ("html", "javascript", "script", "tool", "command", "cypher", "sql")):
-            raise ValueError("presentation block contains a forbidden executable field")
+        _validate_no_executable_content(block)
+        if block_type == "ComparisonCard":
+            _validate_comparison_block(packet, block)
+        elif block_type == "Checklist":
+            _validate_checklist_refs(packet, block, referenced)
     unknown = {reference for reference in referenced if not reference_allowed(packet, reference)}
     if unknown:
         raise ValueError(f"presentation contains unknown evidence refs: {sorted(unknown)}")

@@ -8,10 +8,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from services.decision import DecisionSupportService
-from services.narration.presentation import PRESENTATION_BLOCK_TYPES, build_presentation_spec, validate_presentation_spec
 from services.narration.demo import DemoSessionPolicy
 from services.narration.governance import ProviderBlockedError, ProviderGovernor, ProviderPolicy
 from services.narration.grounding import allowed_evidence_refs
+from services.narration.presentation import PRESENTATION_BLOCK_TYPES, build_presentation_spec, validate_presentation_spec
 from services.narration.service import NarrationService
 from systems.api.app import app
 from systems.api.runtime import build_local_runtime
@@ -109,7 +109,34 @@ def test_presentation_spec_rejects_executable_fields_and_unknown_blocks() -> Non
         validate_presentation_spec(packet, spec)
         raise AssertionError("executable presentation field was accepted")
     except ValueError as exc:
-        assert "forbidden executable field" in str(exc)
+        assert "schema mismatch" in str(exc) or "forbidden" in str(exc)
+
+    spec = build_presentation_spec(packet, brief, "manager_summary")
+    spec["blocks"][0]["type"] = "ArbitraryHtml"
+    with pytest.raises(ValueError, match="unknown block type"):
+        validate_presentation_spec(packet, spec)
+
+
+def test_presentation_spec_rejects_html_unknown_evidence_and_changed_recommendation() -> None:
+    runtime = build_local_runtime()
+    packet = DecisionSupportService(runtime).packet(runtime.case_repository.list_cases()[0]["case_id"])
+    brief = NarrationService([]).generate(packet, "manager", intent="manager_summary")
+
+    html_spec = build_presentation_spec(packet, brief, "manager_summary")
+    html_spec["blocks"][0]["body"] = "<div>untrusted html</div>"
+    with pytest.raises(ValueError, match="forbidden HTML"):
+        validate_presentation_spec(packet, html_spec)
+
+    evidence_spec = build_presentation_spec(packet, brief, "manager_summary")
+    evidence_spec["blocks"][0]["evidence_refs"] = ["unknown.presentation.evidence"]
+    with pytest.raises(ValueError, match="unknown evidence refs"):
+        validate_presentation_spec(packet, evidence_spec)
+
+    recommendation_spec = build_presentation_spec(packet, brief, "manager_summary")
+    comparison = next(block for block in recommendation_spec["blocks"] if block["type"] == "ComparisonCard")
+    comparison["recommended_option_id"] = "not-allowed"
+    with pytest.raises(ValueError, match="changed deterministic recommendation"):
+        validate_presentation_spec(packet, recommendation_spec)
 
 
 def test_rca_score_explanation_reconstructs_the_actual_deterministic_ranker_score() -> None:
