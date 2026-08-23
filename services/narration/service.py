@@ -13,6 +13,7 @@ from typing import Any
 from .demo import DEMO_INTENTS
 from .governance import ProviderBlockedError, ProviderGovernor, governor_from_env
 from .grounding import allowed_evidence_refs, reference_allowed
+from .presentation import build_presentation_spec
 from .providers import NarrationProviderPort, providers_from_env
 
 AUDIENCES = {"manager", "engineer"}
@@ -278,7 +279,9 @@ class NarrationService:
             with self._stats_lock:
                 self._cache_hits += 1
                 self._last_narration_source = "cached"
-            return {**cached[1], "cache_hit": True}
+            payload = {**cached[1], "cache_hit": True}
+            payload["presentation"] = build_presentation_spec(packet, payload, intent)
+            return payload
         payload = _deterministic_brief(
             packet,
             audience,
@@ -288,6 +291,7 @@ class NarrationService:
         )
         payload["cache_hit"] = False
         payload["intent"] = intent
+        payload["presentation"] = build_presentation_spec(packet, payload, intent)
         return payload
 
     def generate(self, packet: dict[str, Any], audience: str, *, intent: str = "decision_brief") -> dict[str, Any]:
@@ -301,6 +305,7 @@ class NarrationService:
         cached = self._cache.get(cache_key)
         if cached is not None and now - cached[0] <= self.cache_ttl_seconds:
             payload = {**cached[1], "cache_hit": True}
+            payload["presentation"] = build_presentation_spec(packet, payload, intent)
             self._record_live_result(payload, (time.perf_counter() - started) * 1000)
             return payload
         failures: list[str] = []
@@ -333,6 +338,7 @@ class NarrationService:
                         "latency_ms": round((time.perf_counter() - started) * 1000, 3),
                     }
                 )
+                payload["presentation"] = build_presentation_spec(packet, payload, intent)
                 self._cache[cache_key] = (now, payload)
                 self._record_live_result(payload, float(payload["latency_ms"]))
                 return payload
@@ -348,6 +354,7 @@ class NarrationService:
         payload["cache_hit"] = False
         payload["intent"] = intent
         payload["latency_ms"] = round((time.perf_counter() - started) * 1000, 3)
+        payload["presentation"] = build_presentation_spec(packet, payload, intent)
         self._cache[cache_key] = (now, payload)
         self._record_live_result(payload, float(payload["latency_ms"]))
         return payload

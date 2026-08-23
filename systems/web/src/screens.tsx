@@ -2,6 +2,7 @@ import {useEffect, useMemo, useState} from "react";
 import {ClassificationBadge, MetricStrip, ProjectionBadge, ProvenanceBadge, WorkbenchState} from "./components";
 import {EvidenceGraphExplorer} from "./features/evidence/EvidenceGraphExplorer";
 import {DecisionBoundaryPanel, RcaExplainability} from "./features/explainability/RcaExplainability";
+import {PresentationRenderer} from "./features/narration/PresentationRenderer";
 import type {AdvisoryResponse, CaseDetailResponse, CaseReplayTraceResponse, DecisionBriefResponse, DecisionCockpitResponse, DecisionPacket, EvaluationResponse, FabCase, MeasurementPoint, NarrationIntent, NarrationStatusResponse, OverviewResponse, ReplayResponse} from "./types";
 
 function priorityClass(band: string) {
@@ -490,6 +491,7 @@ export function DecisionApproval({detail, packet, advisory, busy, feedback, brie
         <div className="brief-sections">{brief.brief.sections.map((section) => <article key={section.section_id}>
           <strong>{section.title}</strong><p>{section.body}</p><small>Evidence: {section.evidence_refs.join(" · ")}</small>
         </article>)}</div>
+        {brief.brief.presentation ? <PresentationRenderer spec={brief.brief.presentation} /> : null}
         <div className="brief-meta"><span>recommended option: {brief.brief.recommended_option_id}</span><span>{brief.brief.citations.length} evidence refs</span>{brief.brief.fallback_reason ? <span>fallback: {brief.brief.fallback_reason}</span> : null}</div>
         <div className="brief-meta"><span>AI wording does not change the deterministic recommendation.</span>{narrationStatus ? <><span>local: {narrationStatus.provider_health.local_llm}</span><span>vertex: {narrationStatus.provider_health.vertex}</span></> : null}</div>
       </> : <WorkbenchState kind="loading" title="Building decision wording" detail="The deterministic packet is fixed first; an available LLM may only rewrite grounded wording." />}
