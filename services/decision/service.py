@@ -5,7 +5,6 @@ from typing import Any
 
 from services.rca.cqrs import RankRootCausesQuery, TraceAffectedLotsQuery
 
-
 _RCA_COMPONENT_ORDER = (
     "temporal_proximity",
     "affected_scope_overlap",
