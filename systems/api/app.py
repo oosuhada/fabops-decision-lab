@@ -26,9 +26,21 @@ app = FastAPI(
     version=RELEASE_VERSION,
     description="Deterministic local portfolio API. It does not control real fab equipment.",
 )
+
+
+def _cors_origins_from_env() -> list[str]:
+    origins = ["http://127.0.0.1:5173", "http://localhost:5173"]
+    configured = os.getenv("FABOPS_CORS_ORIGINS", "").strip()
+    for origin in configured.split(",") if configured else []:
+        normalized = origin.strip().rstrip("/")
+        if normalized and normalized not in origins:
+            origins.append(normalized)
+    return origins
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
+    allow_origins=_cors_origins_from_env(),
     allow_credentials=False,
     allow_methods=["GET", "POST"],
     allow_headers=[
