@@ -159,7 +159,9 @@ button, textarea, input, select { font-size: var(--ds-type-control); }
 .workspace-context__priority--verify_data { border-color: rgba(177, 133, 53, .38); color: #85651f; background: rgba(177, 133, 53, .08); }
 .left-rail,
 .work-surface,
-.evidence-inspector { grid-row: 3; }
+.evidence-inspector,
+.evidence-inspector-slot,
+.workbench-resize-handle { grid-row: 3; }
 
 .nav-heading { padding: var(--ds-space-5) var(--ds-space-4) var(--ds-space-4); }
 .nav-heading strong { font-size: var(--ds-type-caption); }
