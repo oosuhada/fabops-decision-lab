@@ -170,18 +170,43 @@ class VertexAINarrationProvider:
 
     def generate_json(self, system_prompt: str, payload: dict[str, Any]) -> dict[str, Any]:
         hostname = "aiplatform.googleapis.com" if self.location == "global" else f"{self.location}-aiplatform.googleapis.com"
-        provider = OpenAICompatibleNarrationProvider(
-            base_url=(
-                f"https://{hostname}/v1/projects/{self.project_id}/locations/"
-                f"{self.location}/endpoints/openapi"
-            ),
-            model=f"google/{self.model}",
-            bearer_token=self._access_token(),
-            timeout_seconds=self.timeout_seconds,
-            max_output_tokens=self.max_output_tokens,
-            name=self.name,
+        url = (
+            f"https://{hostname}/v1/projects/{self.project_id}/locations/{self.location}/"
+            f"publishers/google/models/{self.model}:generateContent"
         )
-        return provider.generate_json(system_prompt, payload)
+        body = json.dumps(
+            {
+                "systemInstruction": {"parts": [{"text": system_prompt}]},
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [{"text": json.dumps(payload, ensure_ascii=False, sort_keys=True)}],
+                    }
+                ],
+                "generationConfig": {
+                    "temperature": 0.1,
+                    "maxOutputTokens": self.max_output_tokens,
+                    "responseMimeType": "application/json",
+                },
+            },
+            ensure_ascii=False,
+        ).encode("utf-8")
+        request = urllib.request.Request(
+            url,
+            data=body,
+            headers={
+                "Authorization": f"Bearer {self._access_token()}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+            result = json.load(response)
+        candidate = result["candidates"][0]
+        if candidate.get("finishReason") == "MAX_TOKENS":
+            raise RuntimeError("provider output token limit reached")
+        content = candidate["content"]["parts"][0]["text"]
+        return _extract_json(str(content))
 
 
 def providers_from_env() -> list[NarrationProviderPort]:
