@@ -2,15 +2,31 @@
 
 ## Current preview access
 
-Release `0.6.0` is available at `https://fabops-preview.oosu.dev` as a **public
-read-only portfolio preview**. Cloudflare Tunnel routes that hostname to a
-dedicated localhost-only nginx preview proxy on the Mac mini. The proxy forwards
-only `GET` and `HEAD` to the existing Web origin at `127.0.0.1:8220`; other HTTP
-methods are rejected with `405` before they can reach the deployed application.
+`https://fabops-preview.oosu.dev` currently exposes the **v0.7 decision-cockpit
+candidate UI** as a public read-only portfolio preview. This is not a promoted
+`0.7.0` release: the accepted authoritative base remains release `0.6.0` while
+M8 continues. The candidate UI therefore labels itself `0.7 CANDIDATE` and
+`BASE 0.6.0` rather than presenting an unverified release as complete.
+
+Cloudflare Tunnel routes the hostname to a dedicated localhost-only nginx
+preview proxy on the Mac mini. The proxy forwards only `GET` and `HEAD` to an
+isolated candidate Web origin at `127.0.0.1:8250`; other HTTP methods are
+rejected with `405` before they can reach the candidate application.
+
+The candidate composition is separate from the active M8 application:
+
+- candidate API: `127.0.0.1:8240`, local deterministic runtime,
+- candidate Web: `127.0.0.1:8250`,
+- candidate Compose project: `fabops-decision-lab-preview-v07`,
+- current M8 API/Web remain on `8210`/`8220`,
+- the current M8 PostgreSQL, Redpanda and Neo4j containers are not shared with
+  the candidate runtime.
 
 The active M8 application images, API/Web containers, database schema and demo
-database were not rebuilt, redeployed, restarted or reset to create this preview.
-PostgreSQL, Redpanda and Neo4j remain private to the FabOps Compose network.
+database are not rebuilt, redeployed, restarted or reset by candidate-preview
+updates. PostgreSQL, Redpanda and Neo4j remain private to the original FabOps
+Compose network. Public narration is deterministic fallback in this candidate
+so anonymous GET traffic cannot consume local-LLM capacity or Vertex budget.
 
 The current UI still renders its workflow controls. In the public read-only
 preview those controls are intentionally non-functional because their POST

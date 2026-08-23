@@ -1,0 +1,66 @@
+{
+  "schema_version": "fabops-public-candidate-preview-v1",
+  "observed_at": "2026-08-23T10:11:38+09:00",
+  "public_url": "https://fabops-preview.oosu.dev",
+  "access_mode": "public-read-only",
+  "candidate": {
+    "label": "0.7 CANDIDATE",
+    "git_sha": "c05b2f2d67656df40d005b387eefde84680eb5f5",
+    "compose_project": "fabops-decision-lab-preview-v07",
+    "api_bind": "127.0.0.1:8240",
+    "web_bind": "127.0.0.1:8250",
+    "runtime_mode": "local",
+    "narration_mode": "deterministic_fallback",
+    "api_image": "sha256:1b9b66d47268f352cca2a12fc3b1627d5570e4abbf4bd98aaaf800b9aee7e44e",
+    "web_image": "sha256:8f8b53ea8d66b1052ada8e0e9f45d2909cdd37d267f46f762a69b9c567e926f7"
+  },
+  "authoritative_base": {
+    "release_version": "0.6.0",
+    "release_hash": "ab8b20a696b9b1996495f23a3e413cc33a67b6861efa184c64742e0f310c6326",
+    "deployed_git_sha": "2a3df187294706afb397f0cf8072c0f3ddcc2f23",
+    "m8_modified": false
+  },
+  "public_verification": {
+    "root_http_status": 200,
+    "decision_cockpit_http_status": 200,
+    "anonymous_mutation_http_status": 405,
+    "preview_mode_header": "read-only",
+    "preview_candidate_header": "v0.7",
+    "decision_packet_count": 7,
+    "ground_truth_present": false,
+    "desktop_chromium_verified": true,
+    "mobile_390x844_verified": true
+  },
+  "m8_continuity_after_switch": {
+    "soak_samples_observed": 130,
+    "collector_ok": true,
+    "api_ready": true,
+    "web_alive": true,
+    "application_restart_counts": {
+      "api": 0,
+      "web": 0,
+      "postgres": 0,
+      "redpanda": 0,
+      "neo4j": 0
+    },
+    "application_health": {
+      "api": "healthy",
+      "web": "healthy",
+      "postgres": "healthy",
+      "redpanda": "healthy",
+      "neo4j": "healthy"
+    },
+    "ontology_oosu_dev_http_status": 200
+  },
+  "rollback": {
+    "preview_proxy_backup": "~/Services/fabops-decision-lab-data/public-preview/nginx.conf.pre-v07-20260823-100827",
+    "previous_web_origin": "127.0.0.1:8220",
+    "candidate_web_origin": "127.0.0.1:8250"
+  },
+  "claim_boundaries": [
+    "The candidate UI is not the promoted v0.7 release.",
+    "All displayed process data is synthetic and decisions are inferred or computed from synthetic evidence.",
+    "The public preview does not permit anonymous workflow mutation.",
+    "The public preview does not expose equipment control, PostgreSQL, Redpanda, Neo4j or LLM provider endpoints."
+  ]
+}
