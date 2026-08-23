@@ -1794,3 +1794,48 @@ body::before {
   .case-comparison-hero { padding: 15px; }
 }
 
+/* Shift handoff: current deterministic snapshot, never fabricated history. */
+.shift-handoff { gap: 14px; }
+.shift-handoff-hero { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 20px; align-items: end; border: 1px solid #d3dfe6; border-radius: 14px; padding: 20px; background: linear-gradient(145deg, #f9fcfd, #edf5f7); box-shadow: 0 5px 18px rgba(31,55,71,.045); }
+.shift-handoff-hero h1 { margin: 4px 0 8px; max-width: 820px; font-size: clamp(1.55rem,2.4vw,2.4rem); line-height: 1.08; }
+.shift-handoff-hero p { margin: 0; max-width: 860px; color: #667c8b; line-height: 1.55; }
+.shift-handoff-source { display: grid; gap: 3px; min-width: 250px; border-left: 2px solid #75aebe; padding-left: 13px; }
+.shift-handoff-source span { color: #718795; font-size: 8px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+.shift-handoff-source strong { color: #1c3c50; font-size: 11px; font-variant-numeric: tabular-nums; }
+.shift-handoff-source small { color: #718795; font-size: 8px; }
+.shift-handoff-summary { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); overflow: hidden; border: 1px solid #d6e0e6; border-radius: 11px; background: #fff; }
+.shift-handoff-summary > div { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; min-height: 82px; align-content: center; padding: 11px 13px; border-right: 1px solid #e0e7eb; }
+.shift-handoff-summary > div:last-child { border-right: 0; }
+.shift-handoff-summary span,.shift-handoff-summary small { color: #748995; font-size: 8px; }
+.shift-handoff-summary strong { grid-row: 1 / span 2; grid-column: 2; color: #17394e; font-size: 24px; font-variant-numeric: tabular-nums; }
+.shift-handoff-alert { border-left: 4px solid #c48228; padding: 13px 15px; background: #fff9ed; }
+.shift-handoff-alert p { margin: 4px 0 0; color: #7b6744; font-size: 10px; }
+.shift-handoff-list > ol { margin: 0; padding: 0; list-style: none; }
+.shift-handoff-list > ol > li { display: grid; grid-template-columns: 92px minmax(240px,1.35fr) minmax(220px,1fr) minmax(220px,1fr); gap: 12px; align-items: center; min-height: 92px; padding: 12px 14px; border-top: 1px solid #e1e8ec; }
+.shift-handoff-list > ol > li:first-child { border-top: 0; }
+.shift-handoff-rank,.shift-handoff-decision,.shift-handoff-evidence,.shift-handoff-next { display: grid; gap: 3px; min-width: 0; }
+.shift-handoff-rank span { color: #6c8290; font-size: 20px; font-weight: 850; }
+.shift-handoff-rank b { width: max-content; border: 1px solid #d6b2b5; border-radius: 999px; padding: 3px 7px; background: #fff2f3; color: #a7474d; font-size: 7px; }
+.shift-handoff-decision span,.shift-handoff-evidence span,.shift-handoff-next span { color: #718693; font-size: 8px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.shift-handoff-decision strong,.shift-handoff-evidence strong,.shift-handoff-next strong { overflow: hidden; color: #203e51; font-size: 11px; line-height: 1.35; text-overflow: ellipsis; }
+.shift-handoff-decision small,.shift-handoff-evidence small,.shift-handoff-next small { color: #738794; font-size: 8px; line-height: 1.4; }
+.shift-handoff-boundaries { display: grid; gap: 5px; border: 1px dashed #cbd8df; border-radius: 9px; padding: 11px 13px; background: rgba(249,251,252,.72); }
+.shift-handoff-boundaries p { margin: 0; color: #677d8a; font-size: 9px; }
+
+@media (max-width: 1180px) {
+  .shift-handoff-hero { grid-template-columns: 1fr; }
+  .shift-handoff-summary { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .shift-handoff-summary > div:nth-child(3) { border-right: 0; }
+  .shift-handoff-list > ol > li { grid-template-columns: 70px minmax(0,1.3fr) minmax(0,1fr); }
+  .shift-handoff-next { grid-column: 2 / -1; }
+}
+
+@media (max-width: 760px) {
+  .shift-handoff-hero { padding: 15px; }
+  .shift-handoff-source { min-width: 0; }
+  .shift-handoff-summary { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .shift-handoff-summary > div { border-bottom: 1px solid #e0e7eb; }
+  .shift-handoff-list > ol > li { grid-template-columns: 54px minmax(0,1fr); }
+  .shift-handoff-evidence,.shift-handoff-next { grid-column: 2; }
+}
+
