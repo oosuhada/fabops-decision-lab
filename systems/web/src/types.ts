@@ -1,4 +1,4 @@
-export type ScreenId = "cockpit" | "overview" | "case" | "graph" | "decision" | "evaluation" | "replay";
+export type ScreenId = "cockpit" | "overview" | "case" | "graph" | "analysis" | "decision" | "evaluation" | "replay";
 
 export interface ProjectionStatus {
   projection_version: string;
