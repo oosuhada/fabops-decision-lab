@@ -2,7 +2,7 @@ import {useCallback, useEffect, useMemo, useState} from "react";
 import {api} from "./api";
 import {EvidenceInspector, WorkbenchState} from "./components";
 import {DecisionApproval, DecisionCockpit, EvaluationLab, EvidenceGraph, ExcursionCase, OperationsOverview, ReplayOperations, caseById} from "./screens";
-import type {AdvisoryResponse, CaseDetailResponse, DecisionBriefResponse, DecisionCockpitResponse, EvaluationResponse, NarrationIntent, OverviewResponse, ReplayResponse, ScreenId} from "./types";
+import type {AdvisoryResponse, CaseDetailResponse, DecisionBriefResponse, DecisionCockpitResponse, EvaluationResponse, NarrationIntent, NarrationStatusResponse, OverviewResponse, ReplayResponse, ScreenId} from "./types";
 
 const navigation: Array<{id: ScreenId; label: string; short: string; group: "Decide" | "Investigate" | "Trust"}> = [
   {id: "cockpit", label: "Decision Cockpit", short: "01", group: "Decide"},
@@ -28,6 +28,7 @@ export default function App() {
   const [demoSessionToken, setDemoSessionToken] = useState<string | null>(null);
   const [narrationBusy, setNarrationBusy] = useState(false);
   const [narrationFeedback, setNarrationFeedback] = useState<string | null>(null);
+  const [narrationStatus, setNarrationStatus] = useState<NarrationStatusResponse | null>(null);
   const [selectedStep, setSelectedStep] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -63,6 +64,7 @@ export default function App() {
   }, []);
 
   useEffect(() => { void loadRoot(); }, [loadRoot]);
+  useEffect(() => { void api.narrationStatus().then(setNarrationStatus).catch(() => setNarrationStatus(null)); }, []);
   useEffect(() => { if (selectedCaseId) void loadCase(selectedCaseId); }, [loadCase, selectedCaseId]);
   useEffect(() => {
     if (!selectedCaseId || screen !== "decision") return;
@@ -118,6 +120,7 @@ export default function App() {
         const generated = await api.demoNarration(token, selectedCaseId, briefAudience, intent);
         setDecisionBrief(generated);
         setNarrationFeedback(`Bounded AI demo · ${generated.brief.provider} · ${generated.brief.mode}`);
+        void api.narrationStatus().then(setNarrationStatus).catch(() => undefined);
       } catch (reason) {
         const status = typeof reason === "object" && reason !== null && "status" in reason ? Number((reason as {status: number}).status) : 0;
         if (status !== 401) throw reason;
@@ -126,6 +129,7 @@ export default function App() {
         const generated = await api.demoNarration(session.token, selectedCaseId, briefAudience, intent);
         setDecisionBrief(generated);
         setNarrationFeedback(`Bounded AI demo · ${generated.brief.provider} · ${generated.brief.mode}`);
+        void api.narrationStatus().then(setNarrationStatus).catch(() => undefined);
       }
     } catch (reason) {
       const status = typeof reason === "object" && reason !== null && "status" in reason ? Number((reason as {status: number}).status) : 0;
@@ -161,6 +165,7 @@ export default function App() {
     briefAudience={briefAudience}
     narrationBusy={narrationBusy}
     narrationFeedback={narrationFeedback}
+    narrationStatus={narrationStatus}
     onBriefAudience={setBriefAudience}
     onGenerateBrief={generateDemoBrief}
     onRequestEvidence={(reason) => mutate(() => api.requestEvidence(detail.case.case_id, reason))}

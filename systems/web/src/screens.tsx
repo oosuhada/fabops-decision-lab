@@ -1,6 +1,6 @@
 import {useMemo, useState} from "react";
 import {ClassificationBadge, MetricStrip, ProjectionBadge, ProvenanceBadge, WorkbenchState} from "./components";
-import type {AdvisoryResponse, CaseDetailResponse, DecisionBriefResponse, DecisionCockpitResponse, DecisionPacket, EvaluationResponse, FabCase, NarrationIntent, OverviewResponse, ReplayResponse} from "./types";
+import type {AdvisoryResponse, CaseDetailResponse, DecisionBriefResponse, DecisionCockpitResponse, DecisionPacket, EvaluationResponse, FabCase, NarrationIntent, NarrationStatusResponse, OverviewResponse, ReplayResponse} from "./types";
 
 function priorityClass(band: string) {
   if (band === "HIGH") return "decision-priority is-high";
@@ -273,7 +273,7 @@ export function EvidenceGraph({detail, selectedStep, onSelectStep}: {detail: Cas
   </div>;
 }
 
-export function DecisionApproval({detail, packet, advisory, busy, feedback, brief, briefAudience, narrationBusy, narrationFeedback, onBriefAudience, onGenerateBrief, onRequestEvidence, onPropose, onApprove, onReject}: {
+export function DecisionApproval({detail, packet, advisory, busy, feedback, brief, briefAudience, narrationBusy, narrationFeedback, narrationStatus, onBriefAudience, onGenerateBrief, onRequestEvidence, onPropose, onApprove, onReject}: {
   detail: CaseDetailResponse;
   packet: DecisionPacket | null;
   advisory: AdvisoryResponse | null;
@@ -283,6 +283,7 @@ export function DecisionApproval({detail, packet, advisory, busy, feedback, brie
   briefAudience: "manager" | "engineer";
   narrationBusy: boolean;
   narrationFeedback: string | null;
+  narrationStatus: NarrationStatusResponse | null;
   onBriefAudience: (audience: "manager" | "engineer") => void;
   onGenerateBrief: (intent: NarrationIntent) => Promise<void>;
   onRequestEvidence: (reason: string) => Promise<void>;
@@ -292,6 +293,7 @@ export function DecisionApproval({detail, packet, advisory, busy, feedback, brie
 }) {
   const [reason, setReason] = useState("Collect confirming metrology before any containment decision.");
   const recommended = packet?.options.find((option) => option.option_id === packet.recommended_option_id);
+  const narrationSource = !brief ? "DETERMINISTIC FALLBACK" : brief.brief.cache_hit ? "CACHED" : brief.brief.provider === "vertex-ai-gemini" ? "VERTEX AI" : brief.brief.provider === "local-qwen" || brief.brief.provider === "local-openai-compatible" ? "LOCAL QWEN" : brief.brief.mode === "deterministic_fallback" ? "DETERMINISTIC FALLBACK" : brief.brief.provider.toUpperCase();
   return <div className="screen-stack">
     <section className="decision-header">
       <div>
@@ -323,9 +325,9 @@ export function DecisionApproval({detail, packet, advisory, busy, feedback, brie
         <div className="brief-summary-grid">
           <div className="brief-summary-main"><span>Executive summary</span><p>{brief.brief.summary}</p></div>
           <div className="brief-provider-card">
-            <span>Narration path</span>
-            <strong>{brief.brief.provider}</strong>
-            <small>{brief.brief.mode}{brief.brief.cache_hit ? " · cached" : " · fresh"}</small>
+            <span>Narration source</span>
+            <strong>{narrationSource}</strong>
+            <small>{brief.brief.cache_hit ? "cache hit" : brief.brief.mode}{brief.brief.latency_ms !== undefined ? ` · ${Math.round(brief.brief.latency_ms)} ms` : ""}</small>
             <b>Decision ID preserved</b>
           </div>
         </div>
@@ -333,6 +335,7 @@ export function DecisionApproval({detail, packet, advisory, busy, feedback, brie
           <strong>{section.title}</strong><p>{section.body}</p><small>Evidence: {section.evidence_refs.join(" · ")}</small>
         </article>)}</div>
         <div className="brief-meta"><span>recommended option: {brief.brief.recommended_option_id}</span><span>{brief.brief.citations.length} evidence refs</span>{brief.brief.fallback_reason ? <span>fallback: {brief.brief.fallback_reason}</span> : null}</div>
+        <div className="brief-meta"><span>AI wording does not change the deterministic recommendation.</span>{narrationStatus ? <><span>local: {narrationStatus.provider_health.local_llm}</span><span>vertex: {narrationStatus.provider_health.vertex}</span></> : null}</div>
       </> : <WorkbenchState kind="loading" title="Building decision wording" detail="The deterministic packet is fixed first; an available LLM may only rewrite grounded wording." />}
       <div className="brief-live-controls">
         <div>

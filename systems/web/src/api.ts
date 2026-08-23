@@ -1,4 +1,4 @@
-import type {AdvisoryResponse, CaseDetailResponse, DecisionBriefResponse, DecisionCockpitResponse, DemoSessionResponse, EvaluationResponse, NarrationIntent, OverviewResponse, ReplayResponse} from "./types";
+import type {AdvisoryResponse, CaseDetailResponse, DecisionBriefResponse, DecisionCockpitResponse, DemoSessionResponse, EvaluationResponse, NarrationIntent, NarrationStatusResponse, OverviewResponse, ReplayResponse} from "./types";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
 
@@ -17,6 +17,7 @@ export const api = {
   decisionCockpit: () => request<DecisionCockpitResponse>("/api/decision-cockpit"),
   decisionBrief: (caseId: string, audience: "manager" | "engineer") => request<DecisionBriefResponse>(`/api/cases/${caseId}/decision-brief?audience=${audience}`),
   demoSession: () => request<DemoSessionResponse>("/api/demo/session"),
+  narrationStatus: () => request<NarrationStatusResponse>("/api/narration/status"),
   demoNarration: (sessionToken: string, caseId: string, audience: "manager" | "engineer", intent: NarrationIntent) => request<DecisionBriefResponse>("/api/demo/narration", {
     method: "POST",
     headers: {"Content-Type": "application/json", "X-FabOps-Demo-Session": sessionToken},

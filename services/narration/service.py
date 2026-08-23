@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import threading
 import time
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -128,6 +131,15 @@ class NarrationService:
         if self.governor is None:
             self.governor = governor_from_env([provider.name for provider in self.providers or []])
         self._cache: dict[str, tuple[float, dict[str, Any]]] = {}
+        self._stats_lock = threading.Lock()
+        self._cache_only_reads = 0
+        self._live_generation_requests = 0
+        self._cache_hits = 0
+        self._fallback_count = 0
+        self._validation_rejections = 0
+        self._provider_selections: dict[str, int] = {}
+        self._latencies_ms: deque[float] = deque(maxlen=500)
+        self._last_narration_source = "deterministic_fallback"
 
     @staticmethod
     def _cache_key(packet: dict[str, Any], audience: str, intent: str = "decision_brief") -> str:
@@ -140,14 +152,78 @@ class NarrationService:
         return hashlib.sha256(payload).hexdigest()
 
     def status(self) -> dict[str, Any]:
+        governance = self.governor.status() if self.governor else {}
+        configured = {provider.name for provider in self.providers or []}
+        local_governance = governance.get("local-qwen", {})
+        vertex_governance = governance.get("vertex-ai-gemini", {})
+        local_state = "offline"
+        if "local-qwen" in configured:
+            local_state = "circuit_open" if local_governance.get("state") == "circuit_open" else "degraded" if local_governance.get("state") == "degraded" else "healthy"
+        vertex_project = os.getenv("FABOPS_VERTEX_PROJECT", "").strip()
+        vertex_enabled = os.getenv("FABOPS_VERTEX_ENABLED", "true").strip().lower() in {"1", "true", "yes"}
+        narration_mode = os.getenv("FABOPS_NARRATION_MODE", "deterministic").strip().lower()
+        if "vertex-ai-gemini" in configured:
+            if vertex_governance.get("state") == "circuit_open":
+                vertex_state = "circuit_open"
+            elif str(vertex_governance.get("last_block_reason", "")).startswith("daily_"):
+                vertex_state = "budget_exhausted"
+            else:
+                vertex_state = "healthy"
+        elif not vertex_project:
+            vertex_state = "unconfigured"
+        elif not vertex_enabled or narration_mode not in {"auto", "vertex"}:
+            vertex_state = "disabled"
+        else:
+            vertex_state = "unconfigured"
+        with self._stats_lock:
+            latencies = sorted(self._latencies_ms)
+            metrics = {
+                "cache_only_reads": self._cache_only_reads,
+                "live_generation_requests": self._live_generation_requests,
+                "cache_hits": self._cache_hits,
+                "fallback_count": self._fallback_count,
+                "validation_rejections": self._validation_rejections,
+                "provider_selections": dict(sorted(self._provider_selections.items())),
+                "generation_latency_ms": {
+                    "samples": len(latencies),
+                    "p50": self._percentile(latencies, 0.50),
+                    "p95": self._percentile(latencies, 0.95),
+                    "p99": self._percentile(latencies, 0.99),
+                },
+            }
+            last_source = self._last_narration_source
         return {
             "configured_providers": [provider.name for provider in self.providers or []],
             "fallback": "deterministic",
             "cache_ttl_seconds": self.cache_ttl_seconds,
             "cache_entries": len(self._cache),
             "authority": "wording-only",
-            "provider_governance": self.governor.status() if self.governor else {},
+            "provider_health": {"local_llm": local_state, "vertex": vertex_state},
+            "narration": {"last_source": last_source},
+            "metrics": metrics,
+            "provider_governance": governance,
         }
+
+    @staticmethod
+    def _percentile(values: list[float], fraction: float) -> float | None:
+        if not values:
+            return None
+        index = min(len(values) - 1, max(0, round((len(values) - 1) * fraction)))
+        return round(values[index], 3)
+
+    def _record_live_result(self, payload: dict[str, Any], elapsed_ms: float) -> None:
+        source = "cached" if payload.get("cache_hit") else "deterministic_fallback" if payload.get("mode") == "deterministic_fallback" else "vertex" if payload.get("provider") == "vertex-ai-gemini" else "local"
+        with self._stats_lock:
+            self._live_generation_requests += 1
+            self._latencies_ms.append(elapsed_ms)
+            if payload.get("cache_hit"):
+                self._cache_hits += 1
+            elif payload.get("mode") == "deterministic_fallback":
+                self._fallback_count += 1
+            else:
+                provider = str(payload.get("provider") or "unknown")
+                self._provider_selections[provider] = self._provider_selections.get(provider, 0) + 1
+            self._last_narration_source = source
 
     @staticmethod
     def _validate(packet: dict[str, Any], audience: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -186,10 +262,15 @@ class NarrationService:
     def cached_or_deterministic(self, packet: dict[str, Any], audience: str, *, intent: str = "decision_brief") -> dict[str, Any]:
         if audience not in AUDIENCES:
             raise ValueError(f"unsupported audience: {audience}")
+        with self._stats_lock:
+            self._cache_only_reads += 1
         cache_key = self._cache_key(packet, audience, intent)
         now = time.monotonic()
         cached = self._cache.get(cache_key)
         if cached is not None and now - cached[0] <= self.cache_ttl_seconds:
+            with self._stats_lock:
+                self._cache_hits += 1
+                self._last_narration_source = "cached"
             return {**cached[1], "cache_hit": True}
         payload = _deterministic_brief(
             packet,
@@ -207,11 +288,14 @@ class NarrationService:
             raise ValueError(f"unsupported audience: {audience}")
         if intent != "decision_brief" and intent not in DEMO_INTENTS:
             raise ValueError(f"unsupported narration intent: {intent}")
+        started = time.perf_counter()
         cache_key = self._cache_key(packet, audience, intent)
         now = time.monotonic()
         cached = self._cache.get(cache_key)
         if cached is not None and now - cached[0] <= self.cache_ttl_seconds:
-            return {**cached[1], "cache_hit": True}
+            payload = {**cached[1], "cache_hit": True}
+            self._record_live_result(payload, (time.perf_counter() - started) * 1000)
+            return payload
         failures: list[str] = []
         prompt_payload = {"decision_packet": packet, "audience": audience, "intent": intent}
         estimated_input_tokens = self.governor.estimate_tokens(prompt_payload) if self.governor else 1
@@ -234,17 +318,24 @@ class NarrationService:
                         "generated_at": datetime.now(timezone.utc).isoformat(),
                         "cache_hit": False,
                         "intent": intent,
+                        "latency_ms": round((time.perf_counter() - started) * 1000, 3),
                     }
                 )
                 self._cache[cache_key] = (now, payload)
+                self._record_live_result(payload, float(payload["latency_ms"]))
                 return payload
             except ProviderBlockedError as exc:
                 failures.append(f"{provider.name}:{exc.reason}")
             except Exception as exc:  # noqa: BLE001 - provider/schema/grounding failures fail closed to deterministic wording
+                if isinstance(exc, ValueError):
+                    with self._stats_lock:
+                        self._validation_rejections += 1
                 failures.append(f"{provider.name}:{type(exc).__name__}")
         reason = ",".join(failures) if failures else "llm_not_configured"
         payload = _deterministic_brief(packet, audience, mode="deterministic_fallback", provider="deterministic", fallback_reason=reason)
         payload["cache_hit"] = False
         payload["intent"] = intent
+        payload["latency_ms"] = round((time.perf_counter() - started) * 1000, 3)
         self._cache[cache_key] = (now, payload)
+        self._record_live_result(payload, float(payload["latency_ms"]))
         return payload

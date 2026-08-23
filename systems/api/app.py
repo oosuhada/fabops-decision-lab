@@ -11,7 +11,7 @@ from typing import Annotated, Any, Iterator, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from services.decision import DecisionSupportService
 from services.narration import NarrationService
@@ -122,12 +122,16 @@ class CloseRequest(BaseModel):
 
 
 class DemoNarrationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     case_id: str = Field(min_length=3, max_length=120)
     audience: Literal["manager", "engineer"] = "manager"
     intent: Literal["manager_summary", "engineer_checklist", "tradeoff_compare", "counter_evidence"] = "manager_summary"
 
 
 class NarrationPrecomputeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     case_ids: list[str] | None = None
     audiences: list[Literal["manager", "engineer"]] = Field(default_factory=lambda: ["manager", "engineer"], min_length=1, max_length=2)
 
@@ -236,9 +240,7 @@ def narration_status() -> dict[str, Any]:
     return {
         "source": "runtime-configuration",
         **get_narration_service().status(),
-        "public_get_mode": "cache_only"
-        if os.getenv("FABOPS_PUBLIC_NARRATION_CACHE_ONLY", "false").strip().lower() in {"1", "true", "yes"}
-        else "live_allowed",
+        "public_get_mode": "cache_only",
         "public_demo": demo_policy.status() if demo_policy is not None else {"enabled": False},
     }
 
@@ -257,9 +259,7 @@ def decision_brief(
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="case not found") from exc
         with runtime.telemetry.operation("decision.narrate", case_id=case_id, audience=audience):
-            service = get_narration_service()
-            cache_only = os.getenv("FABOPS_PUBLIC_NARRATION_CACHE_ONLY", "false").strip().lower() in {"1", "true", "yes"}
-            brief = service.cached_or_deterministic(packet, audience) if cache_only else service.generate(packet, audience)
+            brief = get_narration_service().cached_or_deterministic(packet, audience)
     return {"source": "inferred-decision-support", "packet": packet, "brief": brief}
 
 
