@@ -1,6 +1,6 @@
 import {useMemo, useState} from "react";
 import {ClassificationBadge, MetricStrip, ProjectionBadge, ProvenanceBadge, WorkbenchState} from "./components";
-import type {AdvisoryResponse, CaseDetailResponse, DecisionBriefResponse, DecisionCockpitResponse, DecisionPacket, EvaluationResponse, FabCase, NarrationIntent, NarrationStatusResponse, OverviewResponse, ReplayResponse} from "./types";
+import type {AdvisoryResponse, CaseDetailResponse, DecisionBriefResponse, DecisionCockpitResponse, DecisionPacket, EvaluationResponse, FabCase, MeasurementPoint, NarrationIntent, NarrationStatusResponse, OverviewResponse, ReplayResponse} from "./types";
 
 function priorityClass(band: string) {
   if (band === "HIGH") return "decision-priority is-high";
@@ -48,6 +48,127 @@ function DecisionOptionCards({packet, compact = false}: {packet: DecisionPacket;
 function readableEvidence(item: Record<string, unknown>) {
   const entries = Object.entries(item).filter(([, value]) => value != null).slice(0, 4);
   return entries.length ? entries.map(([key, value]) => `${key.replaceAll("_", " ")}: ${String(value)}`).join(" · ") : "Evidence record";
+}
+
+function boundedPercent(value: number) {
+  return Math.max(0, Math.min(100, value));
+}
+
+function smoothSvgPath(points: Array<{x: number; y: number}>) {
+  if (!points.length) return "";
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+  return points.slice(1).reduce((path, point, index) => {
+    const previous = points[index];
+    const midpoint = (previous.x + point.x) / 2;
+    return `${path} C ${midpoint} ${previous.y}, ${midpoint} ${point.y}, ${point.x} ${point.y}`;
+  }, `M ${points[0].x} ${points[0].y}`);
+}
+
+function YieldHealthRing({yieldValue}: {yieldValue: number | null}) {
+  const percent = boundedPercent((yieldValue ?? 0) * 100);
+  const circumference = 2 * Math.PI * 42;
+  const offset = circumference * (1 - percent / 100);
+  return <div className="yield-health-ring" aria-label={yieldValue == null ? "Yield unavailable" : `Yield ${percent.toFixed(1)} percent`}>
+    <svg viewBox="0 0 108 108" role="img">
+      <circle cx="54" cy="54" r="42" className="yield-health-ring__track" />
+      <circle cx="54" cy="54" r="42" className="yield-health-ring__value" strokeDasharray={circumference} strokeDashoffset={offset} />
+    </svg>
+    <div><strong>{yieldValue == null ? "—" : `${percent.toFixed(1)}%`}</strong><span>synthetic yield</span></div>
+  </div>;
+}
+
+function SignalTrendChart({points, sensor, step}: {points: MeasurementPoint[]; sensor: string; step: string}) {
+  const sensorGroups = Array.from(new Set(points.map((point) => point.sensor_name)))
+    .filter((name) => sensor === "all" || name === sensor)
+    .slice(0, 3)
+    .map((name) => ({name, points: points.filter((point) => point.sensor_name === name)}));
+
+  return <div className="signal-chart signal-chart--trend">
+    <div className="signal-chart__title">
+      <div><span>Normalized signal trend</span><strong>{sensor === "all" ? "Multi-sensor overlay" : sensor.replaceAll("_", " ")}</strong></div>
+      <div className="signal-legend">{sensorGroups.map((group, index) => <span key={group.name}><i className={`signal-swatch signal-swatch--${index}`} />{group.name}</span>)}</div>
+    </div>
+    <svg viewBox="0 0 640 250" role="img" aria-label={`${step} normalized measurement series`} preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="signalAreaGradient" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="currentColor" stopOpacity="0.28" />
+          <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {[54, 98, 142, 186].map((y) => <line key={y} x1="42" y1={y} x2="620" y2={y} className="signal-grid-line" />)}
+      {sensorGroups.map((group, groupIndex) => {
+        const values = group.points.map((point) => point.value);
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const span = Math.max(0.0001, max - min);
+        const svgPoints = group.points.map((point, index) => ({
+          x: group.points.length === 1 ? 330 : 42 + index * (578 / (group.points.length - 1)),
+          y: 204 - ((point.value - min) / span) * 158,
+        }));
+        const path = smoothSvgPath(svgPoints);
+        const areaPath = groupIndex === 0 && svgPoints.length > 1 ? `${path} L ${svgPoints.at(-1)?.x ?? 620} 218 L ${svgPoints[0].x} 218 Z` : "";
+        return <g key={group.name} className={`signal-series signal-series--${groupIndex}`}>
+          {areaPath ? <path d={areaPath} className="signal-area" /> : null}
+          <path d={path} className="signal-path" />
+          {svgPoints.map((point, index) => <circle key={`${point.x}-${point.y}-${index}`} cx={point.x} cy={point.y} r="4" className="signal-point"><title>{`${group.points[index].sensor_name}: ${group.points[index].value.toFixed(3)} ${group.points[index].unit}`}</title></circle>)}
+        </g>;
+      })}
+    </svg>
+    <div className="signal-chart__footer"><span>earliest evidence</span><span>{points.length} measurements</span><span>latest evidence</span></div>
+  </div>;
+}
+
+function SignalHistogram({points, sensor}: {points: MeasurementPoint[]; sensor: string}) {
+  const selected = points.filter((point) => sensor === "all" || point.sensor_name === sensor);
+  if (!selected.length) return <WorkbenchState kind="empty" title="No distribution" detail="No measurements match this sensor filter." />;
+  const values = selected.map((point) => point.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = Math.max(0.0001, max - min);
+  const bucketCount = Math.min(8, Math.max(4, Math.ceil(Math.sqrt(values.length))));
+  const buckets = Array.from({length: bucketCount}, () => 0);
+  for (const value of values) {
+    const index = Math.min(bucketCount - 1, Math.floor(((value - min) / span) * bucketCount));
+    buckets[index] += 1;
+  }
+  const maxCount = Math.max(...buckets, 1);
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+  return <div className="signal-chart signal-chart--histogram">
+    <div className="signal-chart__title"><div><span>Distribution</span><strong>Signal density</strong></div><b>μ {mean.toFixed(2)}</b></div>
+    <div className="histogram-bars" aria-label="Signal distribution histogram">{buckets.map((count, index) => <div key={index} className="histogram-column"><span style={{height: `${Math.max(8, (count / maxCount) * 100)}%`}}><i>{count}</i></span></div>)}</div>
+    <div className="signal-chart__footer"><span>{min.toFixed(2)}</span><span>{values.length} values</span><span>{max.toFixed(2)}</span></div>
+  </div>;
+}
+
+function ChamberHeatmap({points}: {points: MeasurementPoint[]}) {
+  const chambers = Array.from(new Set(points.map((point) => point.chamber_id))).map((chamber) => {
+    const chamberPoints = points.filter((point) => point.chamber_id === chamber);
+    const average = chamberPoints.reduce((sum, point) => sum + Math.abs(point.value), 0) / Math.max(1, chamberPoints.length);
+    return {chamber, count: chamberPoints.length, average};
+  });
+  const maxAverage = Math.max(...chambers.map((item) => item.average), 1);
+  return <div className="signal-chart signal-chart--heatmap">
+    <div className="signal-chart__title"><div><span>Chamber map</span><strong>Relative signal intensity</strong></div><b>{chambers.length} nodes</b></div>
+    <div className="chamber-heatmap" aria-label="Chamber relative signal intensity">{chambers.map((item) => <div key={item.chamber} className="chamber-heatmap__cell" style={{"--heat": `${Math.max(.14, item.average / maxAverage)}`} as React.CSSProperties}>
+      <span>{item.chamber}</span><strong>{item.average.toFixed(2)}</strong><small>{item.count} events</small>
+    </div>)}</div>
+    <p>Intensity is normalized within this case view; it is not an equipment-health score.</p>
+  </div>;
+}
+
+function SignalKpis({points}: {points: MeasurementPoint[]}) {
+  if (!points.length) return null;
+  const values = points.map((point) => point.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / values.length;
+  return <div className="signal-kpis">
+    <div><span>Mean</span><strong>{mean.toFixed(2)}</strong></div>
+    <div><span>Range</span><strong>{(max - min).toFixed(2)}</strong></div>
+    <div><span>σ</span><strong>{Math.sqrt(variance).toFixed(2)}</strong></div>
+    <div><span>Events</span><strong>{points.length}</strong></div>
+  </div>;
 }
 
 export function DecisionCockpit({cockpit, onOpenCase, onOpenDecision}: {
@@ -142,6 +263,9 @@ export function DecisionCockpit({cockpit, onOpenCase, onOpenDecision}: {
 }
 
 export function OperationsOverview({overview, onSelectCase}: {overview: OverviewResponse; onSelectCase: (caseId: string) => void}) {
+  const classificationTotal = Math.max(1, overview.metrics.physical_excursions + overview.metrics.sensor_bias_cases + overview.metrics.data_quality_cases);
+  const averageYield = overview.cases.filter((item) => item.mean_yield != null).reduce((sum, item) => sum + (item.mean_yield ?? 0), 0) / Math.max(1, overview.cases.filter((item) => item.mean_yield != null).length);
+  const maxAnomaly = Math.max(...overview.cases.map((item) => item.anomaly_score), 1);
   return <div className="screen-stack">
     <section className="surface-header">
       <div><span className="eyebrow">Operations overview</span><h1>Yield excursion triage queue</h1></div>
@@ -154,6 +278,32 @@ export function OperationsOverview({overview, onSelectCase}: {overview: Overview
       {label: "Data quality", value: overview.metrics.data_quality_cases, detail: "no fab action"},
       {label: "Events", value: overview.metrics.event_count, detail: "source event log"},
     ]} />
+    <section className="overview-visual-grid">
+      <article className="glass-visual-card glass-visual-card--yield">
+        <div className="visual-card-head"><div><span className="eyebrow">Portfolio pulse</span><strong>Yield health</strong></div><small>synthetic case mean</small></div>
+        <YieldHealthRing yieldValue={averageYield || null} />
+        <div className="visual-card-foot"><span>{overview.cases.length} cases in view</span><b>{overview.projection.stale ? "projection delayed" : "projection fresh"}</b></div>
+      </article>
+      <article className="glass-visual-card glass-visual-card--mix">
+        <div className="visual-card-head"><div><span className="eyebrow">Case mix</span><strong>Classification distribution</strong></div><small>read-only</small></div>
+        <div className="classification-stack" aria-label="Case classification distribution">
+          <span className="classification-stack__physical" style={{width: `${(overview.metrics.physical_excursions / classificationTotal) * 100}%`}} />
+          <span className="classification-stack__bias" style={{width: `${(overview.metrics.sensor_bias_cases / classificationTotal) * 100}%`}} />
+          <span className="classification-stack__quality" style={{width: `${(overview.metrics.data_quality_cases / classificationTotal) * 100}%`}} />
+        </div>
+        <div className="classification-legend">
+          <div><i className="classification-dot classification-dot--physical" /><span>Physical</span><strong>{overview.metrics.physical_excursions}</strong></div>
+          <div><i className="classification-dot classification-dot--bias" /><span>Sensor bias</span><strong>{overview.metrics.sensor_bias_cases}</strong></div>
+          <div><i className="classification-dot classification-dot--quality" /><span>Data quality</span><strong>{overview.metrics.data_quality_cases}</strong></div>
+        </div>
+      </article>
+      <article className="glass-visual-card glass-visual-card--anomaly">
+        <div className="visual-card-head"><div><span className="eyebrow">Signal pressure</span><strong>Anomaly ranking</strong></div><small>top cases</small></div>
+        <div className="anomaly-bars">{[...overview.cases].sort((a, b) => b.anomaly_score - a.anomaly_score).slice(0, 5).map((item) => <button key={item.case_id} onClick={() => onSelectCase(item.case_id)}>
+          <span>{item.lot_id}</span><i><b style={{width: `${Math.max(6, (item.anomaly_score / maxAnomaly) * 100)}%`}} /></i><strong>{item.anomaly_score.toFixed(2)}</strong>
+        </button>)}</div>
+      </article>
+    </section>
     {overview.projection.stale ? <WorkbenchState kind="stale" title="Projection is stale" detail={`${overview.projection.lag_events} source events have not reached the RCA read model.`} /> : null}
     <section className="panel dense-table-panel">
       <header><div><span className="eyebrow">Object set</span><h2>Excursion cases</h2></div><small>Source: synthetic events · result: inferred</small></header>
@@ -231,43 +381,44 @@ export function ExcursionCase({detail, advisory}: {detail: CaseDetailResponse; a
   </div>;
 }
 
-function EvidenceLine({detail, selectedStep}: {detail: CaseDetailResponse; selectedStep: string}) {
-  const points = detail.evidence_series.measurements.filter((point) => point.step_id === selectedStep);
-  if (!points.length) return <WorkbenchState kind="empty" title="No measurements" detail={`No measurement evidence exists for ${selectedStep}.`} />;
-  const values = points.map((point) => point.value);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = Math.max(0.001, max - min);
-  const svgPoints = points.map((point, index) => {
-    const x = points.length === 1 ? 50 : 4 + index * (92 / (points.length - 1));
-    const y = 88 - ((point.value - min) / span) * 72;
-    return `${x},${y}`;
-  }).join(" ");
-  return <div className="series-wrap">
-    <svg viewBox="0 0 100 100" role="img" aria-label={`${selectedStep} normalized measurement series`} preserveAspectRatio="none">
-      <line x1="4" y1="88" x2="96" y2="88" className="axis-line" />
-      <polyline points={svgPoints} className="series-line" />
-    </svg>
-    <div className="series-caption"><span>min {min.toFixed(2)}</span><span>{points.length} points · {selectedStep}</span><span>max {max.toFixed(2)}</span></div>
-  </div>;
-}
-
 export function EvidenceGraph({detail, selectedStep, onSelectStep}: {detail: CaseDetailResponse; selectedStep: string | null; onSelectStep: (step: string) => void}) {
   const step = selectedStep ?? detail.trace.process_path[0]?.step_id ?? "LITHO";
   const filtered = detail.evidence_series.measurements.filter((item) => item.step_id === step);
+  const sensorOptions = Array.from(new Set(filtered.map((item) => item.sensor_name)));
+  const [sensorFilter, setSensorFilter] = useState("all");
+  const activeSensor = sensorFilter === "all" || sensorOptions.includes(sensorFilter) ? sensorFilter : "all";
+  const selectedSignals = filtered.filter((item) => activeSensor === "all" || item.sensor_name === activeSensor);
+  const latestMeasurement = [...selectedSignals].sort((a, b) => b.event_time.localeCompare(a.event_time))[0];
   return <div className="screen-stack">
-    <section className="surface-header"><div><span className="eyebrow">Evidence graph</span><h1>{detail.case.lot_id} lineage</h1></div><ProjectionBadge projection={detail.trace.projection} /></section>
-    <section className="panel graph-workspace">
-      <header><div><span className="eyebrow">Coordinated selection</span><h2>Lot → run → chamber → evidence</h2></div><small>Select a step to update graph, series and table together.</small></header>
+    <section className="signal-console-hero">
+      <div><span className="eyebrow">Evidence console · read-only explorer</span><h1>{detail.case.lot_id} lineage · signal workspace</h1><p>Correlate process lineage, sensor shape, chamber intensity, and event-level evidence without changing case state or equipment.</p></div>
+      <div className="console-live-status"><span className="console-live-dot" /><div><strong>{detail.trace.projection.stale ? "DEGRADED" : "LIVE SNAPSHOT"}</strong><small>{detail.trace.projection.lag_events} projection lag · {filtered.length} measurements</small></div></div>
+    </section>
+    <section className="console-toolbar" aria-label="Signal console controls">
+      <div className="console-toolbar__scope"><span>STEP</span><strong>{step}</strong><i>/</i><span>SENSOR</span></div>
+      <div className="console-filter-group">
+        <button className={activeSensor === "all" ? "is-active" : ""} onClick={() => setSensorFilter("all")}>All signals</button>
+        {sensorOptions.map((sensor) => <button className={activeSensor === sensor ? "is-active" : ""} key={sensor} onClick={() => setSensorFilter(sensor)}>{sensor.replaceAll("_", " ")}</button>)}
+      </div>
+      <div className="console-toolbar__readout"><span>Latest</span><strong>{latestMeasurement ? latestMeasurement.value.toFixed(3) : "—"}</strong><small>{latestMeasurement?.unit ?? "no signal"}</small></div>
+    </section>
+    <section className="panel graph-workspace graph-workspace--console">
+      <header><div><span className="eyebrow">Process lineage</span><h2>Lot → run → chamber → evidence</h2></div><div className="graph-header-meta"><ProjectionBadge projection={detail.trace.projection} /><small>Select a step to coordinate every lens.</small></div></header>
       <div className="lineage-row" aria-label="Process lineage">{detail.trace.process_path.map((item, index) => <div className="lineage-fragment" key={item.process_run_id}>
         <button className={item.step_id === step ? "lineage-node is-selected" : "lineage-node"} aria-pressed={item.step_id === step} onClick={() => onSelectStep(item.step_id)}>
           <span>{item.step_id}</span><strong>{item.chamber_id ?? "no chamber"}</strong><small>{item.equipment_id ?? "—"}</small>
         </button>{index < detail.trace.process_path.length - 1 ? <span className="lineage-arrow" aria-hidden="true">→</span> : null}
       </div>)}</div>
-      <EvidenceLine detail={detail} selectedStep={step} />
-      <div className="table-scroll"><table>
+      <div className="signal-console-grid">
+        <div className="signal-console-grid__trend"><SignalTrendChart points={filtered} sensor={activeSensor} step={step} /></div>
+        <SignalHistogram points={filtered} sensor={activeSensor} />
+        <ChamberHeatmap points={selectedSignals} />
+      </div>
+      <SignalKpis points={selectedSignals} />
+      <div className="console-ledger-head"><div><span className="eyebrow">Raw evidence ledger</span><strong>Selected signal events</strong></div><small>Values below are source-linked synthetic evidence.</small></div>
+      <div className="table-scroll console-table"><table>
         <thead><tr><th>Sensor</th><th>Value</th><th>Chamber</th><th>Event time</th><th>Event</th></tr></thead>
-        <tbody>{filtered.map((item) => <tr key={item.event_id}><td>{item.sensor_name}</td><td>{item.value.toFixed(3)}</td><td>{item.chamber_id}</td><td>{item.event_time}</td><td><code>{item.event_id.slice(0, 12)}…</code></td></tr>)}</tbody>
+        <tbody>{selectedSignals.map((item) => <tr key={item.event_id}><td><span className="sensor-ledger-name"><i />{item.sensor_name}</span></td><td>{item.value.toFixed(3)}</td><td>{item.chamber_id}</td><td>{item.event_time}</td><td><code>{item.event_id.slice(0, 12)}…</code></td></tr>)}</tbody>
       </table></div>
     </section>
   </div>;

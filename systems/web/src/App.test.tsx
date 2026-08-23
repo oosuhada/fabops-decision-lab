@@ -59,6 +59,10 @@ describe("FabOps workbench", () => {
     await screen.findByRole("heading", {name: "What needs a decision now?"});
     fireEvent.click(screen.getByRole("button", {name: /Evidence Graph/i}));
     expect(await screen.findByRole("heading", {name: /LOT-00002 lineage/})).toBeInTheDocument();
+    expect(screen.getByText("Normalized signal trend")).toBeInTheDocument();
+    expect(screen.getByText("Signal density")).toBeInTheDocument();
+    expect(screen.getByText("Relative signal intensity")).toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "All signals"})).toHaveClass("is-active");
     expect(screen.getByRole("button", {name: /ETCH/i})).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(screen.getByRole("button", {name: /Decision & Approval/i}));
     expect(await screen.findByRole("heading", {name: /Should the team collect confirming evidence first/i})).toBeInTheDocument();
