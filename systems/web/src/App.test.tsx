@@ -35,6 +35,7 @@ const replay = {source: "synthetic-replay", event_count: 3, detection_checkpoint
 
 describe("FabOps workbench", () => {
   beforeEach(() => {
+    window.history.replaceState({}, "", "/");
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       const value = url.endsWith("/api/demo/session") ? demoSession : url.endsWith("/api/demo/narration") ? llmDecisionBrief : url.endsWith("/api/narration/status") ? narrationStatus : url.endsWith("/api/decision-cockpit") ? cockpit : url.includes("/decision-brief?") ? decisionBrief : url.endsWith("/api/overview") ? overview : url.endsWith("/api/evaluation") ? evaluation : url.endsWith("/api/replay") ? replay : url.endsWith("/advisory") ? advisory : detail;
@@ -47,6 +48,7 @@ describe("FabOps workbench", () => {
   it("opens on an API-backed decision cockpit instead of a generic metric dashboard", async () => {
     render(<App />);
     expect(await screen.findByRole("heading", {name: "What needs a decision now?"})).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/DecisionCockpit");
     expect(screen.getAllByText("LOT-00002").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Collect confirming metrology", {exact: false}).length).toBeGreaterThan(1);
     expect(screen.getByText("Prepare containment review", {exact: false})).toBeInTheDocument();
@@ -58,6 +60,7 @@ describe("FabOps workbench", () => {
     render(<App />);
     await screen.findByRole("heading", {name: "What needs a decision now?"});
     fireEvent.click(screen.getByRole("button", {name: /Evidence Graph/i}));
+    expect(window.location.pathname).toBe("/EvidenceGraph");
     expect(await screen.findByRole("heading", {name: /LOT-00002 lineage/})).toBeInTheDocument();
     expect(screen.getByText("Normalized signal trend")).toBeInTheDocument();
     expect(screen.getByText("Signal density")).toBeInTheDocument();
@@ -65,6 +68,7 @@ describe("FabOps workbench", () => {
     expect(screen.getByRole("button", {name: "All signals"})).toHaveClass("is-active");
     expect(screen.getByRole("button", {name: /ETCH/i})).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(screen.getByRole("button", {name: /Decision & Approval/i}));
+    expect(window.location.pathname).toBe("/DecisionApproval");
     expect(await screen.findByRole("heading", {name: /Should the team collect confirming evidence first/i})).toBeInTheDocument();
     expect(screen.getByText("Choose a stance, not an opaque AI answer")).toBeInTheDocument();
     expect(screen.getAllByText("NO TOOL CONTROL").length).toBeGreaterThan(0);
