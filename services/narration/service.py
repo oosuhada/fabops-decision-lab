@@ -116,6 +116,7 @@ Rules:
 6. Return one JSON object with keys: schema_version, case_id, audience, headline, summary, recommended_option_id, sections, citations, uncertainties, limitations.
 7. schema_version must be decision-brief-v1. sections must be objects with section_id, title, body, evidence_refs.
 8. Write human-readable wording in Korean while leaving IDs unchanged.
+9. Keep the JSON compact enough to finish within the hard output-token limit: headline <= 40 Korean characters; summary <= 120 Korean characters; exactly 2 sections; each title <= 24 characters; each body <= 120 Korean characters; at most 2 evidence_refs per section; at most 4 citations; at most 2 uncertainties; exactly 2 short limitations. Do not repeat the packet. Return JSON only.
 """
 
 
@@ -167,6 +168,8 @@ class NarrationService:
                 vertex_state = "circuit_open"
             elif str(vertex_governance.get("last_block_reason", "")).startswith("daily_"):
                 vertex_state = "budget_exhausted"
+            elif vertex_governance.get("state") == "degraded":
+                vertex_state = "degraded"
             else:
                 vertex_state = "healthy"
         elif not vertex_project:
