@@ -4,7 +4,10 @@ import json
 import os
 
 from adapters.postgres import PostgresConfig, PostgresRepository
-from systems.api.runtime import build_integration_runtime
+from services.detection.service import DeterministicDetector
+from services.ingestion.service import IngestionService
+from simulator.config import load_config
+from simulator.fabtwin import FabTwinSimulator
 
 
 def main() -> None:
@@ -29,32 +32,35 @@ def main() -> None:
         )
         return
 
-    runtime = build_integration_runtime(
-        seed=int(os.getenv("FABOPS_LIVE_SEED", "42")),
-        profile=os.getenv("FABOPS_LIVE_PROFILE", "test"),
+    seed = int(os.getenv("FABOPS_LIVE_SEED", "42"))
+    profile = os.getenv("FABOPS_LIVE_PROFILE", "test")
+    detector = DeterministicDetector(repository)
+    ingestion = IngestionService(
+        repository,
+        repository,
+        repository,
+        detector.consume,
+        transaction_factory=repository.transaction,
     )
-    try:
-        if runtime.initialization_error is not None:
-            raise RuntimeError(f"live bootstrap failed: {runtime.initialization_error}")
-        seeded = runtime.event_repository.counts()
-        if seeded["events"] <= 0 or seeded["cases"] <= 0:
-            raise RuntimeError("live bootstrap produced no baseline events/cases")
-        print(
-            json.dumps(
-                {
-                    "service": "fabops-live-bootstrap",
-                    "mode": "seeded-baseline",
-                    "event_count": seeded["events"],
-                    "case_count": seeded["cases"],
-                    "detection_checkpoint": runtime.event_repository.checkpoint("detection"),
-                    "projection_checkpoint": runtime.projection.status().projection_checkpoint,
-                },
-                sort_keys=True,
-            ),
-            flush=True,
-        )
-    finally:
-        runtime.graph.close()
+    trace = FabTwinSimulator(load_config(profile), seed).generate()
+    for event in trace.events:
+        ingestion.ingest(event)
+    seeded = repository.counts()
+    if seeded["events"] <= 0 or seeded["cases"] <= 0:
+        raise RuntimeError("live bootstrap produced no baseline events/cases")
+    print(
+        json.dumps(
+            {
+                "service": "fabops-live-bootstrap",
+                "mode": "seeded-baseline",
+                "event_count": seeded["events"],
+                "case_count": seeded["cases"],
+                "detection_checkpoint": repository.checkpoint("detection"),
+            },
+            sort_keys=True,
+        ),
+        flush=True,
+    )
 
 
 if __name__ == "__main__":
