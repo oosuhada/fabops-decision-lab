@@ -388,6 +388,12 @@ td { min-height: 40px; padding: 10px var(--ds-space-3); }
 .yield-health-ring span,
 .signal-chart__title span,
 .signal-chart__footer,
+.signal-y-scale,
+.signal-step-axis span,
+.range-profile__head > span,
+.range-profile__head small,
+.range-profile__scale,
+.range-profile__note,
 .chamber-heatmap__cell small,
 .signal-chart--heatmap > p,
 .console-toolbar__scope span,
@@ -405,6 +411,7 @@ td { min-height: 40px; padding: 10px var(--ds-space-3); }
 .signal-chart__title > b,
 .signal-legend > span,
 .chamber-heatmap__cell span { font-size: var(--ds-type-meta); }
+.range-profile__head strong { font-size: var(--ds-type-caption); }
 .chamber-heatmap__cell strong { font-size: var(--ds-type-body); }
 .signal-kpis span { font-size: var(--ds-type-meta); }
 .signal-kpis strong { font-size: 20px; }

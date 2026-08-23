@@ -65,9 +65,9 @@ describe("FabOps workbench", () => {
     expect(window.location.pathname).toBe("/EvidenceGraph");
     expect(screen.getByLabelText("Current workspace context")).toHaveTextContent("Investigate/Evidence Graph");
     expect(await screen.findByRole("heading", {name: /LOT-00002 lineage/})).toBeInTheDocument();
-    expect(screen.getByText("Normalized signal trend")).toBeInTheDocument();
-    expect(screen.getByText("Signal density")).toBeInTheDocument();
-    expect(screen.getByText("Relative signal intensity")).toBeInTheDocument();
+    expect(screen.getByText("Case-normalized process trend")).toBeInTheDocument();
+    expect(screen.getByText("Within-case range position")).toBeInTheDocument();
+    expect(screen.getByText("Relative sensor level by chamber")).toBeInTheDocument();
     expect(screen.getByRole("button", {name: "All signals"})).toHaveClass("is-active");
     expect(screen.getByRole("button", {name: /ETCH/i})).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(screen.getByRole("button", {name: /Decision & Approval/i}));
