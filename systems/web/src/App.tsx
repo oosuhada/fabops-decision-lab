@@ -228,6 +228,7 @@ export default function App() {
   else workSurface = <ReplayOperations replay={replay} />;
 
   const navGroups = ["Decide", "Investigate", "Trust"] as const;
+  const activeNavigation = navigation.find((item) => item.id === screen) ?? navigation[0];
 
   return <div className="app-shell">
     <header className="global-header">
@@ -241,13 +242,27 @@ export default function App() {
         <span className="status-chip status-chip--safe">NO TOOL CONTROL</span>
       </div>
     </header>
+    <div className="workspace-context" aria-label="Current workspace context">
+      <div className="workspace-context__route">
+        <span>Decision Lab</span>
+        <i aria-hidden="true">/</i>
+        <span>{activeNavigation.group}</span>
+        <i aria-hidden="true">/</i>
+        <strong>{activeNavigation.label}</strong>
+      </div>
+      <div className="workspace-context__object">
+        <span>Current object</span>
+        <strong>{selectedPacket?.lot_id ?? selectedCase?.lot_id ?? "No case selected"}</strong>
+        {selectedPacket ? <span className={`workspace-context__priority workspace-context__priority--${selectedPacket.priority_band.toLowerCase()}`}>{selectedPacket.priority_band}</span> : null}
+      </div>
+    </div>
     <div className="mobile-status-ribbon" aria-label="Release and provenance status">
       <span>0.7 candidate</span><span>base {replay.release.release_version}</span><span>synthetic</span><span>read-only</span>
     </div>
     <aside className="left-rail" aria-label="Primary navigation">
       <div className="nav-heading"><span>Decision workspace</span><strong>From exception to governed action</strong></div>
       <nav>{navGroups.map((group) => <div className="nav-group" key={group}>
-        <span className="nav-group__label">{group}</span>
+        <span className="nav-group__label"><b>{String(navGroups.indexOf(group) + 1).padStart(2, "0")}</b>{group}</span>
         {navigation.filter((item) => item.group === group).map((item) => <button key={item.id} className={screen === item.id ? "nav-item is-active" : "nav-item"} aria-current={screen === item.id ? "page" : undefined} onClick={() => navigate(item.id)}>
           <span>{item.short}</span><strong>{item.label}</strong>
         </button>)}

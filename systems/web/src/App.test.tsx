@@ -54,6 +54,8 @@ describe("FabOps workbench", () => {
     expect(screen.getByText("Prepare containment review", {exact: false})).toBeInTheDocument();
     expect(screen.getByText("READ-ONLY PREVIEW")).toBeInTheDocument();
     expect(screen.getAllByText("BASE 0.6.0", {exact: true}).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Current workspace context")).toHaveTextContent("Decision Lab/Decide/Decision Cockpit");
+    expect(screen.getByLabelText("Current workspace context")).toHaveTextContent("LOT-00002");
   });
 
   it("coordinates evidence graph selection and exposes no equipment execution control", async () => {
@@ -61,6 +63,7 @@ describe("FabOps workbench", () => {
     await screen.findByRole("heading", {name: "What needs a decision now?"});
     fireEvent.click(screen.getByRole("button", {name: /Evidence Graph/i}));
     expect(window.location.pathname).toBe("/EvidenceGraph");
+    expect(screen.getByLabelText("Current workspace context")).toHaveTextContent("Investigate/Evidence Graph");
     expect(await screen.findByRole("heading", {name: /LOT-00002 lineage/})).toBeInTheDocument();
     expect(screen.getByText("Normalized signal trend")).toBeInTheDocument();
     expect(screen.getByText("Signal density")).toBeInTheDocument();
