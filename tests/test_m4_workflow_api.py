@@ -156,6 +156,17 @@ def test_evaluation_api_reads_checked_in_release_evidence_when_present():
         release = json.loads(Path("evidence/release/evaluation-summary.json").read_text(encoding="utf-8"))
         assert body["evidence_hash"] == release["canonical_hash"]
         assert body["metrics"] == release["held_out_metrics"]
+        assert body["negative_results"] == release["negative_results"]
+        console = body["validation_console"]
+        assert [row["family"] for row in console["fault_family_slices"]] == ["F1", "F2", "F3", "F4", "F5", "F6"]
+        assert console["seed_ranges"]["contradicting_evidence_coverage"] == {
+            "mean": 0.42857,
+            "minimum": 0.42857,
+            "maximum": 0.42857,
+        }
+        assert console["common_random_number_comparison"] == release["common_random_number_comparison"]
+        assert all(item["appropriate"] for item in console["unseen_family_results"])
+        assert any("not persisted" in gap for gap in console["evidence_gaps"])
 
 
 def test_rejection_and_request_evidence_transitions_are_explicit():
