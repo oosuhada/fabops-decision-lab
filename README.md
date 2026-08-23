@@ -4,8 +4,8 @@
 
 FabOps Decision Lab is a portfolio-scale engineering decision platform for yield-excursion triage. It connects deterministic synthetic events, source-of-truth persistence, explainable RCA, human-governed workflow, replay, observability and release evidence without requiring an external LLM.
 
-> **Live Demo — READ-ONLY:** https://fabops-preview.oosu.dev  
-> This public portfolio preview serves the immutable deployed `0.6.0` UI and GET/HEAD API data only. Workflow mutation requests are blocked at ingress. The visible approval controls therefore do not form a public interactive demo; interactive-demo hardening is deferred until after the active M8 burn-in.
+> **Live Demo — GOVERNED PUBLIC CANDIDATE:** https://fabops-preview.oosu.dev  
+> The public UI is a **v0.7 candidate** running beside the still-authoritative `0.6.0` M8 soak target. Portfolio data is synthetic. GET/HEAD decision data is cache-only/deterministic and workflow mutation remains blocked at ingress. Live AI wording is available only through predefined bounded demo intents with signed anonymous sessions, application/edge rate limits, provider concurrency and daily budgets. AI wording cannot change the deterministic recommendation, and the demo exposes **NO TOOL CONTROL** or equipment execution. v0.7 is not an official release yet.
 
 <!-- RELEASE_IDENTITY_START -->
 > Release `0.6.0` · canonical release hash `ab8b20a696b9b1996495f23a3e413cc33a67b6861efa184c64742e0f310c6326` · source commit `6824ca11198a`
