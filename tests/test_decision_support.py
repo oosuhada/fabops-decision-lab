@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from services.decision import DecisionSupportService
 from services.narration.demo import DemoSessionPolicy
 from services.narration.governance import ProviderBlockedError, ProviderGovernor, ProviderPolicy
+from services.narration.grounding import allowed_evidence_refs
 from services.narration.service import NarrationService
 from systems.api.app import app
 from systems.api.runtime import build_local_runtime
@@ -310,6 +311,18 @@ def test_grounding_accepts_only_existing_indexed_decision_option_references() ->
     assert accepted["recommended_option_id"] == packet["recommended_option_id"]
     assert rejected["mode"] == "deterministic_fallback"
     assert rejected["recommended_option_id"] == packet["recommended_option_id"]
+
+
+def test_allowed_evidence_refs_are_server_owned_and_reject_model_aliases() -> None:
+    runtime = build_local_runtime()
+    packet = DecisionSupportService(runtime).packet(runtime.case_repository.list_cases()[0]["case_id"])
+    allowed = allowed_evidence_refs(packet)
+
+    assert "case.impact" in allowed
+    assert "decision.options[0]" in allowed
+    assert "case.evidence.mean_yield" not in allowed
+    assert "advisory_status" not in allowed
+    assert "advisory_next_step" not in allowed
 
 
 def test_provider_governor_rejects_concurrency_without_unbounded_queue() -> None:

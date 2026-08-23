@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import os
 import subprocess
@@ -104,6 +105,11 @@ class OpenAICompatibleNarrationProvider:
     name: str = "local-openai-compatible"
 
     def generate_json(self, system_prompt: str, payload: dict[str, Any]) -> dict[str, Any]:
+        response_schema = copy.deepcopy(DECISION_BRIEF_RESPONSE_SCHEMA)
+        allowed_references = [str(value) for value in payload.get("allowed_evidence_refs", []) if isinstance(value, str)]
+        if allowed_references:
+            response_schema["properties"]["citations"]["items"]["enum"] = allowed_references
+            response_schema["properties"]["sections"]["items"]["properties"]["evidence_refs"]["items"]["enum"] = allowed_references
         body = json.dumps(
             {
                 "model": self.model,
@@ -114,7 +120,7 @@ class OpenAICompatibleNarrationProvider:
                     "json_schema": {
                         "name": "fabops_decision_brief",
                         "strict": True,
-                        "schema": DECISION_BRIEF_RESPONSE_SCHEMA,
+                        "schema": response_schema,
                     },
                 },
                 "messages": [
