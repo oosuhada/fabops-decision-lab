@@ -1,5 +1,6 @@
 import {useEffect, useMemo, useState} from "react";
 import {ClassificationBadge, MetricStrip, ProjectionBadge, ProvenanceBadge, WorkbenchState} from "./components";
+import {EvidenceDiff} from "./features/evidence/EvidenceDiff";
 import {EvidenceGraphExplorer} from "./features/evidence/EvidenceGraphExplorer";
 import {DecisionBoundaryPanel, RcaExplainability} from "./features/explainability/RcaExplainability";
 import {PresentationRenderer} from "./features/narration/PresentationRenderer";
@@ -436,6 +437,7 @@ export function ExcursionCase({detail, advisory}: {detail: CaseDetailResponse; a
         </> : <WorkbenchState kind="empty" title="No ranked candidate" detail="The deterministic RCA service did not produce a supported candidate." />}
       </section>
     </div>
+    <EvidenceDiff candidates={detail.rca.candidates} />
     <RcaExplainability candidates={detail.rca.candidates} />
     <section className="panel advisory-strip advisory-strip--decision">
       <div><span className="eyebrow">Evidence-grounded next step</span><h2>{advisory?.result.status === "ready" ? "Ready for human review" : advisory?.result.status ?? "loading"}</h2></div>
