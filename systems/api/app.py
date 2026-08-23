@@ -11,6 +11,8 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from services.decision import DecisionSupportService
+from services.narration import NarrationService
 from services.rca.cqrs import RankRootCausesQuery, TraceAffectedLotsQuery
 from services.release import RELEASE_VERSION, load_release_identity
 from services.workflow.state_machine import AuthorizationError, InvalidTransitionError
@@ -30,6 +32,7 @@ app.add_middleware(
     expose_headers=["X-Correlation-ID", "X-FabOps-Trace-ID"],
 )
 app.state.runtime = build_runtime()
+app.state.narration_service = None
 
 
 @app.middleware("http")
@@ -48,6 +51,14 @@ async def correlation_middleware(request: Request, call_next: Any) -> Any:
 
 def get_runtime() -> LocalRuntime:
     return app.state.runtime
+
+
+def get_narration_service() -> NarrationService:
+    service = getattr(app.state, "narration_service", None)
+    if service is None:
+        service = NarrationService()
+        app.state.narration_service = service
+    return service
 
 
 def actor_headers(
@@ -180,6 +191,35 @@ def advisory(case_id: str, runtime: Annotated[LocalRuntime, Depends(get_runtime)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="case not found") from exc
     return {"source": "inferred-advisory", "llm_enabled": False, "result": result}
+
+
+@app.get("/api/decision-cockpit")
+def decision_cockpit(runtime: Annotated[LocalRuntime, Depends(get_runtime)]) -> dict[str, Any]:
+    with runtime.telemetry.operation("decision.cockpit"):
+        return DecisionSupportService(runtime).cockpit()
+
+
+@app.get("/api/narration/status")
+def narration_status() -> dict[str, Any]:
+    return {"source": "runtime-configuration", **get_narration_service().status()}
+
+
+@app.get("/api/cases/{case_id}/decision-brief")
+def decision_brief(
+    case_id: str,
+    runtime: Annotated[LocalRuntime, Depends(get_runtime)],
+    audience: str = "manager",
+) -> dict[str, Any]:
+    if audience not in {"manager", "engineer"}:
+        raise HTTPException(status_code=422, detail="audience must be manager or engineer")
+    with case_telemetry(runtime, case_id):
+        try:
+            packet = DecisionSupportService(runtime).packet(case_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="case not found") from exc
+        with runtime.telemetry.operation("decision.narrate", case_id=case_id, audience=audience):
+            brief = get_narration_service().generate(packet, audience)
+    return {"source": "inferred-decision-support", "packet": packet, "brief": brief}
 
 
 @app.post("/api/cases/{case_id}/request-evidence")

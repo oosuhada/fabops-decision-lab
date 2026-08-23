@@ -5,6 +5,7 @@ const resolverIp = process.env.FABOPS_PREVIEW_IP;
 
 export default defineConfig({
   testDir: "./e2e",
+  testMatch: "ui-review.spec.ts",
   timeout: 30_000,
   retries: 0,
   workers: 1,

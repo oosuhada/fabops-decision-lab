@@ -1,4 +1,4 @@
-export type ScreenId = "overview" | "case" | "graph" | "decision" | "evaluation" | "replay";
+export type ScreenId = "cockpit" | "overview" | "case" | "graph" | "decision" | "evaluation" | "replay";
 
 export interface ProjectionStatus {
   projection_version: string;
@@ -103,6 +103,86 @@ export interface AdvisoryResponse {
     recommended_next_step: string;
     tool_calls: Array<{tool: string; status: string}>;
     errors: Array<Record<string, string>>;
+  };
+}
+
+export interface DecisionOption {
+  option_id: string;
+  label: string;
+  stance: "recommended" | "alternative" | "conditional" | "guardrail" | string;
+  tradeoff: string;
+  requires_human_approval: boolean;
+}
+
+export interface DecisionPacket {
+  schema_version: string;
+  case_id: string;
+  lot_id: string;
+  classification: string;
+  state: string;
+  decision_question: string;
+  priority_band: "HIGH" | "MEDIUM" | "VERIFY_DATA" | string;
+  priority_rank: number;
+  recommended_option_id: string;
+  options: DecisionOption[];
+  impact: {
+    synthetic_yield_gap_percentage_points: number | null;
+    affected_equipment_count: number;
+    affected_chamber_count: number;
+    affected_lot_count: number;
+    basis: string;
+  };
+  evidence: {
+    anomaly_score: number;
+    mean_yield: number | null;
+    affected_scope: {equipment: string[]; chambers: string[]};
+    top_candidate: null | {
+      candidate_id: string;
+      candidate_type: string;
+      score: number;
+      supporting_evidence: Array<Record<string, unknown>>;
+      contradicting_evidence: Array<Record<string, unknown>>;
+    };
+    advisory_status: string;
+    advisory_next_step: string;
+    data_quality_incidents: string[];
+  };
+  uncertainties: string[];
+  evidence_refs: string[];
+  provenance: Record<string, string | boolean>;
+}
+
+export interface DecisionCockpitResponse {
+  schema_version: string;
+  source: string;
+  summary: {
+    decision_count: number;
+    high_priority: number;
+    medium_priority: number;
+    data_verification: number;
+  };
+  queue: DecisionPacket[];
+}
+
+export interface DecisionBriefResponse {
+  source: string;
+  packet: DecisionPacket;
+  brief: {
+    schema_version: string;
+    case_id: string;
+    audience: "manager" | "engineer";
+    mode: "llm" | "deterministic_fallback" | string;
+    provider: string;
+    fallback_reason?: string | null;
+    cache_hit?: boolean;
+    headline: string;
+    summary: string;
+    recommended_option_id: string;
+    sections: Array<{section_id: string; title: string; body: string; evidence_refs: string[]}>;
+    citations: string[];
+    uncertainties: string[];
+    limitations: string[];
+    generated_at: string;
   };
 }
 

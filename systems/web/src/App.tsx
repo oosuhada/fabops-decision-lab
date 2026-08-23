@@ -1,10 +1,11 @@
 import {useCallback, useEffect, useMemo, useState} from "react";
 import {api} from "./api";
 import {EvidenceInspector, WorkbenchState} from "./components";
-import {DecisionApproval, EvaluationLab, EvidenceGraph, ExcursionCase, OperationsOverview, ReplayOperations, caseById} from "./screens";
-import type {AdvisoryResponse, CaseDetailResponse, EvaluationResponse, OverviewResponse, ReplayResponse, ScreenId} from "./types";
+import {DecisionApproval, DecisionCockpit, EvaluationLab, EvidenceGraph, ExcursionCase, OperationsOverview, ReplayOperations, caseById} from "./screens";
+import type {AdvisoryResponse, CaseDetailResponse, DecisionBriefResponse, DecisionCockpitResponse, EvaluationResponse, OverviewResponse, ReplayResponse, ScreenId} from "./types";
 
 const navigation: Array<{id: ScreenId; label: string; short: string}> = [
+  {id: "cockpit", label: "Decision Cockpit", short: "DC"},
   {id: "overview", label: "Operations Overview", short: "OV"},
   {id: "case", label: "Excursion Case", short: "EC"},
   {id: "graph", label: "Evidence Graph", short: "EG"},
@@ -14,13 +15,16 @@ const navigation: Array<{id: ScreenId; label: string; short: string}> = [
 ];
 
 export default function App() {
-  const [screen, setScreen] = useState<ScreenId>("overview");
+  const [screen, setScreen] = useState<ScreenId>("cockpit");
+  const [cockpit, setCockpit] = useState<DecisionCockpitResponse | null>(null);
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [evaluation, setEvaluation] = useState<EvaluationResponse | null>(null);
   const [replay, setReplay] = useState<ReplayResponse | null>(null);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [detail, setDetail] = useState<CaseDetailResponse | null>(null);
   const [advisory, setAdvisory] = useState<AdvisoryResponse | null>(null);
+  const [decisionBrief, setDecisionBrief] = useState<DecisionBriefResponse | null>(null);
+  const [briefAudience, setBriefAudience] = useState<"manager" | "engineer">("manager");
   const [selectedStep, setSelectedStep] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -31,11 +35,12 @@ export default function App() {
     setLoading(true);
     setError("");
     try {
-      const [nextOverview, nextEvaluation, nextReplay] = await Promise.all([api.overview(), api.evaluation(), api.replay()]);
+      const [nextCockpit, nextOverview, nextEvaluation, nextReplay] = await Promise.all([api.decisionCockpit(), api.overview(), api.evaluation(), api.replay()]);
+      setCockpit(nextCockpit);
       setOverview(nextOverview);
       setEvaluation(nextEvaluation);
       setReplay(nextReplay);
-      setSelectedCaseId((current) => current ?? nextOverview.cases[0]?.case_id ?? null);
+      setSelectedCaseId((current) => current ?? nextCockpit.queue[0]?.case_id ?? nextOverview.cases[0]?.case_id ?? null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to load workbench data");
     } finally {
@@ -56,12 +61,25 @@ export default function App() {
 
   useEffect(() => { void loadRoot(); }, [loadRoot]);
   useEffect(() => { if (selectedCaseId) void loadCase(selectedCaseId); }, [loadCase, selectedCaseId]);
+  useEffect(() => {
+    if (!selectedCaseId || screen !== "decision") return;
+    setDecisionBrief(null);
+    void api.decisionBrief(selectedCaseId, briefAudience).then(setDecisionBrief).catch((reason) => {
+      setError(reason instanceof Error ? reason.message : "Unable to load grounded decision brief");
+    });
+  }, [briefAudience, screen, selectedCaseId]);
 
   const selectedCase = useMemo(() => overview ? caseById(overview.cases, selectedCaseId) : null, [overview, selectedCaseId]);
 
   function selectCase(caseId: string) {
     setSelectedCaseId(caseId);
     setScreen("case");
+    setFeedback(null);
+  }
+
+  function openDecision(caseId: string) {
+    setSelectedCaseId(caseId);
+    setScreen("decision");
     setFeedback(null);
   }
 
@@ -87,12 +105,13 @@ export default function App() {
   if (error && !overview) {
     return <main className="boot-state"><WorkbenchState kind="error" title="Workbench unavailable" detail={error} action={<button onClick={() => void loadRoot()}>Retry</button>} /></main>;
   }
-  if (!overview || !evaluation || !replay) {
+  if (!cockpit || !overview || !evaluation || !replay) {
     return <main className="boot-state"><WorkbenchState kind="empty" title="No operational evidence" detail="The API returned no source state." /></main>;
   }
 
   let workSurface;
-  if (screen === "overview") workSurface = <OperationsOverview overview={overview} onSelectCase={selectCase} />;
+  if (screen === "cockpit") workSurface = <DecisionCockpit cockpit={cockpit} onOpenCase={selectCase} onOpenDecision={openDecision} />;
+  else if (screen === "overview") workSurface = <OperationsOverview overview={overview} onSelectCase={selectCase} />;
   else if ((screen === "case" || screen === "graph" || screen === "decision") && !detail) workSurface = <WorkbenchState kind="loading" title="Loading selected case" detail="Fetching source-linked evidence and deterministic RCA." />;
   else if (screen === "case" && detail) workSurface = <ExcursionCase detail={detail} advisory={advisory} />;
   else if (screen === "graph" && detail) workSurface = <EvidenceGraph detail={detail} selectedStep={selectedStep} onSelectStep={setSelectedStep} />;
@@ -101,6 +120,9 @@ export default function App() {
     advisory={advisory}
     busy={busy}
     feedback={feedback}
+    brief={decisionBrief}
+    briefAudience={briefAudience}
+    onBriefAudience={setBriefAudience}
     onRequestEvidence={(reason) => mutate(() => api.requestEvidence(detail.case.case_id, reason))}
     onPropose={(target, rationale) => mutate(() => api.propose(detail.case.case_id, target, rationale))}
     onApprove={(reason) => mutate(() => api.approve(detail.case.case_id, reason))}
@@ -114,9 +136,10 @@ export default function App() {
       <div className="brand-mark">FDL</div>
       <div><strong>FabOps Decision Lab</strong><span>Evidence-Grounded Yield Excursion Triage</span></div>
       <div className="header-status">
+        <span>UX 0.7 CANDIDATE</span>
         <span>RELEASE {replay.release.release_version}</span>
         <span>{replay.release.release_hash === "unreleased" ? "HASH PENDING" : replay.release.release_hash.slice(0, 12)}</span>
-        <span>LLM OFF</span>
+        <span>GROUNDED NARRATION</span>
         <span>NO EQUIPMENT CONTROL</span>
       </div>
     </header>

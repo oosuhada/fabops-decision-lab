@@ -1,4 +1,4 @@
-import type {AdvisoryResponse, CaseDetailResponse, EvaluationResponse, OverviewResponse, ReplayResponse} from "./types";
+import type {AdvisoryResponse, CaseDetailResponse, DecisionBriefResponse, DecisionCockpitResponse, EvaluationResponse, OverviewResponse, ReplayResponse} from "./types";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
 
@@ -14,6 +14,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  decisionCockpit: () => request<DecisionCockpitResponse>("/api/decision-cockpit"),
+  decisionBrief: (caseId: string, audience: "manager" | "engineer") => request<DecisionBriefResponse>(`/api/cases/${caseId}/decision-brief?audience=${audience}`),
   overview: () => request<OverviewResponse>("/api/overview"),
   caseDetail: (caseId: string) => request<CaseDetailResponse>(`/api/cases/${caseId}`),
   advisory: (caseId: string) => request<AdvisoryResponse>(`/api/cases/${caseId}/advisory`),
