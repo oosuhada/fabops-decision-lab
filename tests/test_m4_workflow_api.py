@@ -146,6 +146,33 @@ def test_api_visible_metrics_match_case_and_replay_state():
     assert replay["event_count"] == replay["detection_checkpoint"] == replay["projection"]["projection_checkpoint"]
 
 
+def test_case_replay_trace_is_source_backed_and_never_fabricates_missing_audit_timestamps():
+    runtime = build_local_runtime()
+    app.state.runtime = runtime
+    client = TestClient(app)
+    case = runtime.case_repository.list_cases()[0]
+    response = client.get(f"/api/cases/{case['case_id']}/replay-trace")
+    assert response.status_code == 200
+    body = response.json()
+    source_rows = [item for item in body["timeline"] if item["kind"] == "source_event"]
+    audit_rows = [item for item in body["timeline"] if item["kind"] == "audit_event"]
+    projection_rows = [item for item in body["timeline"] if item["kind"] == "projection_snapshot"]
+    expected_event_ids = {
+        stored.event["event_id"]
+        for stored in runtime.event_repository.all_events()
+        if stored.event.get("lot_id") == case["lot_id"]
+    }
+    assert {item["event_id"] for item in source_rows} == expected_event_ids
+    assert all("ground_truth" not in item["payload"] for item in source_rows)
+    assert projection_rows[0]["source"] == "neo4j-rebuildable-projection"
+    assert body["projection_role"] == "rebuildable RCA/read projection"
+    assert audit_rows
+    assert all(
+        item["event_time"] is not None or item["time_semantics"] == "audit_sequence_only"
+        for item in audit_rows
+    )
+
+
 def test_evaluation_api_reads_checked_in_release_evidence_when_present():
     app.state.runtime = build_local_runtime()
     client = TestClient(app)
