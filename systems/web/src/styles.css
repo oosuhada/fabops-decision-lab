@@ -1737,3 +1737,60 @@ body::before {
   .bounded-presentation__blocks { grid-template-columns: 1fr; }
 }
 
+/* Case comparison workbench: deterministic packet-to-packet inspection only. */
+.case-comparison-workbench { gap: 14px; }
+.case-comparison-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, .7fr);
+  gap: 18px;
+  align-items: end;
+  border: 1px solid #d4dfe6;
+  border-radius: 14px;
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(255,255,255,.98), rgba(240,247,250,.96));
+  box-shadow: 0 5px 18px rgba(33, 57, 73, .045);
+}
+.case-comparison-hero h1 { margin: 4px 0 8px; max-width: 880px; font-size: clamp(1.55rem, 2.4vw, 2.45rem); line-height: 1.08; }
+.case-comparison-hero p { margin: 0; max-width: 860px; color: #637888; line-height: 1.55; }
+.case-comparison-controls { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+.case-comparison-controls label { display: grid; gap: 5px; }
+.case-comparison-controls label > span { color: #6c8190; font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.case-comparison-controls select { width: 100%; min-height: 38px; border: 1px solid #cbd8df; border-radius: 8px; padding: 7px 9px; background: #fff; color: #1c3546; font-size: 11px; font-weight: 700; }
+.case-comparison-pair { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+.case-comparison-card { display: grid; gap: 0; overflow: hidden; border: 1px solid #d4dfe6; border-radius: 12px; background: rgba(255,255,255,.96); box-shadow: 0 4px 14px rgba(31,53,70,.04); }
+.case-comparison-card > header { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 9px; min-height: 48px; padding: 10px 13px; border-bottom: 1px solid #dce5ea; background: #f7fafb; }
+.case-comparison-card > header span { border: 1px solid #b9d1dc; border-radius: 999px; padding: 3px 7px; color: #46718a; font-size: 8px; font-weight: 850; }
+.case-comparison-card > header strong { color: #18384b; font-size: 14px; }
+.case-comparison-card > header small { color: #748894; font-size: 8px; }
+.case-comparison-card > div { display: grid; gap: 4px; min-height: 72px; padding: 11px 13px; border-bottom: 1px solid #edf1f3; }
+.case-comparison-card > div:last-child { border-bottom: 0; }
+.case-comparison-card > div span { color: #738895; font-size: 8px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.case-comparison-card > div strong { color: #203d50; font-size: 12px; line-height: 1.35; }
+.case-comparison-card > div small { color: #738895; font-size: 9px; }
+.case-comparison-matrix table { min-width: 880px; }
+.case-comparison-matrix td small { display: block; max-width: 420px; color: #6c7f8c; line-height: 1.45; }
+.case-comparison-matrix tr[data-direction="different"] td:nth-child(2),
+.case-comparison-matrix tr[data-direction="different"] td:nth-child(3),
+.case-comparison-matrix tr[data-direction="left-higher"] td:nth-child(2),
+.case-comparison-matrix tr[data-direction="right-higher"] td:nth-child(3) { background: rgba(232, 245, 249, .48); }
+.case-comparison-refs__grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 9px; padding: 12px; }
+.case-comparison-refs__column { min-width: 0; border: 1px solid #d9e3e8; border-radius: 9px; padding: 11px; background: #fbfcfd; }
+.case-comparison-refs__column > strong { display: block; color: #1f3d50; font-size: 11px; }
+.case-comparison-refs__column > span { display: block; margin-top: 2px; color: #7b8e9a; font-size: 8px; }
+.case-comparison-refs__column ul { display: grid; gap: 5px; margin: 9px 0 0; padding: 0; list-style: none; }
+.case-comparison-refs__column li { overflow-wrap: anywhere; border: 1px solid #e0e7eb; border-radius: 6px; padding: 6px 7px; background: #fff; color: #526b7a; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 8px; }
+.case-comparison-refs__column p, .case-comparison-empty p { color: #6f8390; font-size: 10px; }
+.case-comparison-empty { padding: 18px; }
+.case-comparison-empty h1 { margin: 5px 0; }
+
+@media (max-width: 1180px) {
+  .case-comparison-hero { grid-template-columns: 1fr; align-items: stretch; }
+}
+
+@media (max-width: 760px) {
+  .case-comparison-controls,
+  .case-comparison-pair,
+  .case-comparison-refs__grid { grid-template-columns: 1fr; }
+  .case-comparison-hero { padding: 15px; }
+}
+
