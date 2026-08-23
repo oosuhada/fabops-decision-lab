@@ -31,11 +31,13 @@ class LiveFabTwinStream:
         profile: str = "test",
         acceleration: float | None = None,
         minimum_interval_seconds: float = 0.03,
+        lot_base: int | None = None,
     ) -> None:
         self.config = load_config(profile)
         self.seed = seed
         self.acceleration = max(1.0, acceleration or float(os.getenv("FABOPS_LIVE_TIME_ACCELERATION", "720")))
         self.minimum_interval_seconds = max(0.0, minimum_interval_seconds)
+        self.lot_base = self.config.lot_count if lot_base is None else max(0, lot_base)
         generated = FabTwinSimulator(self.config, seed).generate().events
         self.template = [event for event in generated if event.get("source") != "fabtwin-sim-contract-fixture"]
 
@@ -48,7 +50,7 @@ class LiveFabTwinStream:
         return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
     def _stable_uuid(self, cycle: int, kind: str, value: str) -> str:
-        return str(uuid.uuid5(LIVE_NAMESPACE, f"{self.seed}:{cycle}:{kind}:{value}"))
+        return str(uuid.uuid5(LIVE_NAMESPACE, f"{self.seed}:{self.lot_base}:{cycle}:{kind}:{value}"))
 
     def _live_lot_id(self, cycle: int, value: str | None) -> str | None:
         if not value or not value.startswith("LOT-"):
@@ -57,7 +59,7 @@ class LiveFabTwinStream:
             source_index = int(value.split("-", 1)[1])
         except ValueError:
             return value
-        live_index = (cycle + 1) * self.config.lot_count + source_index
+        live_index = self.lot_base + cycle * self.config.lot_count + source_index
         return f"LOT-{live_index:05d}"
 
     def _live_wafer_id(self, cycle: int, value: str | None) -> str | None:
