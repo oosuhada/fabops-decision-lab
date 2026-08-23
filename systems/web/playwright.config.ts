@@ -1,5 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const apiPort = process.env.FABOPS_E2E_API_PORT ?? "8000";
+const webPort = process.env.FABOPS_E2E_WEB_PORT ?? "5173";
+const apiBaseURL = `http://127.0.0.1:${apiPort}`;
+const webBaseURL = `http://127.0.0.1:${webPort}`;
+
 export default defineConfig({
   testDir: "./e2e",
   testIgnore: "ui-review.spec.ts",
@@ -8,7 +13,7 @@ export default defineConfig({
   retries: 0,
   reporter: "line",
   use: {
-    baseURL: "http://127.0.0.1:5173",
+    baseURL: webBaseURL,
     trace: "retain-on-failure",
   },
   projects: [
@@ -19,9 +24,9 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: "/opt/homebrew/bin/uv run uvicorn systems.api.app:app --host 127.0.0.1 --port 8000",
+      command: `/opt/homebrew/bin/uv run uvicorn systems.api.app:app --host 127.0.0.1 --port ${apiPort}`,
       cwd: "../..",
-      url: "http://127.0.0.1:8000/health",
+      url: `${apiBaseURL}/health`,
       env: {
         ...process.env,
         FABOPS_PUBLIC_NARRATION_CACHE_ONLY: "true",
@@ -33,9 +38,9 @@ export default defineConfig({
       timeout: 30_000,
     },
     {
-      command: "npm run dev -- --host 127.0.0.1 --port 5173",
+      command: `VITE_API_URL=${apiBaseURL} npm run dev -- --host 127.0.0.1 --port ${webPort}`,
       cwd: ".",
-      url: "http://127.0.0.1:5173",
+      url: webBaseURL,
       reuseExistingServer: false,
       timeout: 30_000,
     }
