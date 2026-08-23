@@ -4,6 +4,7 @@ import {EvidenceDiff} from "./features/evidence/EvidenceDiff";
 import {EvidenceGraphExplorer} from "./features/evidence/EvidenceGraphExplorer";
 import {DecisionBoundaryPanel, RcaExplainability} from "./features/explainability/RcaExplainability";
 import {PresentationRenderer} from "./features/narration/PresentationRenderer";
+import {DecisionProvenanceGraph} from "./features/provenance/DecisionProvenanceGraph";
 import type {AdvisoryResponse, CaseDetailResponse, CaseReplayTraceResponse, DecisionBriefResponse, DecisionCockpitResponse, DecisionPacket, EvaluationResponse, FabCase, MeasurementPoint, NarrationIntent, NarrationStatusResponse, OverviewResponse, ReplayResponse} from "./types";
 
 function priorityClass(band: string) {
@@ -495,9 +496,10 @@ export function EvidenceGraph({detail, selectedStep, onSelectStep}: {detail: Cas
   </div>;
 }
 
-export function DecisionApproval({detail, packet, advisory, busy, feedback, brief, briefAudience, narrationBusy, narrationFeedback, narrationStatus, onBriefAudience, onGenerateBrief, onRequestEvidence, onPropose, onApprove, onReject}: {
+export function DecisionApproval({detail, packet, replayTrace, advisory, busy, feedback, brief, briefAudience, narrationBusy, narrationFeedback, narrationStatus, onBriefAudience, onGenerateBrief, onRequestEvidence, onPropose, onApprove, onReject}: {
   detail: CaseDetailResponse;
   packet: DecisionPacket | null;
+  replayTrace: CaseReplayTraceResponse | null;
   advisory: AdvisoryResponse | null;
   busy: boolean;
   feedback: {kind: "ok" | "error" | "unauthorized"; message: string} | null;
@@ -536,6 +538,7 @@ export function DecisionApproval({detail, packet, advisory, busy, feedback, brie
       <DecisionOptionCards packet={packet} />
     </section> : null}
     {packet ? <DecisionBoundaryPanel packet={packet} /> : null}
+    {packet ? <DecisionProvenanceGraph packet={packet} trace={replayTrace} /> : null}
     <section className="panel grounded-brief">
       <header>
         <div><span className="eyebrow">Grounded decision brief</span><h2>{brief?.brief.headline ?? "Generating evidence-grounded wording…"}</h2></div>
