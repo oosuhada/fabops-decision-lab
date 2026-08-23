@@ -66,9 +66,9 @@ describe("FabOps workbench", () => {
     expect(window.location.pathname).toBe("/EvidenceGraph");
     expect(screen.getByLabelText("Current workspace context")).toHaveTextContent("Investigate/Evidence Graph");
     expect(await screen.findByRole("heading", {name: /LOT-00002 lineage/})).toBeInTheDocument();
-    expect(screen.getByText("Normalized signal trend")).toBeInTheDocument();
-    expect(screen.getByText("Signal density")).toBeInTheDocument();
-    expect(screen.getByText("Relative signal intensity")).toBeInTheDocument();
+    expect(screen.getByText("Case-normalized process trend")).toBeInTheDocument();
+    expect(screen.getByText("Within-case range position")).toBeInTheDocument();
+    expect(screen.getByText("Relative sensor level by chamber")).toBeInTheDocument();
     expect(screen.getByRole("button", {name: "All signals"})).toHaveClass("is-active");
     expect(screen.getByRole("button", {name: /ETCH/i})).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(screen.getByRole("button", {name: /Decision & Approval/i}));
@@ -88,6 +88,18 @@ describe("FabOps workbench", () => {
     expect(screen.getByRole("heading", {name: /Is chamber:ETCH-01-A the best explanation/i})).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", {name: "Counter-evidence first"}));
     expect(screen.getByRole("button", {name: "Balanced order"})).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("keeps the synthetic yield label outside the yield ring", async () => {
+    const {container} = render(<App />);
+    await screen.findByRole("heading", {name: "What needs a decision now?"});
+    fireEvent.click(screen.getByRole("button", {name: /Operations Queue/i}));
+    expect(await screen.findByText("Yield health", {exact: true})).toBeInTheDocument();
+    const ring = container.querySelector(".yield-health-ring");
+    const caption = container.querySelector(".yield-health-ring__caption");
+    expect(ring).not.toBeNull();
+    expect(caption).not.toBeNull();
+    expect(ring?.contains(caption)).toBe(false);
   });
 
   it("starts bounded AI narration only after an explicit intent click", async () => {
