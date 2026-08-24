@@ -8,12 +8,36 @@ import {AuthorityChain} from "./features/governance/AuthorityChain";
 import {WaferInspectionContext} from "./features/inspection/WaferInspectionContext";
 import {PresentationRenderer} from "./features/narration/PresentationRenderer";
 import {DecisionProvenanceGraph} from "./features/provenance/DecisionProvenanceGraph";
-import type {AdvisoryResponse, CaseDetailResponse, CaseReplayTraceResponse, DecisionBriefResponse, DecisionCockpitResponse, DecisionPacket, EvaluationResponse, FabCase, LiveStatusResponse, MeasurementPoint, NarrationIntent, NarrationStatusResponse, OverviewResponse, ProjectionStatus, ReplayResponse} from "./types";
+import type {AdvisoryResponse, CaseDetailResponse, CaseReplayTraceResponse, ContinuousIntelligenceStatus, DecisionBriefResponse, DecisionCockpitResponse, DecisionPacket, EvaluationResponse, FabCase, LiveStatusResponse, MeasurementPoint, NarrationIntent, NarrationStatusResponse, OverviewResponse, ProjectionStatus, ReplayResponse} from "./types";
 
 function priorityClass(band: string) {
   if (band === "HIGH") return "decision-priority is-high";
   if (band === "VERIFY_DATA") return "decision-priority is-verify";
   return "decision-priority is-medium";
+}
+
+function AdaptiveIntelligenceVisualization({intelligence, liveStatus}: {intelligence: ContinuousIntelligenceStatus | null; liveStatus: LiveStatusResponse | null}) {
+  const plan = intelligence?.visualization_plans[0];
+  if (!plan) return <div className="adaptive-intelligence-viz is-empty"><strong>Visualization planner warming up</strong><p>A renderer is selected after the first material intelligence change.</p></div>;
+  const type = plan.primary.type;
+  const sensor = liveStatus?.prediction.top_sensor_forecasts[0];
+  const learned = intelligence?.latest_predictions.slice(0, 8) ?? [];
+  if (type === "timeseries" && sensor) {
+    const values = [sensor.last_value, ...sensor.forecast_next];
+    const minimum = Math.min(...values);
+    const maximum = Math.max(...values);
+    const span = Math.max(.001, maximum - minimum);
+    const points = values.map((value, index) => `${20 + index * 92},${104 - ((value - minimum) / span) * 74}`).join(" ");
+    return <div className="adaptive-intelligence-viz"><header><span>{plan.primary.title}</span><strong>{sensor.chamber_id} · {sensor.sensor_name}</strong></header><svg viewBox="0 0 320 125" role="img" aria-label="Adaptive failure precursor trajectory"><polyline points={points} className="adaptive-viz-line" />{values.map((value, index) => <circle key={index} cx={20 + index * 92} cy={104 - ((value - minimum) / span) * 74} r="4"><title>{value.toFixed(3)}</title></circle>)}</svg><footer><span>observed</span><span>forecast +1</span><span>+2</span><span>+3</span></footer></div>;
+  }
+  if (type === "heatmap") {
+    const forecasts = liveStatus?.prediction.top_sensor_forecasts.slice(0, 8) ?? [];
+    return <div className="adaptive-intelligence-viz"><header><span>{plan.primary.title}</span><strong>dynamic chamber intensity</strong></header><div className="adaptive-viz-heatmap">{forecasts.map((item) => <div key={`${item.chamber_id}:${item.sensor_name}`} style={{"--adaptive-risk": Math.max(.08, item.risk_score)} as React.CSSProperties}><span>{item.chamber_id}</span><strong>{item.sensor_name}</strong><small>{(item.risk_score * 100).toFixed(0)} risk</small></div>)}</div></div>;
+  }
+  if (type === "timeline") {
+    return <div className="adaptive-intelligence-viz"><header><span>{plan.primary.title}</span><strong>material intelligence sequence</strong></header><ol className="adaptive-viz-timeline">{learned.slice(0, 6).map((item) => <li key={`${item.model_name}:${item.generated_at}`}><time>{item.source_event_time}</time><strong>{item.target.replaceAll("_", " ")}</strong><span>{(item.score * 100).toFixed(1)} · {item.lot_id}</span></li>)}</ol></div>;
+  }
+  return <div className="adaptive-intelligence-viz"><header><span>{plan.primary.title}</span><strong>{type} comparison</strong></header><div className="adaptive-viz-bars">{learned.slice(0, 6).map((item) => <div key={`${item.model_name}:${item.target}`}><span>{item.target.replaceAll("_", " ")}</span><i><b style={{width: `${Math.max(4, Math.min(100, item.score * 100))}%`}} /></i><strong>{(item.score * 100).toFixed(0)}</strong></div>)}</div></div>;
 }
 
 function optionStanceLabel(stance: string) {
@@ -230,12 +254,13 @@ function SignalKpis({casePoints, stepPoints, sensor, step}: {casePoints: Measure
   </div>;
 }
 
-export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, liveStatus, selectedCaseId, onOpenCase, onOpenDecision}: {
+export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, liveStatus, intelligence, selectedCaseId, onOpenCase, onOpenDecision}: {
   cockpit: DecisionCockpitResponse;
   detail: CaseDetailResponse | null;
   projection: ProjectionStatus;
   sourceTimestamp: string;
   liveStatus: LiveStatusResponse | null;
+  intelligence: ContinuousIntelligenceStatus | null;
   selectedCaseId: string | null;
   onOpenCase: (caseId: string) => void;
   onOpenDecision: (caseId: string) => void;
@@ -254,6 +279,13 @@ export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, l
   const topProcess = matchingDetail?.trace.process_path[0] ?? null;
   const topForecast = liveStatus?.prediction.top_sensor_forecasts[0] ?? null;
   const topCaseRisk = liveStatus?.prediction.case_risks[0] ?? null;
+  const learnedByTarget = new Map<string, ContinuousIntelligenceStatus["latest_predictions"][number]>();
+  for (const prediction of intelligence?.latest_predictions ?? []) if (!learnedByTarget.has(prediction.target)) learnedByTarget.set(prediction.target, prediction);
+  const learnedYield = learnedByTarget.get("yield");
+  const learnedFailure = learnedByTarget.get("future_failure_probability");
+  const learnedMaintenance = learnedByTarget.get("maintenance_probability");
+  const learnedExcursion = learnedByTarget.get("excursion_probability");
+  const autoReport = intelligence?.reports[0] ?? null;
   return <div className="screen-stack decision-cockpit">
     <section className="cockpit-hero">
       <div className="cockpit-hero__intro">
@@ -273,6 +305,13 @@ export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, l
       <div><span>Event ledger</span><strong>{liveStatus?.event_count ?? "—"}</strong><small>{liveStatus?.latest_lot_id ?? "no live lot"} · {liveStatus?.latest_event_type?.replaceAll(".v1", "") ?? "no event"}</small></div>
       <div><span>Highest drift watch</span><strong>{topForecast ? `${topForecast.chamber_id} / ${topForecast.sensor_name}` : "—"}</strong><small>{topForecast ? `${topForecast.risk_band} · ${(topForecast.risk_score * 100).toFixed(0)} risk score` : "forecast unavailable"}</small></div>
       <div><span>Predictive case risk</span><strong>{topCaseRisk?.lot_id ?? "—"}</strong><small>{topCaseRisk ? `${topCaseRisk.risk_band} · ${(topCaseRisk.risk_score * 100).toFixed(0)} risk score` : "no active forecast"}</small></div>
+    </section>
+    <section className="learned-intelligence-strip" aria-label="Learned predictive intelligence">
+      <div><span>Learned yield</span><strong>{learnedYield ? `${(learnedYield.score * 100).toFixed(1)}%` : "—"}</strong><small>{learnedYield?.model_version ?? "champion warming"}</small></div>
+      <div><span>Excursion model</span><strong>{learnedExcursion ? `${(learnedExcursion.score * 100).toFixed(0)}%` : "—"}</strong><small>{learnedExcursion?.calibrated ? "calibrated champion" : "learning"}</small></div>
+      <div><span>Next-lot failure</span><strong>{learnedFailure ? `${(learnedFailure.score * 100).toFixed(0)}%` : "—"}</strong><small>{learnedFailure?.risk_band ?? "waiting"}</small></div>
+      <div><span>Maintenance need</span><strong>{learnedMaintenance ? `${(learnedMaintenance.score * 100).toFixed(0)}%` : "—"}</strong><small>{learnedMaintenance?.risk_band ?? "waiting"}</small></div>
+      <div><span>Auto analyst</span><strong>{autoReport?.provider?.toUpperCase() ?? "WAITING"}</strong><small>{autoReport?.brief?.headline ?? "material-change reporting"}</small></div>
     </section>
     <section className="evidence-authority-matrix" aria-label="Evidence authority separation">
       <article><span>OBSERVED</span><strong>Source records</strong><small>Event, measurement, inspection</small></article>
@@ -362,12 +401,18 @@ export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, l
   </div>;
 }
 
-export function OperationsOverview({overview, liveStatus, onSelectCase}: {overview: OverviewResponse; liveStatus: LiveStatusResponse | null; onSelectCase: (caseId: string) => void}) {
+export function OperationsOverview({overview, liveStatus, intelligence, onSelectCase}: {overview: OverviewResponse; liveStatus: LiveStatusResponse | null; intelligence: ContinuousIntelligenceStatus | null; onSelectCase: (caseId: string) => void}) {
   const classificationTotal = Math.max(1, overview.metrics.physical_excursions + overview.metrics.sensor_bias_cases + overview.metrics.data_quality_cases);
   const averageYield = overview.cases.filter((item) => item.mean_yield != null).reduce((sum, item) => sum + (item.mean_yield ?? 0), 0) / Math.max(1, overview.cases.filter((item) => item.mean_yield != null).length);
   const maxAnomaly = Math.max(...overview.cases.map((item) => item.anomaly_score), 1);
   const databaseBacked = overview.source === "postgresql-read-only";
   const topForecasts = liveStatus?.prediction.top_sensor_forecasts.slice(0, 4) ?? [];
+  const champions = Object.values(intelligence?.champions ?? {});
+  const predictionByTarget = new Map<string, NonNullable<ContinuousIntelligenceStatus["latest_predictions"]>[number]>();
+  for (const prediction of intelligence?.latest_predictions ?? []) if (!predictionByTarget.has(prediction.target)) predictionByTarget.set(prediction.target, prediction);
+  const latestReport = intelligence?.reports[0] ?? null;
+  const latestPlan = intelligence?.visualization_plans[0] ?? null;
+  const feedbackSamples = Object.values(intelligence?.feedback ?? {}).reduce((sum, item) => sum + item.samples, 0);
   return <div className="screen-stack">
     <section className="surface-header">
       <div><span className="eyebrow">Operations overview</span><h1>Yield excursion triage queue</h1></div>
@@ -395,6 +440,42 @@ export function OperationsOverview({overview, liveStatus, onSelectCase}: {overvi
           <div className="forecast-horizon"><span>next</span>{forecast.forecast_next.map((value, index) => <b key={index}>{value.toFixed(2)}</b>)}</div>
         </article>) : <p className="muted">Sensor forecasts appear as soon as measurement history is available.</p>}
       </div>
+    </section>
+    <section className="panel learning-engine-panel">
+      <header><div><span className="eyebrow">Continuous learning engine</span><h2>{intelligence?.learning_enabled ? "Models learn from completed lots" : "Learning registry unavailable"}</h2></div><small>{intelligence?.feedback_loop ?? "waiting for intelligence worker"}</small></header>
+      <div className="learning-kpis">
+        <article><span>Outcome memory</span><strong>{intelligence?.outcome_count ?? 0}</strong><small>completed lots available for feedback</small></article>
+        <article><span>Champion models</span><strong>{champions.length}</strong><small>yield · excursion · failure · maintenance</small></article>
+        <article><span>Prediction feedback</span><strong>{feedbackSamples}</strong><small>predictions compared with realized outcomes</small></article>
+        <article><span>Feature drift</span><strong>{intelligence?.drift.status?.toUpperCase() ?? "WAITING"}</strong><small>{intelligence ? `drift score ${intelligence.drift.score.toFixed(3)}` : "learning window warming"}</small></article>
+      </div>
+      <div className="champion-model-grid">
+        {champions.length ? champions.map((model) => <article key={model.model_name}>
+          <div><span>{model.model_name.replaceAll("_", " ")}</span><strong>{model.model_version}</strong></div>
+          <div className="model-metric-row"><span>{model.training_rows} rows</span><span>{model.metrics.mae != null ? `MAE ${model.metrics.mae.toFixed(3)}` : `Brier ${(model.metrics.brier ?? 0).toFixed(3)}`}</span><span>{model.metrics.accuracy != null ? `Acc ${(model.metrics.accuracy * 100).toFixed(0)}%` : "continuous"}</span></div>
+        </article>) : <p className="muted">The first champion set appears after enough completed lot outcomes are persisted.</p>}
+      </div>
+      <div className="learned-prediction-grid">
+        {["yield", "excursion_probability", "future_failure_probability", "maintenance_probability"].map((target) => {
+          const prediction = predictionByTarget.get(target);
+          return <article key={target}><span>{target.replaceAll("_", " ")}</span><strong>{prediction ? `${(prediction.score * 100).toFixed(target === "yield" ? 1 : 0)}%` : "—"}</strong><small>{prediction ? `${prediction.lot_id} · ${prediction.model_version}` : "awaiting champion prediction"}</small></article>;
+        })}
+      </div>
+      {(latestReport || latestPlan) ? <div className="intelligence-narrative-grid">
+        <article>
+          <span className="eyebrow">Auto analyst report</span>
+          <strong>{latestReport?.brief?.headline ?? `Case ${latestReport?.case_id ?? "—"}`}</strong>
+          <p>{latestReport?.brief?.summary ?? "A material change was detected and persisted; deterministic wording remains available when no LLM provider succeeds."}</p>
+          <small>{latestReport ? `${latestReport.trigger_type} · ${latestReport.provider} · ${latestReport.material_signature}` : "no report yet"}</small>
+        </article>
+        <article>
+          <span className="eyebrow">Adaptive visualization planner</span>
+          <strong>{latestPlan ? `${latestPlan.primary.type} → ${latestPlan.secondary.type}` : "Waiting"}</strong>
+          <p>{latestPlan?.rationale ?? "The planner changes chart strategy when the dominant operational question changes."}</p>
+          <small>{latestPlan ? `${latestPlan.primary.title} · ${latestPlan.secondary.title}` : "no plan yet"}</small>
+        </article>
+      </div> : null}
+      <AdaptiveIntelligenceVisualization intelligence={intelligence} liveStatus={liveStatus} />
     </section>
     <section className="overview-visual-grid">
       <article className="glass-visual-card glass-visual-card--yield">

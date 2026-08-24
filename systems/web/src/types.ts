@@ -95,6 +95,67 @@ export interface LiveStatusResponse {
   prediction: PredictiveSnapshot;
 }
 
+export interface LearnedPrediction {
+  lot_id: string;
+  model_name: string;
+  model_version: string;
+  target: "yield" | "excursion_probability" | "future_failure_probability" | "maintenance_probability" | string;
+  score: number;
+  risk_band: string;
+  source_event_time: string;
+  generated_at: string;
+  trained_model: boolean;
+  calibrated: boolean;
+}
+
+export interface ChampionModel {
+  model_name: string;
+  model_version: string;
+  training_rows: number;
+  trained_at: string;
+  feature_schema: string[];
+  parameters: {kind?: string; weights?: number[]; bias?: number};
+  metrics: {mae?: number; brier?: number; accuracy?: number; validation_rows?: number; trained_rows?: number};
+}
+
+export interface IntelligenceReport {
+  case_id: string;
+  material_signature: string;
+  trigger_type: string;
+  mode: string;
+  provider: string;
+  brief?: {
+    headline?: string;
+    summary?: string;
+    generated_at?: string;
+    sections?: Array<{title: string; body: string}>;
+  };
+}
+
+export interface AdaptiveVisualizationPlan {
+  case_id: string;
+  material_signature: string;
+  planner: string;
+  rationale: string;
+  primary: {type: string; title: string; x?: string; y?: string; group_by?: string};
+  secondary: {type: string; title: string; x?: string; y?: string; group_by?: string};
+}
+
+export interface ContinuousIntelligenceStatus {
+  source: string;
+  schema_version: string;
+  learning_enabled: boolean;
+  feedback_loop: string;
+  outcome_count: number;
+  champions: Record<string, ChampionModel>;
+  latest_predictions: LearnedPrediction[];
+  feedback: Record<string, {samples: number; mae: number; mse: number}>;
+  drift: {status: "warming" | "stable" | "drift" | string; score: number; recent_rows: number; baseline_rows: number; top_shifts?: Array<{feature: string; shift: number}>};
+  reports: IntelligenceReport[];
+  visualization_plans: AdaptiveVisualizationPlan[];
+  degraded_reason?: string;
+}
+
 export interface RcaCandidate {
   candidate_id: string;
   candidate_type: string;

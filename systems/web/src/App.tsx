@@ -9,7 +9,7 @@ import {WorkbenchResizeHandle} from "./platform/workbench/WorkbenchResizeHandle"
 import {useWorkbenchLayout} from "./platform/workbench/useWorkbenchLayout";
 import {useLocale} from "./locale";
 import {DecisionApproval, DecisionCockpit, EvaluationLab, EvidenceGraph, ExcursionCase, OperationsOverview, ReplayOperations, caseById} from "./screens";
-import type {AdvisoryResponse, CaseDetailResponse, CaseReplayTraceResponse, DecisionBriefResponse, DecisionCockpitResponse, DeploymentIdentityResponse, EvaluationResponse, LiveStatusResponse, NarrationIntent, NarrationStatusResponse, OverviewResponse, ReplayResponse, ScreenId} from "./types";
+import type {AdvisoryResponse, CaseDetailResponse, CaseReplayTraceResponse, ContinuousIntelligenceStatus, DecisionBriefResponse, DecisionCockpitResponse, DeploymentIdentityResponse, EvaluationResponse, LiveStatusResponse, NarrationIntent, NarrationStatusResponse, OverviewResponse, ReplayResponse, ScreenId} from "./types";
 
 const navigation: Array<{id: ScreenId; label: string; short: string; group: "Decide" | "Investigate" | "Trust"}> = [
   {id: "cockpit", label: "Decision Cockpit", short: "01", group: "Decide"},
@@ -101,6 +101,7 @@ export default function App() {
   const [replay, setReplay] = useState<ReplayResponse | null>(null);
   const [deploymentIdentity, setDeploymentIdentity] = useState<DeploymentIdentityResponse | null>(null);
   const [liveStatus, setLiveStatus] = useState<LiveStatusResponse | null>(null);
+  const [intelligenceStatus, setIntelligenceStatus] = useState<ContinuousIntelligenceStatus | null>(null);
   const [caseReplayTrace, setCaseReplayTrace] = useState<CaseReplayTraceResponse | null>(null);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [detail, setDetail] = useState<CaseDetailResponse | null>(null);
@@ -156,8 +157,17 @@ export default function App() {
     }
   }, []);
 
+  const loadIntelligenceStatus = useCallback(async () => {
+    try {
+      setIntelligenceStatus(await api.intelligenceStatus());
+    } catch {
+      setIntelligenceStatus(null);
+    }
+  }, []);
+
   useEffect(() => { void loadRoot(); }, [loadRoot]);
   useEffect(() => { void loadLiveStatus(); }, [loadLiveStatus]);
+  useEffect(() => { void loadIntelligenceStatus(); }, [loadIntelligenceStatus]);
   useEffect(() => {
     try { window.localStorage.setItem(NAV_GROUP_STORAGE_KEY, JSON.stringify(openGroups)); } catch { /* Storage is optional for the preview. */ }
   }, [openGroups]);
@@ -192,6 +202,7 @@ export default function App() {
         void loadLiveStatus();
       }
       void loadRoot();
+      void loadIntelligenceStatus();
       if (selectedCaseId) void loadCase(selectedCaseId);
     };
     source.addEventListener("fabops-update", refresh);
@@ -199,16 +210,17 @@ export default function App() {
       source.removeEventListener("fabops-update", refresh);
       source.close();
     };
-  }, [loadCase, loadLiveStatus, loadRoot, selectedCaseId]);
+  }, [loadCase, loadIntelligenceStatus, loadLiveStatus, loadRoot, selectedCaseId]);
   useEffect(() => {
     if (!liveStatus?.live_enabled) return;
     const timer = window.setInterval(() => {
       void loadRoot();
       void loadLiveStatus();
+      void loadIntelligenceStatus();
       if (selectedCaseId) void loadCase(selectedCaseId);
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [liveStatus?.live_enabled, loadCase, loadLiveStatus, loadRoot, selectedCaseId]);
+  }, [liveStatus?.live_enabled, loadCase, loadIntelligenceStatus, loadLiveStatus, loadRoot, selectedCaseId]);
 
   const selectedCase = useMemo(() => overview ? caseById(overview.cases, selectedCaseId) : null, [overview, selectedCaseId]);
   const selectedPacket = useMemo(() => cockpit?.queue.find((packet) => packet.case_id === selectedCaseId) ?? cockpit?.queue[0] ?? null, [cockpit, selectedCaseId]);
@@ -295,8 +307,8 @@ export default function App() {
   }
 
   let workSurface;
-  if (screen === "cockpit") workSurface = <DecisionCockpit cockpit={cockpit} detail={detail} projection={overview.projection} sourceTimestamp={overview.source_timestamp} liveStatus={liveStatus} selectedCaseId={selectedCaseId} onOpenCase={selectCase} onOpenDecision={openDecision} />;
-  else if (screen === "overview") workSurface = <OperationsOverview overview={overview} liveStatus={liveStatus} onSelectCase={selectCase} />;
+  if (screen === "cockpit") workSurface = <DecisionCockpit cockpit={cockpit} detail={detail} projection={overview.projection} sourceTimestamp={overview.source_timestamp} liveStatus={liveStatus} intelligence={intelligenceStatus} selectedCaseId={selectedCaseId} onOpenCase={selectCase} onOpenDecision={openDecision} />;
+  else if (screen === "overview") workSurface = <OperationsOverview overview={overview} liveStatus={liveStatus} intelligence={intelligenceStatus} onSelectCase={selectCase} />;
   else if ((screen === "case" || screen === "graph" || screen === "analysis" || screen === "decision") && !detail) workSurface = <WorkbenchState kind="loading" title="Loading selected case" detail="Fetching source-linked evidence and deterministic RCA." />;
   else if (screen === "case" && detail) workSurface = <ExcursionCase detail={detail} advisory={advisory} />;
   else if (screen === "graph" && detail) workSurface = <EvidenceGraph detail={detail} selectedStep={selectedStep} onSelectStep={setSelectedStep} onSelectEvidenceNode={setSelectedEvidenceNode} />;

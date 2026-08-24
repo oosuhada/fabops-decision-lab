@@ -263,6 +263,199 @@ class PostgresRepository:
                 result[name] = int(row["count"])
         return result
 
+    def upsert_learning_outcome(self, outcome: dict[str, Any]) -> None:
+        with self._connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO fabops_learning_outcomes(
+                    lot_id, yield_value, physical_excursion, equipment_alarm,
+                    maintenance_observed, features, outcome_document
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (lot_id) DO UPDATE SET
+                    yield_value = EXCLUDED.yield_value,
+                    physical_excursion = EXCLUDED.physical_excursion,
+                    equipment_alarm = EXCLUDED.equipment_alarm,
+                    maintenance_observed = EXCLUDED.maintenance_observed,
+                    features = EXCLUDED.features,
+                    outcome_document = EXCLUDED.outcome_document,
+                    updated_at = now()
+                """,
+                (
+                    outcome["lot_id"], outcome.get("yield_value"), bool(outcome["physical_excursion"]),
+                    bool(outcome["equipment_alarm"]), bool(outcome["maintenance_observed"]),
+                    Jsonb(outcome["features"]), Jsonb(outcome),
+                ),
+            )
+
+    def learning_outcomes(self) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT outcome_document FROM fabops_learning_outcomes ORDER BY updated_at, lot_id"
+            ).fetchall()
+        return [deepcopy(row["outcome_document"]) for row in rows]
+
+    def register_model(self, model: dict[str, Any], *, champion: bool) -> None:
+        with self._connection() as connection:
+            if champion:
+                connection.execute(
+                    "UPDATE fabops_model_registry SET status = 'retired' WHERE model_name = %s AND status = 'champion'",
+                    (model["model_name"],),
+                )
+            connection.execute(
+                """
+                INSERT INTO fabops_model_registry(
+                    model_name, model_version, status, training_rows, feature_schema,
+                    parameters, metrics
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (model_name, model_version) DO UPDATE SET
+                    status = EXCLUDED.status,
+                    training_rows = EXCLUDED.training_rows,
+                    feature_schema = EXCLUDED.feature_schema,
+                    parameters = EXCLUDED.parameters,
+                    metrics = EXCLUDED.metrics,
+                    trained_at = now()
+                """,
+                (
+                    model["model_name"], model["model_version"], "champion" if champion else "candidate",
+                    int(model["training_rows"]), Jsonb(model["feature_schema"]), Jsonb(model["parameters"]),
+                    Jsonb(model["metrics"]),
+                ),
+            )
+
+    def champion_models(self) -> dict[str, dict[str, Any]]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT model_name, model_version, training_rows, feature_schema, parameters, metrics, trained_at
+                FROM fabops_model_registry WHERE status = 'champion' ORDER BY model_name
+                """
+            ).fetchall()
+        return {
+            str(row["model_name"]): {
+                "model_name": str(row["model_name"]),
+                "model_version": str(row["model_version"]),
+                "training_rows": int(row["training_rows"]),
+                "feature_schema": deepcopy(row["feature_schema"]),
+                "parameters": deepcopy(row["parameters"]),
+                "metrics": deepcopy(row["metrics"]),
+                "trained_at": row["trained_at"].isoformat(),
+            }
+            for row in rows
+        }
+
+    def append_prediction(self, prediction: dict[str, Any]) -> None:
+        with self._connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO fabops_predictions(lot_id, model_name, model_version, target, score, prediction_document)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    prediction["lot_id"], prediction["model_name"], prediction["model_version"],
+                    prediction["target"], float(prediction["score"]), Jsonb(prediction),
+                ),
+            )
+
+    def latest_predictions(self, limit: int = 40) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT prediction_document FROM fabops_predictions ORDER BY prediction_id DESC LIMIT %s",
+                (limit,),
+            ).fetchall()
+        return [deepcopy(row["prediction_document"]) for row in rows]
+
+    def unevaluated_predictions(self, limit: int = 200) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT p.prediction_id, p.prediction_document
+                FROM fabops_predictions p
+                LEFT JOIN fabops_prediction_feedback f ON f.prediction_id = p.prediction_id
+                WHERE f.prediction_id IS NULL
+                ORDER BY p.prediction_id
+                LIMIT %s
+                """,
+                (limit,),
+            ).fetchall()
+        return [{"prediction_id": int(row["prediction_id"]), **deepcopy(row["prediction_document"])} for row in rows]
+
+    def append_prediction_feedback(self, feedback: dict[str, Any]) -> None:
+        with self._connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO fabops_prediction_feedback(prediction_id, target, predicted, actual, absolute_error)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (prediction_id) DO NOTHING
+                """,
+                (
+                    int(feedback["prediction_id"]), feedback["target"], float(feedback["predicted"]),
+                    float(feedback["actual"]), float(feedback["absolute_error"]),
+                ),
+            )
+
+    def prediction_feedback_summary(self) -> dict[str, Any]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT target, count(*) AS samples, avg(absolute_error) AS mae,
+                       avg((predicted - actual) * (predicted - actual)) AS mse
+                FROM fabops_prediction_feedback
+                GROUP BY target ORDER BY target
+                """
+            ).fetchall()
+        return {
+            str(row["target"]): {
+                "samples": int(row["samples"]),
+                "mae": round(float(row["mae"]), 6),
+                "mse": round(float(row["mse"]), 6),
+            }
+            for row in rows
+        }
+
+    def append_intelligence_report(self, report: dict[str, Any]) -> bool:
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                INSERT INTO fabops_intelligence_reports(
+                    case_id, material_signature, trigger_type, mode, provider, report_document
+                ) VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (case_id, material_signature) DO NOTHING RETURNING report_id
+                """,
+                (
+                    report["case_id"], report["material_signature"], report["trigger_type"],
+                    report["mode"], report["provider"], Jsonb(report),
+                ),
+            ).fetchone()
+        return row is not None
+
+    def latest_intelligence_reports(self, limit: int = 20) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT report_document FROM fabops_intelligence_reports ORDER BY report_id DESC LIMIT %s",
+                (limit,),
+            ).fetchall()
+        return [deepcopy(row["report_document"]) for row in rows]
+
+    def append_visualization_plan(self, plan: dict[str, Any]) -> bool:
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                INSERT INTO fabops_visualization_plans(case_id, material_signature, plan_document)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (case_id, material_signature) DO NOTHING RETURNING plan_id
+                """,
+                (plan["case_id"], plan["material_signature"], Jsonb(plan)),
+            ).fetchone()
+        return row is not None
+
+    def latest_visualization_plans(self, limit: int = 20) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT plan_document FROM fabops_visualization_plans ORDER BY plan_id DESC LIMIT %s",
+                (limit,),
+            ).fetchall()
+        return [deepcopy(row["plan_document"]) for row in rows]
+
 
 class ReadOnlyPostgresRepository(PostgresRepository):
     """PostgreSQL adapter that enforces read-only transactions at the server boundary.

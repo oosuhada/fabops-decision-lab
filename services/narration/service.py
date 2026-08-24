@@ -23,12 +23,16 @@ def _deterministic_brief(packet: dict[str, Any], audience: str, *, mode: str, pr
     option = next(option for option in packet["options"] if option["option_id"] == packet["recommended_option_id"])
     top = packet["evidence"].get("top_candidate")
     impact = packet["impact"]
+    predictive = packet.get("predictive_intelligence", {}) if isinstance(packet.get("predictive_intelligence"), dict) else {}
+    predictive_summary = ", ".join(f"{name}={float(value.get('score', 0.0)):.2f}" for name, value in predictive.items())
     if audience == "manager":
         headline = f"{packet['priority_band']} decision · {packet['lot_id']}"
         summary = (
             f"{packet['decision_question']} Current deterministic recommendation: {option['label']}. "
             "This is decision support only; no equipment command is executed."
         )
+        if predictive_summary:
+            summary += f" Learned outlook: {predictive_summary}."
         sections = [
             {
                 "section_id": "impact",
@@ -51,6 +55,8 @@ def _deterministic_brief(packet: dict[str, Any], audience: str, *, mode: str, pr
         candidate = "No ranked RCA candidate" if top is None else f"Top RCA: {top['candidate_id']} (score {top['score']:.2f})"
         headline = f"Engineering evidence packet · {packet['case_id']}"
         summary = f"{candidate}. Recommended next decision: {option['label']}."
+        if predictive_summary:
+            summary += f" Learned outlook: {predictive_summary}."
         sections = [
             {
                 "section_id": "rca",

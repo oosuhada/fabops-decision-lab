@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.responses import StreamingResponse
 
 from services.decision import DecisionSupportService
+from services.intelligence import ContinuousIntelligenceService
 from services.narration import NarrationService
 from services.narration.demo import DemoPolicyError, DemoSessionPolicy, demo_policy_from_env
 from services.prediction import PredictiveIntelligenceService
@@ -113,6 +114,25 @@ def _live_status(runtime: Runtime) -> dict[str, Any]:
         "projection": asdict(runtime.projection.status()),
         "prediction": prediction,
     }
+
+
+def _continuous_intelligence_status(runtime: Runtime) -> dict[str, Any]:
+    try:
+        return ContinuousIntelligenceService(runtime.event_repository).status()
+    except Exception as exc:  # noqa: BLE001 - old/local schemas degrade without hiding live runtime
+        return {
+            "schema_version": "fabops-continuous-intelligence-v1",
+            "learning_enabled": False,
+            "feedback_loop": "unavailable",
+            "outcome_count": 0,
+            "champions": {},
+            "latest_predictions": [],
+            "feedback": {},
+            "drift": {"status": "unavailable", "score": 0.0, "recent_rows": 0, "baseline_rows": 0},
+            "reports": [],
+            "visualization_plans": [],
+            "degraded_reason": type(exc).__name__,
+        }
 
 
 def get_narration_service() -> NarrationService:
@@ -235,6 +255,11 @@ def live_status(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, 
 def predictions(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
     _refresh_projection(runtime)
     return {"source": "transparent-online-baseline", **PredictiveIntelligenceService(runtime.event_repository, runtime.case_repository).snapshot()}
+
+
+@app.get("/api/intelligence/status")
+def continuous_intelligence_status(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
+    return {"source": "continuous-learning-registry", **_continuous_intelligence_status(runtime)}
 
 
 @app.get("/api/live/stream")
