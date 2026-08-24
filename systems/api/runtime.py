@@ -238,7 +238,7 @@ class DatabaseReadOnlyRuntime:
         try:
             event_count = len(self.event_repository.all_events())
             detection_checkpoint = self.event_repository.checkpoint("detection")
-            projection = self.projection.status()
+            projection = self.projection.catch_up()
             source_ready = event_count > 0 and detection_checkpoint == event_count
             projection_payload = {
                 "projection_version": projection.projection_version,
