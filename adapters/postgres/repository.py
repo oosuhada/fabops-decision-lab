@@ -169,6 +169,16 @@ class PostgresRepository:
         rows.reverse()
         return [StoredEvent(deepcopy(row["envelope"]), str(row["delivery_status"]), int(row["sequence"])) for row in rows]
 
+    def delivery_status_counts(self) -> dict[str, int]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT delivery_status, count(*) AS count FROM fabops_event_log GROUP BY delivery_status"
+            ).fetchall()
+        result = {"on_time": 0, "late": 0, "out_of_order": 0}
+        for row in rows:
+            result[str(row["delivery_status"])] = int(row["count"])
+        return result
+
     def append_outbox(self, topic: str, payload: dict[str, Any]) -> None:
         with self._connection() as connection:
             connection.execute("INSERT INTO fabops_outbox(topic, payload) VALUES (%s, %s)", (topic, Jsonb(payload)))

@@ -403,10 +403,11 @@ class DecisionSupportService:
                 str(case["case_id"]),
             ),
         )
-        # Hydrate only the first decision in full. The live queue can grow without
-        # multiplying expensive RCA/advisory scans across every historical case.
+        # The cockpit is an index, not a case-detail endpoint. Detailed RCA is
+        # hydrated only after a case is opened so boot latency stays bounded as
+        # the live corpus grows.
         queue_limit = 100
-        queue = [self._cockpit_packet(case, hydrate=index == 0) for index, case in enumerate(ordered_cases[:queue_limit])]
+        queue = [self._cockpit_packet(case, hydrate=False) for case in ordered_cases[:queue_limit]]
         counts: dict[str, int] = {"HIGH": 0, "MEDIUM": 0, "VERIFY_DATA": 0}
         for case in ordered_cases:
             band = str(_decision_definition(str(case["classification"]))["priority_band"])

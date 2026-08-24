@@ -816,19 +816,23 @@ def evaluation(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, A
 @app.get("/api/replay")
 def replay_status(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
     _refresh_projection(runtime)
-    stored = runtime.event_repository.all_events()
+    counter = getattr(runtime.event_repository, "event_count", None)
+    event_count = int(counter()) if callable(counter) else len(runtime.event_repository.all_events())
+    counts = runtime.event_repository.counts() if hasattr(runtime.event_repository, "counts") else None
+    delivery_counter = getattr(runtime.event_repository, "delivery_status_counts", None)
+    delivery_counts = delivery_counter() if callable(delivery_counter) else {
+        key: sum(item.delivery_status == key for item in runtime.event_repository.all_events())
+        for key in ("on_time", "late", "out_of_order")
+    }
     status = runtime.projection.status()
     return {
         "source": "synthetic-replay",
-        "event_count": len(stored),
+        "event_count": event_count,
         "detection_checkpoint": runtime.event_repository.checkpoint("detection"),
         "projection": asdict(status),
-        "outbox_count": len(runtime.event_repository.outbox()),
-        "quarantine_count": len(runtime.quarantine.all()),
-        "delivery_status_counts": {
-            key: sum(item.delivery_status == key for item in stored)
-            for key in ("on_time", "late", "out_of_order")
-        },
+        "outbox_count": counts["outbox"] if counts is not None else len(runtime.event_repository.outbox()),
+        "quarantine_count": counts["quarantine"] if counts is not None else len(runtime.quarantine.all()),
+        "delivery_status_counts": delivery_counts,
         "external_services": {
             "postgres": runtime.integration_status()["postgres_runtime_verified"],
             "redpanda": runtime.integration_status()["redpanda_runtime_verified"],
