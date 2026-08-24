@@ -96,6 +96,21 @@ class Neo4jDriverProjectionAdapter(Neo4jProjectionAdapter):
             nodes.append(GraphNode(str(row["kind"]), node_id, properties))
         return nodes
 
+    def nodes_for_lot(self, kind: str, lot_id: str) -> list[GraphNode]:
+        rows = self._run(
+            "MATCH (n:FabOpsProjection) WHERE n.kind = $kind AND n.lot_id = $lot_id RETURN n.projection_key AS projection_key, n.kind AS kind, properties(n) AS properties ORDER BY n.projection_key",
+            {"kind": kind, "lot_id": lot_id},
+        )
+        nodes: list[GraphNode] = []
+        for row in rows:
+            projection_key = str(row["projection_key"])
+            _prefix, node_id = projection_key.split(":", 1)
+            properties = dict(row["properties"])
+            properties.pop("projection_key", None)
+            properties.pop("kind", None)
+            nodes.append(GraphNode(str(row["kind"]), node_id, properties))
+        return nodes
+
     def edges(self, relation: str | None = None) -> list[GraphEdge]:
         rows = self._run(
             """
@@ -114,16 +129,36 @@ class Neo4jDriverProjectionAdapter(Neo4jProjectionAdapter):
         return result
 
     def outgoing(self, source_kind: str, source_id: str, relation: str | None = None) -> list[GraphEdge]:
-        return [
-            edge
-            for edge in self.edges(relation)
-            if edge.source_kind == source_kind and edge.source_id == source_id
-        ]
+        rows = self._run(
+            """
+            MATCH (a:FabOpsProjection {projection_key: $source_key})-[r:FABOPS_RELATION]->(b:FabOpsProjection)
+            WHERE $relation IS NULL OR r.relation = $relation
+            RETURN a.projection_key AS source_key, r.relation AS relation, b.projection_key AS target_key
+            ORDER BY relation, target_key
+            """,
+            {"source_key": f"{source_kind}:{source_id}", "relation": relation},
+        )
+        result: list[GraphEdge] = []
+        for row in rows:
+            result_source_kind, result_source_id = str(row["source_key"]).split(":", 1)
+            target_kind, target_id = str(row["target_key"]).split(":", 1)
+            result.append(GraphEdge(result_source_kind, result_source_id, str(row["relation"]), target_kind, target_id))
+        return result
 
     def incoming(self, target_kind: str, target_id: str, relation: str | None = None) -> list[GraphEdge]:
-        return [
-            edge
-            for edge in self.edges(relation)
-            if edge.target_kind == target_kind and edge.target_id == target_id
-        ]
+        rows = self._run(
+            """
+            MATCH (a:FabOpsProjection)-[r:FABOPS_RELATION]->(b:FabOpsProjection {projection_key: $target_key})
+            WHERE $relation IS NULL OR r.relation = $relation
+            RETURN a.projection_key AS source_key, r.relation AS relation, b.projection_key AS target_key
+            ORDER BY relation, source_key
+            """,
+            {"target_key": f"{target_kind}:{target_id}", "relation": relation},
+        )
+        result: list[GraphEdge] = []
+        for row in rows:
+            source_kind, source_id = str(row["source_key"]).split(":", 1)
+            result_target_kind, result_target_id = str(row["target_key"]).split(":", 1)
+            result.append(GraphEdge(source_kind, source_id, str(row["relation"]), result_target_kind, result_target_id))
+        return result
 

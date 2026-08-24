@@ -70,7 +70,8 @@ class RcaQueryService:
         if isinstance(query, RankRootCausesQuery):
             return {"case_id": query.case_id, "projection": status, "candidates": self.ranker.rank(case)}
         lot_id = case["lot_id"]
-        runs = [node for node in self.graph.nodes("ProcessRun") if node.properties.get("lot_id") == lot_id]
+        indexed = getattr(self.graph, "nodes_for_lot", None)
+        runs = indexed("ProcessRun", lot_id) if callable(indexed) else [node for node in self.graph.nodes("ProcessRun") if node.properties.get("lot_id") == lot_id]
         path = []
         for run in sorted(runs, key=lambda node: node.properties.get("event_time", "")):
             chamber_edges = self.graph.outgoing("ProcessRun", run.node_id, "USED_CHAMBER")

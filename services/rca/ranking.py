@@ -27,6 +27,9 @@ class TransparentRcaRanker:
         self.graph = graph
 
     def _nodes_for_lot(self, kind: str, lot_id: str) -> list[GraphNode]:
+        indexed = getattr(self.graph, "nodes_for_lot", None)
+        if callable(indexed):
+            return indexed(kind, lot_id)
         return [node for node in self.graph.nodes(kind) if node.properties.get("lot_id") == lot_id]
 
     def _component_score(self, components: dict[str, float]) -> float:

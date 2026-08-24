@@ -363,8 +363,11 @@ def get_case(case_id: str, runtime: Annotated[Runtime, Depends(get_runtime)]) ->
         ranking = runtime.queries.execute(RankRootCausesQuery(case_id))
         trace = runtime.queries.execute(TraceAffectedLotsQuery(case_id))
         lot_id = case["lot_id"]
-        measurements = [node.properties for node in runtime.graph.nodes("Measurement") if node.properties.get("lot_id") == lot_id]
-        inspections = [node.properties for node in runtime.graph.nodes("Inspection") if node.properties.get("lot_id") == lot_id]
+        indexed = getattr(runtime.graph, "nodes_for_lot", None)
+        measurement_nodes = indexed("Measurement", lot_id) if callable(indexed) else [node for node in runtime.graph.nodes("Measurement") if node.properties.get("lot_id") == lot_id]
+        inspection_nodes = indexed("Inspection", lot_id) if callable(indexed) else [node for node in runtime.graph.nodes("Inspection") if node.properties.get("lot_id") == lot_id]
+        measurements = [node.properties for node in measurement_nodes]
+        inspections = [node.properties for node in inspection_nodes]
         return {
             "source": "inferred",
             "case": case,

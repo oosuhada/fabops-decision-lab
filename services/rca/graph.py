@@ -36,45 +36,68 @@ class InMemoryGraphProjection:
     def __init__(self) -> None:
         self._nodes: dict[tuple[str, str], GraphNode] = {}
         self._edges: dict[tuple[str, str, str, str, str], GraphEdge] = {}
+        self._nodes_by_kind: dict[str, dict[str, GraphNode]] = {}
+        self._nodes_by_lot: dict[tuple[str, str], dict[str, GraphNode]] = {}
+        self._outgoing_edges: dict[tuple[str, str], dict[tuple[str, str, str, str, str], GraphEdge]] = {}
+        self._incoming_edges: dict[tuple[str, str], dict[tuple[str, str, str, str, str], GraphEdge]] = {}
 
     def clear(self) -> None:
         self._nodes.clear()
         self._edges.clear()
+        self._nodes_by_kind.clear()
+        self._nodes_by_lot.clear()
+        self._outgoing_edges.clear()
+        self._incoming_edges.clear()
 
     def upsert_node(self, kind: str, node_id: str, properties: dict[str, Any]) -> None:
         key = (kind, node_id)
         current = self._nodes.get(key)
         merged = dict(current.properties) if current else {}
         merged.update(deepcopy(properties))
-        self._nodes[key] = GraphNode(kind, node_id, merged)
+        node = GraphNode(kind, node_id, merged)
+        self._nodes[key] = node
+        self._nodes_by_kind.setdefault(kind, {})[node_id] = node
+        old_lot = str(current.properties.get("lot_id")) if current and current.properties.get("lot_id") is not None else None
+        new_lot = str(merged.get("lot_id")) if merged.get("lot_id") is not None else None
+        if old_lot and old_lot != new_lot:
+            bucket = self._nodes_by_lot.get((kind, old_lot))
+            if bucket is not None:
+                bucket.pop(node_id, None)
+        if new_lot:
+            self._nodes_by_lot.setdefault((kind, new_lot), {})[node_id] = node
 
     def upsert_edge(self, source_kind: str, source_id: str, relation: str, target_kind: str, target_id: str) -> None:
         edge = GraphEdge(source_kind, source_id, relation, target_kind, target_id)
-        self._edges[(source_kind, source_id, relation, target_kind, target_id)] = edge
+        key = (source_kind, source_id, relation, target_kind, target_id)
+        self._edges[key] = edge
+        self._outgoing_edges.setdefault((source_kind, source_id), {})[key] = edge
+        self._incoming_edges.setdefault((target_kind, target_id), {})[key] = edge
 
     def get_node(self, kind: str, node_id: str) -> GraphNode | None:
         node = self._nodes.get((kind, node_id))
         return deepcopy(node) if node else None
 
     def nodes(self, kind: str | None = None) -> list[GraphNode]:
-        values = [node for node in self._nodes.values() if kind is None or node.kind == kind]
+        values = list(self._nodes.values()) if kind is None else list(self._nodes_by_kind.get(kind, {}).values())
         return deepcopy(sorted(values, key=lambda item: (item.kind, item.node_id)))
+
+    def nodes_for_lot(self, kind: str, lot_id: str) -> list[GraphNode]:
+        values = list(self._nodes_by_lot.get((kind, lot_id), {}).values())
+        return deepcopy(sorted(values, key=lambda item: item.node_id))
 
     def edges(self, relation: str | None = None) -> list[GraphEdge]:
         values = [edge for edge in self._edges.values() if relation is None or edge.relation == relation]
         return deepcopy(sorted(values, key=lambda item: (item.source_kind, item.source_id, item.relation, item.target_kind, item.target_id)))
 
     def outgoing(self, source_kind: str, source_id: str, relation: str | None = None) -> list[GraphEdge]:
-        return [
-            edge
-            for edge in self.edges(relation)
-            if edge.source_kind == source_kind and edge.source_id == source_id
-        ]
+        values = list(self._outgoing_edges.get((source_kind, source_id), {}).values())
+        if relation is not None:
+            values = [edge for edge in values if edge.relation == relation]
+        return deepcopy(sorted(values, key=lambda item: (item.relation, item.target_kind, item.target_id)))
 
     def incoming(self, target_kind: str, target_id: str, relation: str | None = None) -> list[GraphEdge]:
-        return [
-            edge
-            for edge in self.edges(relation)
-            if edge.target_kind == target_kind and edge.target_id == target_id
-        ]
+        values = list(self._incoming_edges.get((target_kind, target_id), {}).values())
+        if relation is not None:
+            values = [edge for edge in values if edge.relation == relation]
+        return deepcopy(sorted(values, key=lambda item: (item.relation, item.source_kind, item.source_id)))
 
