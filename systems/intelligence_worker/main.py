@@ -89,7 +89,9 @@ def main() -> None:
                             }
                         )
                     finally:
-                        runtime.graph.close()
+                        close_graph = getattr(runtime.graph, "close", None)
+                        if callable(close_graph):
+                            close_graph()
             print(
                 json.dumps(
                     {

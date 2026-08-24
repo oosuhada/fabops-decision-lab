@@ -4,6 +4,7 @@ import asyncio
 import hmac
 import json
 import os
+import threading
 import uuid
 from contextlib import contextmanager
 from dataclasses import asdict
@@ -32,6 +33,7 @@ app = FastAPI(
 )
 
 Runtime = LocalRuntime | IntegrationRuntime | DatabaseReadOnlyRuntime
+_PROJECTION_REFRESH_LOCK = threading.Lock()
 
 
 def _cors_origins_from_env() -> list[str]:
@@ -87,9 +89,33 @@ def get_runtime() -> Runtime:
 def _refresh_projection(runtime: Runtime) -> None:
     """Catch a long-lived API process up with newly persisted source events."""
     try:
-        runtime.projection.catch_up()
+        with _PROJECTION_REFRESH_LOCK:
+            runtime.projection.catch_up()
     except Exception:  # noqa: BLE001 - endpoint payloads still expose stale/degraded state
         return
+
+
+async def _continuous_projection_loop() -> None:
+    while True:
+        await asyncio.to_thread(_refresh_projection, get_runtime())
+        await asyncio.sleep(1.0)
+
+
+@app.on_event("startup")
+async def start_continuous_projection() -> None:
+    if os.getenv("FABOPS_LIVE_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}:
+        app.state.projection_task = asyncio.create_task(_continuous_projection_loop())
+
+
+@app.on_event("shutdown")
+async def stop_continuous_projection() -> None:
+    task = getattr(app.state, "projection_task", None)
+    if task is not None:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 def _live_status(runtime: Runtime) -> dict[str, Any]:
