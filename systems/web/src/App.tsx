@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useMemo, useState} from "react";
+import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {api} from "./api";
 import {EvidenceInspector, WorkbenchState} from "./components";
 import {AnalysisWorkbench} from "./features/analysis/AnalysisWorkbench";
@@ -68,24 +68,40 @@ function screenFromPath(pathname: string): ScreenId {
   return match?.[0] ?? "cockpit";
 }
 
-function InitialBoot() {
+type BootStage = "ledger" | "cases" | "intelligence" | "workspace";
+const BOOT_STAGE_ORDER: Record<BootStage, number> = {ledger: 0, cases: 1, intelligence: 2, workspace: 3};
+
+function InitialBoot({stage}: {stage: BootStage}) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(() => setElapsed((current) => current + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const stageIndex = BOOT_STAGE_ORDER[stage];
+  const stages = [
+    ["LIVE EVENT LEDGER", "CONNECTING", "streaming source-of-truth"],
+    ["ONLINE DETECTION", "HYDRATING", "case + RCA projection"],
+    ["LEARNED INTELLIGENCE", "WARMING", "champion models + feedback"],
+    ["ADAPTIVE WORKBENCH", "ASSEMBLING", "live views + decision context"],
+  ] as const;
   return <main className="boot-experience" aria-label="Loading FabOps workbench">
     <section className="boot-panel">
-      <div className="boot-panel__topline"><span>FABOPS / DECISION LAB</span><b>READ-ONLY PREVIEW</b></div>
+      <div className="boot-panel__topline"><span>FABOPS / CONTINUOUS DECISION INTELLIGENCE</span><b>READ-ONLY LIVE PREVIEW</b></div>
       <div className="boot-panel__hero">
         <div className="boot-orb" aria-hidden="true"><span /><span /><span /></div>
         <div className="boot-lockup">
           <div className="boot-logo">FO</div>
-          <div><span>INITIALIZING WORKSPACE</span><strong>Connecting operational evidence</strong><p>Synchronizing deterministic cases, source events, and projection freshness.</p></div>
+          <div><span>INITIALIZING LIVE INTELLIGENCE</span><strong>Connecting the evidence-to-prediction loop</strong><p>Restoring the live ledger, online cases, champion models, prediction feedback, and adaptive decision views.</p></div>
         </div>
       </div>
-      <div className="boot-progress" aria-hidden="true"><i /></div>
+      <div className="boot-progress boot-progress--staged" aria-hidden="true"><i style={{width: `${24 + stageIndex * 24}%`}} /></div>
       <div className="boot-telemetry">
-        <div><span>EVENT STREAM</span><strong>LINKING</strong><small>source ledger</small></div>
-        <div><span>CASE PROJECTION</span><strong>SYNCING</strong><small>read model</small></div>
-        <div><span>DECISION EVIDENCE</span><strong>VERIFYING</strong><small>human authority</small></div>
+        {stages.map(([label, active, detail], index) => <div key={label} className={index < stageIndex ? "is-complete" : index === stageIndex ? "is-active" : "is-pending"}>
+          <span>{label}</span><strong>{index < stageIndex ? "READY" : index === stageIndex ? active : "QUEUED"}</strong><small>{detail}</small>
+        </div>)}
       </div>
-      <footer><span className="console-live-dot" /> No equipment command path · synthetic portfolio evidence</footer>
+      <div className="boot-heartbeat"><span><i /> runtime heartbeat</span><b>{elapsed}s</b><small>Data services continue running while the UI hydrates.</small></div>
+      <footer><span className="console-live-dot" /> Continuous learning preview · no equipment command path · synthetic portfolio evidence</footer>
     </section>
   </main>;
 }
@@ -115,34 +131,47 @@ export default function App() {
   const [selectedStep, setSelectedStep] = useState<string | null>(null);
   const [selectedEvidenceNode, setSelectedEvidenceNode] = useState<EvidenceGraphNode | null>(null);
   const [loading, setLoading] = useState(true);
+  const [bootStage, setBootStage] = useState<BootStage>("ledger");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<{kind: "ok" | "error" | "unauthorized"; message: string} | null>(null);
+  const initialRootLoaded = useRef(false);
 
   const loadRoot = useCallback(async () => {
-    setLoading(true);
+    const isInitialLoad = !initialRootLoaded.current;
+    if (isInitialLoad) setLoading(true);
     setError("");
     try {
-      const [nextCockpit, nextOverview, nextEvaluation, nextReplay, nextDeploymentIdentity] = await Promise.all([api.decisionCockpit(), api.overview(), api.evaluation(), api.replay(), api.deploymentIdentity()]);
+      if (isInitialLoad) setBootStage("ledger");
+      const advanceBootStage = (next: BootStage) => setBootStage((current) => BOOT_STAGE_ORDER[next] > BOOT_STAGE_ORDER[current] ? next : current);
+      const overviewPromise = api.overview().then((value) => { if (isInitialLoad) advanceBootStage("cases"); return value; });
+      const cockpitPromise = api.decisionCockpit().then((value) => { if (isInitialLoad) advanceBootStage("intelligence"); return value; });
+      const identityPromise = isInitialLoad ? api.deploymentIdentity() : Promise.resolve<DeploymentIdentityResponse | null>(null);
+      const [nextCockpit, nextOverview, nextDeploymentIdentity] = await Promise.all([cockpitPromise, overviewPromise, identityPromise]);
       setCockpit(nextCockpit);
       setOverview(nextOverview);
-      setEvaluation(nextEvaluation);
-      setReplay(nextReplay);
-      setDeploymentIdentity(nextDeploymentIdentity);
+      if (nextDeploymentIdentity) setDeploymentIdentity(nextDeploymentIdentity);
       setSelectedCaseId((current) => current ?? nextCockpit.queue[0]?.case_id ?? nextOverview.cases[0]?.case_id ?? null);
+      if (isInitialLoad) {
+        advanceBootStage("workspace");
+        initialRootLoaded.current = true;
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to load workbench data");
     } finally {
-      setLoading(false);
+      if (isInitialLoad) setLoading(false);
     }
   }, []);
 
   const loadCase = useCallback(async (caseId: string) => {
+    setDetail((current) => current?.case.case_id === caseId ? current : null);
+    setAdvisory(null);
+    setCaseReplayTrace(null);
     try {
-      const [nextDetail, nextAdvisory, nextReplayTrace] = await Promise.all([api.caseDetail(caseId), api.advisory(caseId), api.caseReplayTrace(caseId)]);
+      void api.advisory(caseId).then(setAdvisory).catch(() => undefined);
+      void api.caseReplayTrace(caseId).then(setCaseReplayTrace).catch(() => undefined);
+      const nextDetail = await api.caseDetail(caseId);
       setDetail(nextDetail);
-      setAdvisory(nextAdvisory);
-      setCaseReplayTrace(nextReplayTrace);
       setSelectedStep((current) => current && nextDetail.trace.process_path.some((item) => item.step_id === current) ? current : nextDetail.trace.process_path[0]?.step_id ?? null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to load selected case");
@@ -168,6 +197,11 @@ export default function App() {
   useEffect(() => { void loadRoot(); }, [loadRoot]);
   useEffect(() => { void loadLiveStatus(); }, [loadLiveStatus]);
   useEffect(() => { void loadIntelligenceStatus(); }, [loadIntelligenceStatus]);
+  useEffect(() => {
+    if (loading || !overview) return;
+    if (!evaluation) void api.evaluation().then(setEvaluation).catch(() => undefined);
+    if (!replay) void api.replay().then(setReplay).catch(() => undefined);
+  }, [evaluation, loading, overview, replay]);
   useEffect(() => {
     try { window.localStorage.setItem(NAV_GROUP_STORAGE_KEY, JSON.stringify(openGroups)); } catch { /* Storage is optional for the preview. */ }
   }, [openGroups]);
@@ -218,6 +252,11 @@ export default function App() {
     }, 15000);
     return () => window.clearInterval(timer);
   }, [liveStatus?.live_enabled, loadCase, loadIntelligenceStatus, loadLiveStatus, loadRoot, selectedCaseId]);
+  useEffect(() => {
+    if (!liveStatus?.live_enabled || screen !== "replay") return;
+    const timer = window.setInterval(() => void api.replay().then(setReplay).catch(() => undefined), 60000);
+    return () => window.clearInterval(timer);
+  }, [liveStatus?.live_enabled, screen]);
 
   const selectedCase = useMemo(() => overview ? caseById(overview.cases, selectedCaseId) : null, [overview, selectedCaseId]);
   const selectedPacket = useMemo(() => cockpit?.queue.find((packet) => packet.case_id === selectedCaseId) ?? cockpit?.queue[0] ?? null, [cockpit, selectedCaseId]);
@@ -294,24 +333,25 @@ export default function App() {
   }
 
   if (loading && !overview) {
-    return <InitialBoot />;
+    return <InitialBoot stage={bootStage} />;
   }
   if (error && !overview) {
     return <main className="boot-state"><WorkbenchState kind="error" title="Workbench unavailable" detail={error} action={<button onClick={() => void loadRoot()}>Retry</button>} /></main>;
   }
-  if (!cockpit || !overview || !evaluation || !replay || !deploymentIdentity) {
+  if (!cockpit || !overview || !deploymentIdentity) {
     return <main className="boot-state"><WorkbenchState kind="empty" title="No operational evidence" detail="The API returned no source state." /></main>;
   }
 
   let workSurface;
   if (screen === "cockpit") workSurface = <DecisionCockpit cockpit={cockpit} detail={detail} projection={overview.projection} sourceTimestamp={overview.source_timestamp} liveStatus={liveStatus} intelligence={intelligenceStatus} selectedCaseId={selectedCaseId} onOpenCase={selectCase} onOpenDecision={openDecision} />;
   else if (screen === "overview") workSurface = <OperationsOverview overview={overview} liveStatus={liveStatus} intelligence={intelligenceStatus} onSelectCase={selectCase} />;
-  else if ((screen === "case" || screen === "graph" || screen === "analysis" || screen === "decision") && !detail) workSurface = <WorkbenchState kind="loading" title="Loading selected case" detail="Fetching source-linked evidence and deterministic RCA." />;
+  else if ((screen === "case" || screen === "graph" || screen === "analysis" || screen === "decision") && !detail) workSurface = <WorkbenchState kind="loading" title={screen === "graph" ? "Hydrating evidence graph" : "Loading selected case"} detail={screen === "graph" ? "Streaming the selected case first. RCA nodes and graph relationships appear as soon as source-linked evidence arrives." : "Loading source-linked case evidence first. Advisory and replay context continue hydrating in parallel."} />;
   else if (screen === "case" && detail) workSurface = <ExcursionCase detail={detail} advisory={advisory} />;
   else if (screen === "graph" && detail) workSurface = <EvidenceGraph detail={detail} selectedStep={selectedStep} onSelectStep={setSelectedStep} onSelectEvidenceNode={setSelectedEvidenceNode} />;
   else if (screen === "analysis" && detail) workSurface = <AnalysisWorkbench detail={detail} />;
   else if (screen === "compare") workSurface = <CaseComparisonWorkbench packets={cockpit.queue} />;
-  else if (screen === "handoff") workSurface = <ShiftHandoffBrief cockpit={cockpit} overview={overview} replay={replay} />;
+  else if (screen === "handoff" && replay) workSurface = <ShiftHandoffBrief cockpit={cockpit} overview={overview} replay={replay} />;
+  else if (screen === "handoff") workSurface = <WorkbenchState kind="loading" title="Building shift handoff" detail="The decision queue is already available. Replay context is hydrating separately." />;
   else if (screen === "decision" && detail) workSurface = <DecisionApproval
     detail={detail}
     packet={selectedPacket}
@@ -331,8 +371,10 @@ export default function App() {
     onApprove={(reason) => mutate(() => api.approve(detail.case.case_id, reason))}
     onReject={(reason) => mutate(() => api.reject(detail.case.case_id, reason))}
   />;
-  else if (screen === "evaluation") workSurface = <EvaluationLab evaluation={evaluation} />;
-  else workSurface = <ReplayOperations replay={replay} trace={caseReplayTrace} />;
+  else if (screen === "evaluation" && evaluation) workSurface = <EvaluationLab evaluation={evaluation} />;
+  else if (screen === "evaluation") workSurface = <WorkbenchState kind="loading" title="Loading model evidence" detail="The operational workspace is already usable. Historical evaluation evidence is loading independently." />;
+  else if (replay) workSurface = <ReplayOperations replay={replay} trace={caseReplayTrace} />;
+  else workSurface = <WorkbenchState kind="loading" title="Loading system health" detail="The live runtime is available. Replay and integration diagnostics are hydrating independently." />;
 
   const activeNavigation = navigation.find((item) => item.id === screen) ?? navigation[0];
   const candidateSha = deploymentIdentity.candidate?.git_sha ?? null;

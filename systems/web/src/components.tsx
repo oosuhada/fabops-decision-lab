@@ -16,8 +16,10 @@ export function WorkbenchState({kind, title, detail, action}: {
 }) {
   const role = kind === "error" || kind === "unauthorized" ? "alert" : "status";
   return <section className={`workbench-state state-${kind}`} role={role} aria-live="polite">
+    {kind === "loading" ? <div className="activity-loader" aria-hidden="true"><span /><span /><span /></div> : null}
     <strong>{title}</strong>
     <p>{detail}</p>
+    {kind === "loading" ? <div className="activity-loader__rail" aria-hidden="true"><i /></div> : null}
     {action ? <div>{action}</div> : null}
   </section>;
 }

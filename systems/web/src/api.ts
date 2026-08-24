@@ -5,7 +5,14 @@ const API_BASE = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, init);
   if (!response.ok) {
-    const detail = await response.text();
+    const contentType = response.headers.get("content-type") ?? "";
+    const raw = await response.text();
+    const isHtml = contentType.includes("text/html") || /<!doctype html|<html/i.test(raw);
+    const detail = isHtml
+      ? response.status === 504
+        ? "Preview origin timed out while loading operational data. The workbench can retry without exposing the gateway error page."
+        : `Preview gateway returned HTTP ${response.status}.`
+      : raw;
     const error = new Error(detail || `Request failed with ${response.status}`) as Error & {status?: number};
     error.status = response.status;
     throw error;
