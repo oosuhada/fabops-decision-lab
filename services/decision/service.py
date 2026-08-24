@@ -343,19 +343,73 @@ class DecisionSupportService:
         }
         return packet
 
+    def _cockpit_packet(self, case: dict[str, Any], *, hydrate: bool) -> dict[str, Any]:
+        if hydrate:
+            return self.packet(str(case["case_id"]))
+
+        definition = _decision_definition(str(case["classification"]))
+        advisory_next_step = {
+            "physical_excursion": "open_case_for_evidence_review",
+            "sensor_bias_suspected": "verify_sensor_calibration",
+            "data_quality_incident": "reconcile_event_delivery",
+        }.get(str(case["classification"]), "request_more_evidence")
+        uncertainties = ["Detailed RCA/advisory hydration is deferred until this case is opened."]
+        if case.get("data_quality_incidents"):
+            uncertainties.append("Data-quality incidents must be resolved before process attribution is treated as actionable.")
+        return {
+            "schema_version": "decision-packet-v1",
+            "case_id": case["case_id"],
+            "lot_id": case["lot_id"],
+            "classification": case["classification"],
+            "state": case["state"],
+            "decision_question": definition["decision_question"],
+            "priority_band": definition["priority_band"],
+            "priority_rank": definition["priority_rank"],
+            "recommended_option_id": definition["recommended_option_id"],
+            "options": definition["options"],
+            "impact": _impact_payload(case, [str(case["lot_id"])]),
+            "evidence": {
+                "anomaly_score": case["anomaly_score"],
+                "mean_yield": case.get("mean_yield"),
+                "affected_scope": case.get("affected_scope", {}),
+                "top_candidate": None,
+                "advisory_status": "deferred",
+                "advisory_next_step": advisory_next_step,
+                "data_quality_incidents": list(case.get("data_quality_incidents", [])),
+            },
+            "uncertainties": uncertainties,
+            "decision_boundary": _decision_boundary(
+                str(case["classification"]),
+                case,
+                None,
+                float(self.runtime.detector.config.excursion_yield_threshold),
+            ),
+            "evidence_refs": [f"case.evidence_event_ids[{index}]" for index, _ in enumerate(case.get("evidence_event_ids", []))],
+            "provenance": {
+                "input": "synthetic",
+                "decision_packet": "inferred-deterministic-live-summary",
+                "equipment_control": False,
+                "financial_impact_claimed": False,
+            },
+        }
+
     def cockpit(self) -> dict[str, Any]:
-        packets = [self.packet(case["case_id"]) for case in self.runtime.case_repository.list_cases()]
-        queue = sorted(
-            packets,
-            key=lambda packet: (
-                -int(packet["priority_rank"]),
-                -(float(packet["evidence"]["anomaly_score"])),
-                str(packet["case_id"]),
+        cases = self.runtime.case_repository.list_cases()
+        ordered_cases = sorted(
+            cases,
+            key=lambda case: (
+                -int(_decision_definition(str(case["classification"]))["priority_rank"]),
+                -float(case.get("anomaly_score", 0.0)),
+                str(case["case_id"]),
             ),
         )
+        # Hydrate only the first decision in full. The live queue can grow without
+        # multiplying expensive RCA/advisory scans across every historical case.
+        queue = [self._cockpit_packet(case, hydrate=index == 0) for index, case in enumerate(ordered_cases)]
         counts: dict[str, int] = {"HIGH": 0, "MEDIUM": 0, "VERIFY_DATA": 0}
-        for packet in queue:
-            counts[packet["priority_band"]] = counts.get(packet["priority_band"], 0) + 1
+        for case in ordered_cases:
+            band = str(_decision_definition(str(case["classification"]))["priority_band"])
+            counts[band] = counts.get(band, 0) + 1
         return {
             "schema_version": "decision-cockpit-v1",
             "source": "synthetic-events-and-inferred-cases",
