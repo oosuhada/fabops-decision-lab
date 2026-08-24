@@ -126,6 +126,49 @@ class PostgresRepository:
             ).fetchall()
         return [StoredEvent(deepcopy(row["envelope"]), str(row["delivery_status"]), int(row["sequence"])) for row in rows]
 
+    def events_after(self, sequence: int, limit: int = 5000) -> list[StoredEvent]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT sequence, envelope, delivery_status
+                FROM fabops_event_log
+                WHERE sequence > %s
+                ORDER BY sequence
+                LIMIT %s
+                """,
+                (int(sequence), int(limit)),
+            ).fetchall()
+        return [StoredEvent(deepcopy(row["envelope"]), str(row["delivery_status"]), int(row["sequence"])) for row in rows]
+
+    def event_count(self) -> int:
+        with self._connection() as connection:
+            row = connection.execute("SELECT count(*) AS count FROM fabops_event_log").fetchone()
+        return int(row["count"])
+
+    def latest_event(self) -> StoredEvent | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT sequence, envelope, delivery_status FROM fabops_event_log ORDER BY sequence DESC LIMIT 1"
+            ).fetchone()
+        if row is None:
+            return None
+        return StoredEvent(deepcopy(row["envelope"]), str(row["delivery_status"]), int(row["sequence"]))
+
+    def recent_measurement_events(self, limit: int = 512) -> list[StoredEvent]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT sequence, envelope, delivery_status
+                FROM fabops_event_log
+                WHERE event_type = 'process.measurement.recorded.v1'
+                ORDER BY sequence DESC
+                LIMIT %s
+                """,
+                (int(limit),),
+            ).fetchall()
+        rows.reverse()
+        return [StoredEvent(deepcopy(row["envelope"]), str(row["delivery_status"]), int(row["sequence"])) for row in rows]
+
     def append_outbox(self, topic: str, payload: dict[str, Any]) -> None:
         with self._connection() as connection:
             connection.execute("INSERT INTO fabops_outbox(topic, payload) VALUES (%s, %s)", (topic, Jsonb(payload)))

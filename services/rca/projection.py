@@ -45,13 +45,25 @@ class RcaProjectionWorker:
         return self.status()
 
     def catch_up(self) -> ProjectionStatus:
-        for stored in self.events.all_events():
-            if stored.sequence > self.projection_checkpoint:
-                self.project_stored(stored)
+        incremental = getattr(self.events, "events_after", None)
+        if callable(incremental):
+            while True:
+                batch = incremental(self.projection_checkpoint, 2000)
+                if not batch:
+                    break
+                for stored in batch:
+                    self.project_stored(stored)
+                if len(batch) < 2000:
+                    break
+        else:
+            for stored in self.events.all_events():
+                if stored.sequence > self.projection_checkpoint:
+                    self.project_stored(stored)
         return self.status()
 
     def status(self) -> ProjectionStatus:
-        source_checkpoint = len(self.events.all_events())
+        counter = getattr(self.events, "event_count", None)
+        source_checkpoint = int(counter()) if callable(counter) else len(self.events.all_events())
         lag = max(0, source_checkpoint - self.projection_checkpoint)
         return ProjectionStatus(PROJECTION_VERSION, source_checkpoint, self.projection_checkpoint, lag, lag > 0)
 

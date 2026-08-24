@@ -47,7 +47,9 @@ class PredictiveIntelligenceService:
 
     def _sensor_forecasts(self) -> list[dict[str, Any]]:
         grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
-        for stored in self.events.all_events():
+        recent = getattr(self.events, "recent_measurement_events", None)
+        stored_events = recent(768) if callable(recent) else self.events.all_events()
+        for stored in stored_events:
             event = stored.event
             if event.get("event_type") != "process.measurement.recorded.v1":
                 continue

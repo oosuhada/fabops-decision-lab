@@ -114,8 +114,8 @@ class ContinuousIntelligenceService:
         snapshots = [self.features.build(events) for _, events in sorted(grouped.items())]
         return snapshots
 
-    def synchronize_outcomes(self) -> list[dict[str, Any]]:
-        completed = [snapshot for snapshot in self.lot_snapshots() if snapshot["complete"]]
+    def synchronize_outcomes(self, snapshots: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+        completed = [snapshot for snapshot in (snapshots if snapshots is not None else self.lot_snapshots()) if snapshot["complete"]]
         for snapshot in completed:
             outcome = {
                 "lot_id": snapshot["lot_id"],

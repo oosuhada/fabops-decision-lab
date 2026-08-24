@@ -28,13 +28,14 @@ def main() -> None:
     repository = PostgresRepository(PostgresConfig(dsn))
     service = ContinuousIntelligenceService(repository)
     narration = NarrationService()
-    interval = max(3.0, float(os.getenv("FABOPS_INTELLIGENCE_INTERVAL_SECONDS", "12")))
+    interval = max(10.0, float(os.getenv("FABOPS_INTELLIGENCE_INTERVAL_SECONDS", "30")))
     retrain_every = max(1, int(os.getenv("FABOPS_RETRAIN_EVERY_OUTCOMES", "6")))
     last_training_rows = 0
     prediction_keys: set[tuple[str, str, str]] = set()
     while not stop_event.is_set():
         try:
-            completed = service.synchronize_outcomes()
+            snapshots = service.lot_snapshots()
+            completed = service.synchronize_outcomes(snapshots)
             feedback_evaluated = service.synchronize_prediction_feedback()
             outcome_count = len(repository.learning_outcomes())
             champions = repository.champion_models()
@@ -45,7 +46,6 @@ def main() -> None:
             if training.get("trained"):
                 last_training_rows = outcome_count
 
-            snapshots = service.lot_snapshots()
             latest = snapshots[-1] if snapshots else None
             latest_predictions: list[dict[str, object]] = []
             if latest is not None:

@@ -98,7 +98,7 @@ def _refresh_projection(runtime: Runtime) -> None:
 async def _continuous_projection_loop() -> None:
     while True:
         await asyncio.to_thread(_refresh_projection, get_runtime())
-        await asyncio.sleep(1.0)
+        await asyncio.sleep(5.0)
 
 
 @app.on_event("startup")
@@ -120,9 +120,14 @@ async def stop_continuous_projection() -> None:
 
 def _live_status(runtime: Runtime) -> dict[str, Any]:
     _refresh_projection(runtime)
-    stored = runtime.event_repository.all_events()
+    counter = getattr(runtime.event_repository, "event_count", None)
+    event_count = int(counter()) if callable(counter) else len(runtime.event_repository.all_events())
+    latest_reader = getattr(runtime.event_repository, "latest_event", None)
+    latest_stored = latest_reader() if callable(latest_reader) else None
+    if latest_stored is None and event_count:
+        latest_stored = runtime.event_repository.all_events()[-1]
+    latest = latest_stored.event if latest_stored else None
     cases = runtime.case_repository.list_cases()
-    latest = stored[-1].event if stored else None
     prediction = PredictiveIntelligenceService(runtime.event_repository, runtime.case_repository).snapshot()
     live_enabled = os.getenv("FABOPS_LIVE_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
     return {
@@ -132,7 +137,7 @@ def _live_status(runtime: Runtime) -> dict[str, Any]:
         "runtime_mode": runtime.runtime_mode,
         "transport": "server-sent-events",
         "read_only": runtime.runtime_mode == "database-readonly",
-        "event_count": len(stored),
+        "event_count": event_count,
         "case_count": len(cases),
         "latest_event_time": latest.get("event_time") if latest else None,
         "latest_event_type": latest.get("event_type") if latest else None,
@@ -324,17 +329,23 @@ def overview(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any
     _refresh_projection(runtime)
     cases = runtime.case_repository.list_cases()
     projection = asdict(runtime.projection.status())
+    counter = getattr(runtime.event_repository, "event_count", None)
+    event_count = int(counter()) if callable(counter) else len(runtime.event_repository.all_events())
+    latest_reader = getattr(runtime.event_repository, "latest_event", None)
+    latest_stored = latest_reader() if callable(latest_reader) else None
+    if latest_stored is None and event_count:
+        latest_stored = runtime.event_repository.all_events()[-1]
     return {
         "source": "postgresql-read-only" if runtime.runtime_mode == "database-readonly" else "synthetic",
-        "source_timestamp": max(item.event["event_time"] for item in runtime.event_repository.all_events()),
+        "source_timestamp": latest_stored.event["event_time"] if latest_stored else "",
         "projection": projection,
         "metrics": {
             "active_cases": sum(case["state"] != "closed" for case in cases),
             "physical_excursions": sum(case["classification"] == "physical_excursion" for case in cases),
             "sensor_bias_cases": sum(case["classification"] == "sensor_bias_suspected" for case in cases),
             "data_quality_cases": sum(case["classification"] == "data_quality_incident" for case in cases),
-            "event_count": len(runtime.event_repository.all_events()),
-            "quarantine_count": len(runtime.quarantine.all()),
+            "event_count": event_count,
+            "quarantine_count": runtime.event_repository.counts()["quarantine"] if hasattr(runtime.event_repository, "counts") else len(runtime.quarantine.all()),
         },
         "cases": cases,
     }

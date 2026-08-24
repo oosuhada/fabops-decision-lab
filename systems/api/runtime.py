@@ -236,7 +236,8 @@ class DatabaseReadOnlyRuntime:
     def health_status(self) -> dict[str, Any]:
         integration = self.integration_status()
         try:
-            event_count = len(self.event_repository.all_events())
+            counter = getattr(self.event_repository, "event_count", None)
+            event_count = int(counter()) if callable(counter) else len(self.event_repository.all_events())
             detection_checkpoint = self.event_repository.checkpoint("detection")
             projection = self.projection.catch_up()
             source_ready = event_count > 0 and detection_checkpoint == event_count

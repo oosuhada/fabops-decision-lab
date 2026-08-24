@@ -201,16 +201,13 @@ export default function App() {
       } catch {
         void loadLiveStatus();
       }
-      void loadRoot();
-      void loadIntelligenceStatus();
-      if (selectedCaseId) void loadCase(selectedCaseId);
     };
     source.addEventListener("fabops-update", refresh);
     return () => {
       source.removeEventListener("fabops-update", refresh);
       source.close();
     };
-  }, [loadCase, loadIntelligenceStatus, loadLiveStatus, loadRoot, selectedCaseId]);
+  }, [loadLiveStatus]);
   useEffect(() => {
     if (!liveStatus?.live_enabled) return;
     const timer = window.setInterval(() => {
@@ -218,7 +215,7 @@ export default function App() {
       void loadLiveStatus();
       void loadIntelligenceStatus();
       if (selectedCaseId) void loadCase(selectedCaseId);
-    }, 5000);
+    }, 15000);
     return () => window.clearInterval(timer);
   }, [liveStatus?.live_enabled, loadCase, loadIntelligenceStatus, loadLiveStatus, loadRoot, selectedCaseId]);
 

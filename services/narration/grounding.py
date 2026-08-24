@@ -8,6 +8,8 @@ DETERMINISTIC_EVIDENCE_REFS = {
     "case.affected_scope",
     "case.mean_yield",
     "case.impact",
+    "case.data_quality_incidents",
+    "detector.excursion_yield_threshold",
 }
 
 

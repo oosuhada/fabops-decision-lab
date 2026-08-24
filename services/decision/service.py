@@ -405,7 +405,8 @@ class DecisionSupportService:
         )
         # Hydrate only the first decision in full. The live queue can grow without
         # multiplying expensive RCA/advisory scans across every historical case.
-        queue = [self._cockpit_packet(case, hydrate=index == 0) for index, case in enumerate(ordered_cases)]
+        queue_limit = 100
+        queue = [self._cockpit_packet(case, hydrate=index == 0) for index, case in enumerate(ordered_cases[:queue_limit])]
         counts: dict[str, int] = {"HIGH": 0, "MEDIUM": 0, "VERIFY_DATA": 0}
         for case in ordered_cases:
             band = str(_decision_definition(str(case["classification"]))["priority_band"])
@@ -414,7 +415,7 @@ class DecisionSupportService:
             "schema_version": "decision-cockpit-v1",
             "source": "synthetic-events-and-inferred-cases",
             "summary": {
-                "decision_count": len(queue),
+                "decision_count": len(ordered_cases),
                 "high_priority": counts.get("HIGH", 0),
                 "medium_priority": counts.get("MEDIUM", 0),
                 "data_verification": counts.get("VERIFY_DATA", 0),
