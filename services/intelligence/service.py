@@ -116,6 +116,8 @@ class ContinuousIntelligenceService:
 
     def synchronize_outcomes(self, snapshots: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
         completed = [snapshot for snapshot in (snapshots if snapshots is not None else self.lot_snapshots()) if snapshot["complete"]]
+        existing = {str(item["lot_id"]): item for item in self.repository.learning_outcomes()}
+        changed: list[dict[str, Any]] = []
         for snapshot in completed:
             outcome = {
                 "lot_id": snapshot["lot_id"],
@@ -127,8 +129,19 @@ class ContinuousIntelligenceService:
                 "features": snapshot["features"],
                 "latest_event_time": snapshot["latest_event_time"],
             }
+            previous = existing.get(str(snapshot["lot_id"]))
+            if previous is not None and (
+                previous.get("latest_event_time") == outcome["latest_event_time"]
+                and previous.get("features") == outcome["features"]
+                and previous.get("yield_value") == outcome["yield_value"]
+                and bool(previous.get("physical_excursion")) == bool(outcome["physical_excursion"])
+                and bool(previous.get("equipment_alarm")) == bool(outcome["equipment_alarm"])
+                and bool(previous.get("maintenance_observed")) == bool(outcome["maintenance_observed"])
+            ):
+                continue
             self.repository.upsert_learning_outcome(outcome)
-        return completed
+            changed.append(snapshot)
+        return changed
 
     @staticmethod
     def _vectors(outcomes: list[dict[str, Any]]) -> list[list[float]]:

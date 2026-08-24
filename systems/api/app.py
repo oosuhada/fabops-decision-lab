@@ -119,7 +119,6 @@ async def stop_continuous_projection() -> None:
 
 
 def _live_status(runtime: Runtime) -> dict[str, Any]:
-    _refresh_projection(runtime)
     counter = getattr(runtime.event_repository, "event_count", None)
     event_count = int(counter()) if callable(counter) else len(runtime.event_repository.all_events())
     latest_reader = getattr(runtime.event_repository, "latest_event", None)
@@ -284,7 +283,6 @@ def live_status(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, 
 
 @app.get("/api/predictions")
 def predictions(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
-    _refresh_projection(runtime)
     return {"source": "transparent-online-baseline", **PredictiveIntelligenceService(runtime.event_repository, runtime.case_repository).snapshot()}
 
 
@@ -326,7 +324,6 @@ async def live_stream(runtime: Annotated[Runtime, Depends(get_runtime)]) -> Stre
 
 @app.get("/api/overview")
 def overview(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
-    _refresh_projection(runtime)
     cases = runtime.case_repository.list_cases()
     projection = asdict(runtime.projection.status())
     counter = getattr(runtime.event_repository, "event_count", None)
@@ -519,7 +516,6 @@ def advisory(case_id: str, runtime: Annotated[Runtime, Depends(get_runtime)]) ->
 
 @app.get("/api/decision-cockpit")
 def decision_cockpit(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
-    _refresh_projection(runtime)
     with runtime.telemetry.operation("decision.cockpit"):
         return DecisionSupportService(runtime).cockpit()
 
@@ -815,7 +811,6 @@ def evaluation(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, A
 
 @app.get("/api/replay")
 def replay_status(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
-    _refresh_projection(runtime)
     counter = getattr(runtime.event_repository, "event_count", None)
     event_count = int(counter()) if callable(counter) else len(runtime.event_repository.all_events())
     counts = runtime.event_repository.counts() if hasattr(runtime.event_repository, "counts") else None
