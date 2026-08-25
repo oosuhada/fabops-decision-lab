@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any, Literal, Optional
@@ -126,6 +127,51 @@ def _model_busy(item: dict[str, Any]) -> bool:
     return queued > 0 or status not in {"", "idle", "ready"}
 
 
+def _active_upstream_connections() -> int:
+    """Count active TCP clients connected to the local LM Studio API.
+
+    `lms ps` is a loaded-model inventory and does not reliably change its
+    status field while an OpenAI-compatible request is generating.  On the
+    private MacBook Pro gateway, an active terminal/API generation does leave
+    an ESTABLISHED TCP connection to the loopback LM Studio listener.  We use
+    only that connection metadata; no prompt or response content is inspected.
+    """
+
+    base = os.getenv("FABOPS_GATEWAY_UPSTREAM_BASE_URL", "http://127.0.0.1:1234/v1").rstrip("/")
+    parsed = urllib.parse.urlparse(base)
+    hostname = (parsed.hostname or "").lower()
+    if hostname not in {"127.0.0.1", "localhost", "::1"}:
+        return 0
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    try:
+        completed = subprocess.run(
+            ["lsof", "-nP", f"-iTCP:{port}", "-sTCP:ESTABLISHED", "-Fpcn"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+    except Exception:  # noqa: BLE001 - activity detection must fail closed to the other health signals
+        return 0
+    if completed.returncode not in {0, 1}:
+        return 0
+    connection_names = {
+        line[1:]
+        for line in completed.stdout.splitlines()
+        if line.startswith("n") and "->" in line and f":{port}" in line
+    }
+    # lsof reports both ends for same-host loopback connections.  We only need
+    # to know whether at least one external/local client is actively attached,
+    # but expose a de-duplicated approximate connection count for health UI.
+    if not connection_names:
+        return 0
+    pairs: set[tuple[str, str]] = set()
+    for name in connection_names:
+        left, right = name.split("->", 1)
+        pairs.add(tuple(sorted((left, right))))
+    return len(pairs)
+
+
 def _interactive_inference_busy() -> bool:
     """Return True when any local LM Studio generation is already active.
 
@@ -134,7 +180,7 @@ def _interactive_inference_busy() -> bool:
     always wins over a new FabOps request.
     """
 
-    return any(_model_busy(item) for item in _loaded_models())
+    return _active_upstream_connections() > 0 or any(_model_busy(item) for item in _loaded_models())
 
 
 def _ensure_model() -> str:
@@ -186,7 +232,8 @@ async def health() -> dict[str, Any]:
         model_installed = any(str(item.get("id")) == model_key for item in result.get("data", []))
         state = _configured_model_state()
         model_loaded = state is not None
-        model_busy = bool(state and _model_busy(state))
+        active_connections = _active_upstream_connections()
+        model_busy = active_connections > 0 or bool(state and _model_busy(state))
         upstream_identifier = str(state.get("identifier")) if state else None
         queued = int(state.get("queued") or 0) if state else 0
     except Exception:  # noqa: BLE001 - health must remain queryable when LM Studio is unavailable
@@ -194,6 +241,7 @@ async def health() -> dict[str, Any]:
         model_installed = False
         model_loaded = False
         model_busy = False
+        active_connections = 0
         upstream_identifier = None
         queued = 0
     return {
@@ -206,6 +254,7 @@ async def health() -> dict[str, Any]:
         "configured_model_installed": model_installed,
         "configured_model_loaded": model_loaded,
         "local_inference_busy": model_busy,
+        "active_inference_connections": active_connections,
         "local_queued_requests": queued,
         "tools_enabled": False,
     }
@@ -233,8 +282,7 @@ async def chat_completions(
         # A short second check closes most of the race where an interactive
         # request starts just before FabOps dispatches its own generation.
         await asyncio.sleep(0.12)
-        state = await asyncio.to_thread(_configured_model_state)
-        if state is not None and _model_busy(state):
+        if await asyncio.to_thread(_interactive_inference_busy):
             raise HTTPException(status_code=429, detail="local model busy")
         payload = {
             "model": upstream_model,

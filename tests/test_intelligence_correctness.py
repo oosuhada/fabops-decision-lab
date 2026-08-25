@@ -6,6 +6,7 @@ from services.decision.service import DecisionSupportService
 from services.intelligence import build_live_decision_intelligence, build_situation_assessment
 from services.intelligence.planner import material_signature, visualization_plan
 from services.intelligence.service import FEATURE_SET_VERSION, PREDICTION_CUTOFF, ContinuousIntelligenceService, FeatureBuilder
+from services.narration import gateway
 from services.narration.governance import ProviderGovernor, ProviderPolicy
 from services.narration.providers import ProviderBusyError
 from services.narration.queue import build_inference_job, queue_policy
@@ -219,6 +220,25 @@ def test_provider_busy_does_not_open_local_failure_circuit() -> None:
     assert status["consecutive_failures"] == 0
     assert status["total_failures"] == 0
     assert status["total_busy_responses"] == 3
+
+
+def test_gateway_detects_active_loopback_lmstudio_connection(monkeypatch) -> None:
+    class Completed:
+        returncode = 0
+        stdout = "\n".join(
+            [
+                "p2080",
+                "n127.0.0.1:1234->127.0.0.1:61705",
+                "p90647",
+                "n127.0.0.1:61705->127.0.0.1:1234",
+            ]
+        )
+
+    monkeypatch.setenv("FABOPS_GATEWAY_UPSTREAM_BASE_URL", "http://127.0.0.1:1234/v1")
+    monkeypatch.setattr(gateway.subprocess, "run", lambda *_args, **_kwargs: Completed())
+
+    assert gateway._active_upstream_connections() == 1
+    assert gateway._interactive_inference_busy() is True
 
 
 def test_situation_assessment_exposes_prediction_delta_without_extra_claims() -> None:
