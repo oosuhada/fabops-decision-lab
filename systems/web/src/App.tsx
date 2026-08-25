@@ -346,7 +346,7 @@ export default function App() {
     try {
       const generated = await requestDemoNarration(caseId, "engineer", "situation_update");
       setCockpitBrief(generated);
-      setCockpitAnalysisFeedback(`${generated.brief.provider} · ${generated.brief.mode} · 방금 갱신`);
+      setCockpitAnalysisFeedback(`${generated.brief.cache_hit ? "CACHED" : generated.brief.provider.toUpperCase()} · ${generated.brief.mode} · ${generated.assessment_persisted ? "서버 assessment history 저장 완료" : "현재 응답만 갱신"}`);
       void loadRoot();
       void loadIntelligenceStatus();
     } catch (reason) {

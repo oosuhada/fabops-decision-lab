@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from typing import Any
 
@@ -266,6 +267,65 @@ def _decision_boundary(
 class DecisionSupportService:
     runtime: Any
 
+    @staticmethod
+    def _lot_sequence(case: dict[str, Any]) -> int:
+        suffix = str(case.get("lot_id", "")).split("-")[-1]
+        return int(suffix) if suffix.isdigit() else 0
+
+    @classmethod
+    def _episode_key(cls, case: dict[str, Any], window_lots: int = 4) -> tuple[str, str, str, int]:
+        scope = case.get("affected_scope", {}) if isinstance(case.get("affected_scope"), dict) else {}
+        equipment = sorted(str(value) for value in scope.get("equipment", []) if value)
+        chambers = sorted(str(value) for value in scope.get("chambers", []) if value)
+        lot_bucket = cls._lot_sequence(case) // max(1, window_lots)
+        return (
+            str(case.get("classification") or "unknown"),
+            equipment[0] if equipment else "data-path",
+            chambers[0] if chambers else "unscoped",
+            lot_bucket,
+        )
+
+    @classmethod
+    def _incident_episodes(cls, cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        grouped: dict[tuple[str, str, str, int], list[dict[str, Any]]] = {}
+        for case in cases:
+            grouped.setdefault(cls._episode_key(case), []).append(case)
+        episodes: list[dict[str, Any]] = []
+        for key, members in grouped.items():
+            ordered = sorted(members, key=cls._lot_sequence)
+            latest = ordered[-1]
+            latest_score = float(latest.get("anomaly_score", 0.0))
+            previous_score = float(ordered[-2].get("anomaly_score", latest_score)) if len(ordered) > 1 else latest_score
+            state = str(latest.get("state") or "")
+            if state in {"closed", "resolved", "rejected"}:
+                status = "RESOLVED"
+            elif len(ordered) == 1:
+                status = "NEW"
+            elif latest_score >= previous_score + 0.25:
+                status = "ESCALATING"
+            elif latest_score <= previous_score - 0.25:
+                status = "RECOVERING"
+            else:
+                status = "ONGOING"
+            episode_id = "EP-" + hashlib.sha256("|".join(map(str, key)).encode("utf-8")).hexdigest()[:12].upper()
+            episodes.append(
+                {
+                    "episode_id": episode_id,
+                    "status": status,
+                    "classification": key[0],
+                    "equipment_id": key[1],
+                    "chamber_id": key[2],
+                    "case_count": len(ordered),
+                    "first_lot_id": ordered[0].get("lot_id"),
+                    "last_lot_id": latest.get("lot_id"),
+                    "representative_case": latest,
+                    "member_case_ids": [str(item["case_id"]) for item in ordered[-8:]],
+                    "grouping_basis": "classification+equipment+chamber+4-lot-window",
+                    "latest_anomaly_score": latest_score,
+                }
+            )
+        return episodes
+
     def packet(self, case_id: str) -> dict[str, Any]:
         case = self.runtime.case_repository.get_case(case_id)
         if case is None:
@@ -403,27 +463,35 @@ class DecisionSupportService:
                 str(case["case_id"]),
             ),
         )
-        # Keep both the highest deterministic-risk cases and the newest live
-        # cases in the bounded cockpit window. Learned risk is attached by the
-        # API layer and then becomes the final ordering signal. This prevents a
-        # historically severe case from permanently hiding today's live lots.
-        queue_limit = 100
-        recent_cases = sorted(
-            cases,
-            key=lambda case: int(str(case.get("lot_id", "LOT-00000")).split("-")[-1]) if str(case.get("lot_id", "")).split("-")[-1].isdigit() else 0,
-            reverse=True,
-        )[:60]
-        selected: list[dict[str, Any]] = []
-        seen: set[str] = set()
-        for case in [*recent_cases, *ordered_cases]:
-            case_id = str(case["case_id"])
-            if case_id in seen:
+        # Raw cases remain intact in PostgreSQL. The cockpit presents correlated
+        # incident episodes so a growing synthetic event ledger does not create
+        # an equally growing human decision queue.
+        episodes = self._incident_episodes(cases)
+        active_episodes = [episode for episode in episodes if episode["status"] != "RESOLVED"]
+        recent_episodes = sorted(active_episodes, key=lambda episode: self._lot_sequence(episode["representative_case"]), reverse=True)[:16]
+        severe_episodes = sorted(
+            active_episodes,
+            key=lambda episode: (
+                -int(_decision_definition(str(episode["classification"]))["priority_rank"]),
+                -float(episode["latest_anomaly_score"]),
+                -self._lot_sequence(episode["representative_case"]),
+            ),
+        )[:16]
+        selected_episodes: list[dict[str, Any]] = []
+        seen_episodes: set[str] = set()
+        for episode in [*recent_episodes, *severe_episodes]:
+            episode_id = str(episode["episode_id"])
+            if episode_id in seen_episodes:
                 continue
-            seen.add(case_id)
-            selected.append(case)
-            if len(selected) >= queue_limit:
+            seen_episodes.add(episode_id)
+            selected_episodes.append(episode)
+            if len(selected_episodes) >= 24:
                 break
-        queue = [self._cockpit_packet(case, hydrate=False) for case in selected]
+        queue = []
+        for episode in selected_episodes:
+            packet = self._cockpit_packet(episode["representative_case"], hydrate=False)
+            packet["incident_episode"] = {key: value for key, value in episode.items() if key != "representative_case"}
+            queue.append(packet)
         counts: dict[str, int] = {"HIGH": 0, "MEDIUM": 0, "VERIFY_DATA": 0}
         for case in ordered_cases:
             band = str(_decision_definition(str(case["classification"]))["priority_band"])
@@ -433,6 +501,10 @@ class DecisionSupportService:
             "source": "synthetic-events-and-inferred-cases",
             "summary": {
                 "decision_count": len(ordered_cases),
+                "raw_case_count": len(ordered_cases),
+                "incident_episode_count": len(episodes),
+                "active_incident_episode_count": len(active_episodes),
+                "decision_queue_count": len(queue),
                 "high_priority": counts.get("HIGH", 0),
                 "medium_priority": counts.get("MEDIUM", 0),
                 "data_verification": counts.get("VERIFY_DATA", 0),

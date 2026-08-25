@@ -16,8 +16,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.responses import StreamingResponse
 
+from adapters.postgres import PostgresConfig, PostgresRepository
 from services.decision import DecisionSupportService
-from services.intelligence import ContinuousIntelligenceService, build_live_decision_intelligence
+from services.intelligence import ContinuousIntelligenceService, build_live_decision_intelligence, build_situation_assessment
+from services.intelligence.planner import material_signature, visualization_plan
 from services.narration import NarrationService
 from services.narration.demo import DemoPolicyError, DemoSessionPolicy, demo_policy_from_env
 from services.prediction import PredictiveIntelligenceService
@@ -210,6 +212,70 @@ def get_narration_service() -> NarrationService:
         service = NarrationService()
         app.state.narration_service = service
     return service
+
+
+def _persist_manual_situation_assessment(runtime: Runtime, case_id: str, brief: dict[str, Any]) -> bool:
+    """Persist a bounded manual situation refresh without enabling workflow mutation."""
+
+    dsn = os.getenv("FABOPS_POSTGRES_DSN", "").strip()
+    if not dsn:
+        return False
+    case = runtime.case_repository.get_case(case_id)
+    if case is None:
+        return False
+    prediction_reader = getattr(runtime.event_repository, "latest_predictions_for_lots", None)
+    predictions_by_lot = prediction_reader([str(case.get("lot_id") or "")]) if callable(prediction_reader) else {}
+    predictions = list(predictions_by_lot.get(str(case.get("lot_id") or ""), []))
+    signature = material_signature(case, predictions)
+    repository = PostgresRepository(PostgresConfig(dsn))
+    previous = repository.latest_intelligence_report_for_case(case_id)
+    plan = visualization_plan(case, predictions, signature)
+    repository.append_visualization_plan(plan)
+    packet_seed = {
+        "case_id": case["case_id"],
+        "lot_id": case["lot_id"],
+        "classification": case["classification"],
+        "evidence": {
+            "anomaly_score": case.get("anomaly_score", 0.0),
+            "mean_yield": case.get("mean_yield"),
+            "affected_scope": case.get("affected_scope", {}),
+        },
+    }
+    context = build_live_decision_intelligence(packet_seed, predictions, previous)
+    cache_hit = bool(brief.get("cache_hit"))
+    assessment_run_id = str(uuid.uuid4())
+    situation_assessment = build_situation_assessment(
+        assessment_id=assessment_run_id,
+        case_id=case_id,
+        trigger="manual_user_refresh",
+        provider="cached" if cache_hit else str(brief.get("provider", "deterministic")),
+        decision_context=context,
+        brief=brief,
+        previous_report=previous,
+        model_versions={str(item["target"]): str(item["model_version"]) for item in predictions},
+        visualization_plan=plan,
+        uncertainties=[],
+    )
+    repository.append_intelligence_report(
+        {
+            "assessment_run_id": assessment_run_id,
+            "case_id": case_id,
+            "material_signature": signature,
+            "trigger_type": "manual_user_refresh",
+            "mode": "cached" if cache_hit else brief.get("mode", "deterministic_fallback"),
+            "provider": "cached" if cache_hit else brief.get("provider", "deterministic"),
+            "provider_model": brief.get("provider_model"),
+            "latency_ms": brief.get("latency_ms"),
+            "previous_report_id": previous.get("report_id") if previous else None,
+            "reused_report_id": previous.get("report_id") if cache_hit and previous else None,
+            "input_context_fingerprint": signature,
+            "brief": brief,
+            "situation_assessment": situation_assessment,
+            "decision_context": context,
+            "visualization_plan": plan,
+        }
+    )
+    return True
 
 
 def get_demo_policy() -> DemoSessionPolicy | None:
@@ -573,6 +639,26 @@ def decision_cockpit(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[
                 str(packet.get("case_id", "")),
             )
         )
+        for index, packet in enumerate(queue):
+            intelligence = packet.get("live_intelligence")
+            if not isinstance(intelligence, dict):
+                continue
+            if index + 1 >= len(queue):
+                intelligence["why_ranked_above_next_case"] = None
+                continue
+            next_intelligence = queue[index + 1].get("live_intelligence", {})
+            current_components = intelligence.get("priority_components", {}) if isinstance(intelligence.get("priority_components"), dict) else {}
+            next_components = next_intelligence.get("priority_components", {}) if isinstance(next_intelligence, dict) and isinstance(next_intelligence.get("priority_components"), dict) else {}
+            deltas = [
+                (key, float(value) - float(next_components.get(key, 0.0)))
+                for key, value in current_components.items()
+                if isinstance(value, (int, float))
+            ]
+            dominant = max(deltas, key=lambda item: item[1], default=("overall_priority", 0.0))
+            intelligence["why_ranked_above_next_case"] = (
+                f"Ranked above {queue[index + 1].get('lot_id', 'next case')} mainly by "
+                f"{dominant[0].replace('_', ' ')} (+{dominant[1] * 100:.1f} points on the normalized component)."
+            )
         payload["queue"] = queue
         payload["source"] = "live-learned-and-deterministic-decision-support"
         payload["summary"]["live_high_priority"] = sum(
@@ -657,11 +743,24 @@ def demo_narration(
             intent=body.intent,
         ):
             brief = get_narration_service().generate(packet, body.audience, intent=body.intent)
+    persisted = False
+    if body.intent == "situation_update":
+        try:
+            persisted = _persist_manual_situation_assessment(runtime, body.case_id, brief)
+        except Exception as exc:  # noqa: BLE001 - narration result remains usable if persistence is temporarily unavailable
+            runtime.telemetry.emit(
+                "decision.manual_assessment_persist_failed",
+                severity="ERROR",
+                outcome="error",
+                case_id=body.case_id,
+                error_classification=type(exc).__name__,
+            )
     return {
         "source": "bounded-public-demo-narration",
         "session_id": session_id,
         "packet": packet,
         "brief": brief,
+        "assessment_persisted": persisted,
     }
 
 

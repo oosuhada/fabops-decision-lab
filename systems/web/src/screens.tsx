@@ -16,26 +16,32 @@ function priorityClass(band: string) {
   return "decision-priority is-medium";
 }
 
-function AdaptiveIntelligenceVisualization({intelligence, liveStatus}: {intelligence: ContinuousIntelligenceStatus | null; liveStatus: LiveStatusResponse | null}) {
-  const plan = intelligence?.visualization_plans[0];
+function AdaptiveIntelligenceVisualization({intelligence, liveStatus, caseId, detail}: {intelligence: ContinuousIntelligenceStatus | null; liveStatus: LiveStatusResponse | null; caseId?: string; detail?: CaseDetailResponse | null}) {
+  const plan = caseId ? intelligence?.visualization_plans.find((item) => item.case_id === caseId) : intelligence?.visualization_plans[0];
   if (!plan) return <div className="adaptive-intelligence-viz is-empty"><strong>Visualization planner warming up</strong><p>A renderer is selected after the first material intelligence change.</p></div>;
+  if (caseId && plan.case_id !== caseId) return <div className="adaptive-intelligence-viz is-empty"><strong>Case-bound visualization unavailable</strong><p>The planner result does not match the selected case, so the UI refused to render it.</p></div>;
   const type = plan.primary.type;
-  const sensor = liveStatus?.prediction.top_sensor_forecasts[0];
-  const learned = intelligence?.latest_predictions.slice(0, 8) ?? [];
-  if (type === "timeseries" && sensor) {
-    const values = [sensor.last_value, ...sensor.forecast_next];
+  const learned = (intelligence?.latest_predictions ?? []).filter((item) => !plan.lot_id || item.lot_id === plan.lot_id).slice(0, 8);
+  const caseMeasurements = detail?.case.case_id === plan.case_id ? detail.evidence_series.measurements : [];
+  const latestMeasurement = caseMeasurements.at(-1);
+  const caseSeries = latestMeasurement ? caseMeasurements.filter((item) => item.sensor_name === latestMeasurement.sensor_name && item.chamber_id === latestMeasurement.chamber_id).slice(-8) : [];
+  const sensor = !caseId ? liveStatus?.prediction.top_sensor_forecasts[0] : null;
+  if (type === "timeseries" && (caseSeries.length || sensor)) {
+    const values = caseSeries.length ? caseSeries.map((item) => item.value) : [sensor!.last_value, ...sensor!.forecast_next];
     const minimum = Math.min(...values);
     const maximum = Math.max(...values);
     const span = Math.max(.001, maximum - minimum);
-    const points = values.map((value, index) => `${20 + index * 92},${104 - ((value - minimum) / span) * 74}`).join(" ");
-    return <div className="adaptive-intelligence-viz"><header><span>{plan.primary.title}</span><strong>{sensor.chamber_id} · {sensor.sensor_name}</strong></header><svg viewBox="0 0 320 125" role="img" aria-label="Adaptive failure precursor trajectory"><polyline points={points} className="adaptive-viz-line" />{values.map((value, index) => <circle key={index} cx={20 + index * 92} cy={104 - ((value - minimum) / span) * 74} r="4"><title>{value.toFixed(3)}</title></circle>)}</svg><footer><span>observed</span><span>forecast +1</span><span>+2</span><span>+3</span></footer></div>;
+    const step = values.length > 1 ? 280 / (values.length - 1) : 0;
+    const points = values.map((value, index) => `${20 + index * step},${104 - ((value - minimum) / span) * 74}`).join(" ");
+    const seriesLabel = caseSeries.length ? `${latestMeasurement!.chamber_id} · ${latestMeasurement!.sensor_name}` : `${sensor!.chamber_id} · ${sensor!.sensor_name}`;
+    return <div className="adaptive-intelligence-viz"><header><span>{plan.primary.title}</span><strong>{seriesLabel}</strong></header>{plan.decision_question ? <p className="adaptive-viz-question">{plan.decision_question}</p> : null}<svg viewBox="0 0 320 125" role="img" aria-label="Case-bound adaptive evidence trajectory"><polyline points={points} className="adaptive-viz-line" />{values.map((value, index) => <circle key={index} cx={20 + index * step} cy={104 - ((value - minimum) / span) * 74} r="4"><title>{value.toFixed(3)}</title></circle>)}</svg><footer><span>{caseSeries.length ? "case evidence" : "observed"}</span><span>{plan.case_id}</span><span>{plan.lot_id ?? ""}</span></footer></div>;
   }
   if (type === "heatmap") {
-    const forecasts = liveStatus?.prediction.top_sensor_forecasts.slice(0, 8) ?? [];
-    return <div className="adaptive-intelligence-viz"><header><span>{plan.primary.title}</span><strong>dynamic chamber intensity</strong></header><div className="adaptive-viz-heatmap">{forecasts.map((item) => <div key={`${item.chamber_id}:${item.sensor_name}`} style={{"--adaptive-risk": Math.max(.08, item.risk_score)} as React.CSSProperties}><span>{item.chamber_id}</span><strong>{item.sensor_name}</strong><small>{(item.risk_score * 100).toFixed(0)} risk</small></div>)}</div></div>;
+    const chamberRows = caseMeasurements.length ? caseMeasurements.slice(-12).map((item) => ({chamber_id: item.chamber_id, sensor_name: item.sensor_name, risk_score: Math.min(1, Math.abs(item.value) / 30)})) : liveStatus?.prediction.top_sensor_forecasts.slice(0, 8) ?? [];
+    return <div className="adaptive-intelligence-viz"><header><span>{plan.primary.title}</span><strong>{caseId ? "case-bound chamber evidence" : "dynamic chamber intensity"}</strong></header>{plan.decision_question ? <p className="adaptive-viz-question">{plan.decision_question}</p> : null}<div className="adaptive-viz-heatmap">{chamberRows.map((item, index) => <div key={`${item.chamber_id}:${item.sensor_name}:${index}`} style={{"--adaptive-risk": Math.max(.08, item.risk_score)} as React.CSSProperties}><span>{item.chamber_id}</span><strong>{item.sensor_name}</strong><small>{caseId ? "selected case" : `${(item.risk_score * 100).toFixed(0)} risk`}</small></div>)}</div></div>;
   }
   if (type === "timeline") {
-    return <div className="adaptive-intelligence-viz"><header><span>{plan.primary.title}</span><strong>material intelligence sequence</strong></header><ol className="adaptive-viz-timeline">{learned.slice(0, 6).map((item) => <li key={`${item.model_name}:${item.generated_at}`}><time>{item.source_event_time}</time><strong>{item.target.replaceAll("_", " ")}</strong><span>{(item.score * 100).toFixed(1)} · {item.lot_id}</span></li>)}</ol></div>;
+    return <div className="adaptive-intelligence-viz"><header><span>{plan.primary.title}</span><strong>material intelligence sequence</strong></header>{plan.decision_question ? <p className="adaptive-viz-question">{plan.decision_question}</p> : null}<ol className="adaptive-viz-timeline">{learned.slice(0, 6).map((item) => <li key={`${item.model_name}:${item.generated_at}`}><time>{item.source_event_time}</time><strong>{item.target.replaceAll("_", " ")}</strong><span>{(item.score * 100).toFixed(1)} · {item.lot_id}</span></li>)}</ol></div>;
   }
   return <div className="adaptive-intelligence-viz"><header><span>{plan.primary.title}</span><strong>{type} comparison</strong></header><div className="adaptive-viz-bars">{learned.slice(0, 6).map((item) => <div key={`${item.model_name}:${item.target}`}><span>{item.target.replaceAll("_", " ")}</span><i><b style={{width: `${Math.max(4, Math.min(100, item.score * 100))}%`}} /></i><strong>{(item.score * 100).toFixed(0)}</strong></div>)}</div></div>;
 }
@@ -286,17 +292,18 @@ export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, l
   const liveDecision = top?.live_intelligence ?? null;
   const learnedByTarget = new Map<string, ContinuousIntelligenceStatus["latest_predictions"][number]>();
   for (const prediction of intelligence?.latest_predictions ?? []) if (!learnedByTarget.has(prediction.target)) learnedByTarget.set(prediction.target, prediction);
-  const learnedYield = learnedByTarget.get("yield");
-  const learnedFailure = learnedByTarget.get("future_failure_probability");
-  const learnedMaintenance = learnedByTarget.get("maintenance_probability");
-  const learnedExcursion = learnedByTarget.get("excursion_probability");
+  const learnedYield = learnedByTarget.get("final_yield");
+  const learnedExcursionAlarm = learnedByTarget.get("next_lot_excursion_alarm_probability");
+  const learnedMaintenanceAttention = learnedByTarget.get("next_lot_maintenance_attention_probability");
+  const learnedExcursion = learnedByTarget.get("final_excursion_probability");
   const autoReport = intelligence?.reports.find((report) => report.case_id === top?.case_id) ?? null;
+  const situationAssessment = autoReport?.situation_assessment ?? null;
   const visibleBrief = manualBrief?.brief.case_id === top?.case_id ? manualBrief.brief : autoReport?.brief ?? null;
   const visibleProvider = manualBrief?.brief.case_id === top?.case_id ? manualBrief.brief.provider : autoReport?.provider ?? liveDecision?.llm.provider ?? null;
-  const predictedYield = liveDecision?.predictions.yield ?? learnedYield?.score ?? null;
-  const predictedExcursion = liveDecision?.predictions.excursion_probability ?? learnedExcursion?.score ?? null;
-  const predictedFailure = liveDecision?.predictions.future_failure_probability ?? learnedFailure?.score ?? null;
-  const predictedMaintenance = liveDecision?.predictions.maintenance_probability ?? learnedMaintenance?.score ?? null;
+  const predictedYield = liveDecision?.predictions.final_yield ?? learnedYield?.score ?? null;
+  const predictedExcursion = liveDecision?.predictions.final_excursion_probability ?? learnedExcursion?.score ?? null;
+  const predictedExcursionAlarm = liveDecision?.predictions.next_lot_excursion_alarm_probability ?? learnedExcursionAlarm?.score ?? null;
+  const predictedMaintenanceAttention = liveDecision?.predictions.next_lot_maintenance_attention_probability ?? learnedMaintenanceAttention?.score ?? null;
   return <div className="screen-stack decision-cockpit">
     <section className="cockpit-hero">
       <div className="cockpit-hero__intro">
@@ -318,10 +325,10 @@ export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, l
       <div><span>Predictive case risk</span><strong>{topCaseRisk?.lot_id ?? "—"}</strong><small>{topCaseRisk ? `${topCaseRisk.risk_band} · ${(topCaseRisk.risk_score * 100).toFixed(0)} risk score` : "no active forecast"}</small></div>
     </section>
     <section className="learned-intelligence-strip" aria-label="Learned predictive intelligence">
-      <div><span>Learned yield</span><strong>{predictedYield != null ? `${(predictedYield * 100).toFixed(1)}%` : "—"}</strong><small>{learnedYield?.model_version ?? "champion model"}</small></div>
-      <div><span>Excursion model</span><strong>{predictedExcursion != null ? `${(predictedExcursion * 100).toFixed(0)}%` : "—"}</strong><small>{learnedExcursion?.calibrated ? "calibrated champion" : "live case score"}</small></div>
-      <div><span>Next-lot failure</span><strong>{predictedFailure != null ? `${(predictedFailure * 100).toFixed(0)}%` : "—"}</strong><small>{predictedFailure != null && predictedFailure >= .7 ? "HIGH" : predictedFailure != null && predictedFailure >= .4 ? "WATCH" : "NORMAL"}</small></div>
-      <div><span>Maintenance need</span><strong>{predictedMaintenance != null ? `${(predictedMaintenance * 100).toFixed(0)}%` : "—"}</strong><small>{predictedMaintenance != null && predictedMaintenance >= .7 ? "HIGH" : predictedMaintenance != null && predictedMaintenance >= .4 ? "WATCH" : "NORMAL"}</small></div>
+      <div><span>Final yield · POST_CMP</span><strong>{predictedYield != null ? `${(predictedYield * 100).toFixed(1)}%` : "—"}</strong><small>{learnedYield?.model_version ?? "cutoff-aware champion"}</small></div>
+      <div><span>Final excursion · POST_CMP</span><strong>{predictedExcursion != null ? `${(predictedExcursion * 100).toFixed(0)}%` : "—"}</strong><small>{learnedExcursion?.calibrated ? "calibrated champion" : "live case score"}</small></div>
+      <div><span>Next-lot excursion / alarm</span><strong>{predictedExcursionAlarm != null ? `${(predictedExcursionAlarm * 100).toFixed(0)}%` : "—"}</strong><small>{predictedExcursionAlarm != null && predictedExcursionAlarm >= .7 ? "HIGH · NOT FAILURE PROBABILITY" : predictedExcursionAlarm != null && predictedExcursionAlarm >= .4 ? "WATCH · NOT FAILURE PROBABILITY" : "NORMAL · NOT FAILURE PROBABILITY"}</small></div>
+      <div><span>Maintenance attention</span><strong>{predictedMaintenanceAttention != null ? `${(predictedMaintenanceAttention * 100).toFixed(0)}%` : "—"}</strong><small>{predictedMaintenanceAttention != null && predictedMaintenanceAttention >= .7 ? "HIGH · NOT RUL" : predictedMaintenanceAttention != null && predictedMaintenanceAttention >= .4 ? "WATCH · NOT RUL" : "NORMAL · NOT RUL"}</small></div>
       <div><span>Auto analyst</span><strong>{visibleProvider?.toUpperCase() ?? "WAITING"}</strong><small>{visibleBrief?.headline ?? "5-minute risk review + material-change trigger"}</small></div>
     </section>
     {top && liveDecision ? <section className={`live-decision-command live-decision-command--${liveDecision.urgency.toLowerCase()}`} aria-label="Live decision intelligence">
@@ -351,11 +358,18 @@ export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, l
           <ul>{liveDecision.trigger_conditions.map((item) => <li className={item.met ? "is-met" : ""} key={item.condition}><b>{item.met ? "TRIGGERED" : "WATCH"}</b><span>{item.meaning}</span><small>{item.current == null ? "current —" : `current ${(item.current * 100).toFixed(0)}%`}</small></li>)}</ul>
         </article>
       </div>
+      <AdaptiveIntelligenceVisualization intelligence={intelligence} liveStatus={liveStatus} caseId={top.case_id} detail={matchingDetail} />
       <div className="live-analyst-brief">
         <div>
           <span>AI 상황 분석</span>
           <strong>{visibleBrief?.headline ?? "자동 Analyst가 다음 주기에서 업데이트합니다."}</strong>
           <p>{visibleBrief?.summary ?? liveDecision.llm.summary ?? "현재는 학습 모델과 deterministic evidence를 기준으로 판단 맥락을 제공하고 있습니다."}</p>
+          {situationAssessment ? <div className="situation-delta-strip">
+            <b>{situationAssessment.risk_trajectory ?? "DELTA REVIEW"}</b>
+            {(situationAssessment.what_changed ?? []).slice(0, 3).map((item, index) => <span key={`${item.metric ?? item.status ?? "delta"}-${index}`}>
+              {item.metric ? `${item.metric.replaceAll("_", " ")} ${item.delta == null ? "—" : `${item.delta >= 0 ? "+" : ""}${(item.delta * 100).toFixed(1)}pp`}` : item.status?.replaceAll("_", " ")}
+            </span>)}
+          </div> : null}
           <small>{visibleProvider ? `${visibleProvider} · ${manualBrief?.brief.case_id === top.case_id ? "manual refresh" : autoReport?.trigger_type ?? "periodic review"}` : "LLM report warming"}{visibleBrief?.generated_at ? ` · ${visibleBrief.generated_at}` : ""}</small>
         </div>
         <button type="button" className="primary live-analyze-button" disabled={analyzing} onClick={onAnalyzeNow}>{analyzing ? "분석 중…" : "지금 다시 분석"}</button>
@@ -414,6 +428,11 @@ export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, l
           <strong>{top.evidence.top_candidate?.candidate_id ?? "Not ranked"}</strong>
           <small>deterministic score {top.evidence.top_candidate?.score.toFixed(2) ?? "—"}</small>
         </div>
+        {liveDecision?.priority_components ? <div className="evidence-meter-card">
+          <div><span>Priority composition</span><strong>{(liveDecision.priority_score * 100).toFixed(1)}</strong></div>
+          <small>{Object.entries(liveDecision.priority_components).map(([key, value]) => `${key.replaceAll("_", " ")} ${(value * 100).toFixed(0)}`).join(" · ")}</small>
+          {liveDecision.why_ranked_above_next_case ? <p>{liveDecision.why_ranked_above_next_case}</p> : null}
+        </div> : null}
         {topEvidence ? <div className="evidence-meter-card">
           <div><span>Evidence balance</span><strong>{topEvidence.label}</strong></div>
           <div className="evidence-meter" aria-label={`${topEvidence.support} supporting and ${topEvidence.contradict} contradicting evidence`}><span style={{width: `${Math.max(6, topEvidence.supportRatio)}%`}} /></div>
@@ -436,7 +455,7 @@ export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, l
           <div className="decision-queue-item__identity">
             <span className={priorityClass(packet.priority_band)}>{packet.priority_band}</span>
             <strong>{packet.lot_id}</strong>
-            <small>#{packet.priority_rank} · {packet.classification.replaceAll("_", " ")}</small>
+            <small>{packet.incident_episode ? `${packet.incident_episode.status} · ${packet.incident_episode.case_count} correlated cases` : `#${packet.priority_rank}`} · {packet.classification.replaceAll("_", " ")}</small>
           </div>
           <div className="decision-queue-item__question"><strong>{packet.live_intelligence?.headline ?? packet.decision_question}</strong><span>{packet.live_intelligence ? `${packet.live_intelligence.urgency} · priority ${(packet.live_intelligence.priority_score * 100).toFixed(0)} · guardrail: ${recommended?.label}` : `Guardrail: ${recommended?.label}`}</span></div>
           <div className="decision-queue-item__evidence">
@@ -495,20 +514,21 @@ export function OperationsOverview({overview, liveStatus, intelligence, onSelect
       <header><div><span className="eyebrow">Continuous learning engine</span><h2>{intelligence?.learning_enabled ? "Models learn from completed lots" : "Learning registry unavailable"}</h2></div><small>{intelligence?.feedback_loop ?? "waiting for intelligence worker"}</small></header>
       <div className="learning-kpis">
         <article><span>Outcome memory</span><strong>{intelligence?.outcome_count ?? 0}</strong><small>completed lots available for feedback</small></article>
-        <article><span>Champion models</span><strong>{champions.length}</strong><small>yield · excursion · failure · maintenance</small></article>
+        <article><span>Champion models</span><strong>{champions.length}</strong><small>cutoff yield · excursion · next-lot alarm · maintenance attention</small></article>
         <article><span>Prediction feedback</span><strong>{feedbackSamples}</strong><small>predictions compared with realized outcomes</small></article>
         <article><span>Feature drift</span><strong>{intelligence?.drift.status?.toUpperCase() ?? "WAITING"}</strong><small>{intelligence ? `drift score ${intelligence.drift.score.toFixed(3)}` : "learning window warming"}</small></article>
       </div>
       <div className="champion-model-grid">
         {champions.length ? champions.map((model) => <article key={model.model_name}>
           <div><span>{model.model_name.replaceAll("_", " ")}</span><strong>{model.model_version}</strong></div>
-          <div className="model-metric-row"><span>{model.training_rows} rows</span><span>{model.metrics.mae != null ? `MAE ${model.metrics.mae.toFixed(3)}` : `Brier ${(model.metrics.brier ?? 0).toFixed(3)}`}</span><span>{model.metrics.accuracy != null ? `Acc ${(model.metrics.accuracy * 100).toFixed(0)}%` : "continuous"}</span></div>
+          <div className="model-metric-row"><span>{model.training_rows} rows</span><span>{model.metrics.brier != null ? `Brier ${model.metrics.brier.toFixed(3)}` : `MAE ${(model.metrics.mae ?? 0).toFixed(3)}`}</span><span>{model.metrics.auprc != null ? `AUPRC ${model.metrics.auprc.toFixed(3)}` : model.metrics.rmse != null ? `RMSE ${model.metrics.rmse.toFixed(3)}` : "shadow test"}</span></div>
+          <small>{model.prediction_cutoff ?? "cutoff unknown"} · test {model.test_window?.start_lot ?? "—"}→{model.test_window?.end_lot ?? "—"}</small>
         </article>) : <p className="muted">The first champion set appears after enough completed lot outcomes are persisted.</p>}
       </div>
       <div className="learned-prediction-grid">
-        {["yield", "excursion_probability", "future_failure_probability", "maintenance_probability"].map((target) => {
+        {["final_yield", "final_excursion_probability", "next_lot_excursion_alarm_probability", "next_lot_maintenance_attention_probability"].map((target) => {
           const prediction = predictionByTarget.get(target);
-          return <article key={target}><span>{target.replaceAll("_", " ")}</span><strong>{prediction ? `${(prediction.score * 100).toFixed(target === "yield" ? 1 : 0)}%` : "—"}</strong><small>{prediction ? `${prediction.lot_id} · ${prediction.model_version}` : "awaiting champion prediction"}</small></article>;
+          return <article key={target}><span>{target.replaceAll("_", " ")}</span><strong>{prediction ? `${(prediction.score * 100).toFixed(target === "final_yield" ? 1 : 0)}%` : "—"}</strong><small>{prediction ? `${prediction.lot_id} · ${prediction.prediction_cutoff ?? "cutoff"}` : "awaiting champion prediction"}</small></article>;
         })}
       </div>
       {(latestReport || latestPlan) ? <div className="intelligence-narrative-grid">

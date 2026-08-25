@@ -109,7 +109,7 @@ def _system_prompt(audience: str, intent: str = "decision_brief") -> str:
         "engineer_checklist": "Produce an engineer-facing diagnostic checklist using only grounded evidence and next checks.",
         "tradeoff_compare": "Emphasize comparison of the supplied decision options and their stated tradeoffs.",
         "counter_evidence": "Emphasize contradicting evidence, missing evidence, and what would reduce uncertainty.",
-        "situation_update": "Explain what changed now, why it matters over the next 1–3 lots, which concrete check should happen next, and which supplied trigger threshold would justify escalation. Use predictive intelligence only as decision support, never as equipment authority.",
+        "situation_update": "Explain what changed since the previous assessment, why it matters for the explicitly supplied prediction horizon, which concrete check should happen next, and which supplied trigger threshold would justify escalation. Never expand a next-lot model into a 1–3 lot claim. Treat next_lot_excursion_alarm_probability as excursion/alarm risk, never equipment failure probability, and treat maintenance-attention risk as a proxy, never RUL.",
     }.get(intent, "Produce a balanced decision brief.")
     return f"""You generate grounded FabOps decision wording for a {audience}.
 
@@ -196,6 +196,8 @@ class NarrationService:
                 "fallback_count": self._fallback_count,
                 "validation_rejections": self._validation_rejections,
                 "provider_selections": dict(sorted(self._provider_selections.items())),
+                "cloud_call_count": self._provider_selections.get("vertex-ai-gemini", 0),
+                "local_qwen_call_count": self._provider_selections.get("local-qwen", 0),
                 "generation_latency_ms": {
                     "samples": len(latencies),
                     "p50": self._percentile(latencies, 0.50),
@@ -301,7 +303,14 @@ class NarrationService:
         payload["presentation"] = build_presentation_spec(packet, payload, intent)
         return payload
 
-    def generate(self, packet: dict[str, Any], audience: str, *, intent: str = "decision_brief") -> dict[str, Any]:
+    def generate(
+        self,
+        packet: dict[str, Any],
+        audience: str,
+        *,
+        intent: str = "decision_brief",
+        allow_cloud_fallback: bool = True,
+    ) -> dict[str, Any]:
         if audience not in AUDIENCES:
             raise ValueError(f"unsupported audience: {audience}")
         if intent != "decision_brief" and intent not in DEMO_INTENTS:
@@ -324,6 +333,9 @@ class NarrationService:
         }
         estimated_input_tokens = self.governor.estimate_tokens(prompt_payload) if self.governor else 1
         for provider in self.providers or []:
+            if provider.name == "vertex-ai-gemini" and not allow_cloud_fallback:
+                failures.append("vertex-ai-gemini:auto_cloud_fallback_disabled")
+                continue
             try:
                 if self.governor:
                     raw = self.governor.run(
@@ -338,6 +350,7 @@ class NarrationService:
                     {
                         "mode": "llm",
                         "provider": provider.name,
+                        "provider_model": getattr(provider, "model", None),
                         "fallback_reason": None,
                         "generated_at": datetime.now(timezone.utc).isoformat(),
                         "cache_hit": False,
@@ -358,6 +371,7 @@ class NarrationService:
                 failures.append(f"{provider.name}:{type(exc).__name__}")
         reason = ",".join(failures) if failures else "llm_not_configured"
         payload = _deterministic_brief(packet, audience, mode="deterministic_fallback", provider="deterministic", fallback_reason=reason)
+        payload["provider_model"] = None
         payload["cache_hit"] = False
         payload["intent"] = intent
         payload["latency_ms"] = round((time.perf_counter() - started) * 1000, 3)

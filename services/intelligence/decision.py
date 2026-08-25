@@ -41,13 +41,11 @@ def build_live_decision_intelligence(
     """
 
     by_target = _prediction_map(predictions)
-    predicted_yield = _score(by_target, "yield")
-    excursion = _score(by_target, "excursion_probability")
-    failure = _score(by_target, "future_failure_probability")
-    maintenance = _score(by_target, "maintenance_probability")
+    predicted_yield = _score(by_target, "final_yield")
+    excursion = _score(by_target, "final_excursion_probability")
+    next_lot_excursion_alarm = _score(by_target, "next_lot_excursion_alarm_probability")
+    maintenance_attention = _score(by_target, "next_lot_maintenance_attention_probability")
     yield_deficit = max(0.0, 0.90 - predicted_yield) / 0.20 if predicted_yield is not None else 0.0
-    risk_components = [value for value in (excursion, failure, maintenance, min(1.0, yield_deficit)) if value is not None]
-    priority_score = max(risk_components or [min(1.0, float(packet.get("evidence", {}).get("anomaly_score", 0.0)) / 3.0)])
 
     classification = str(packet.get("classification") or "unknown")
     lot_id = str(packet.get("lot_id") or "unknown")
@@ -56,21 +54,53 @@ def build_live_decision_intelligence(
     primary_chamber = chambers[0] if chambers else "affected chamber"
     primary_equipment = equipment[0] if equipment else "affected equipment"
 
-    if failure is not None and failure >= 0.75:
+    probability_values = [value for value in (excursion, next_lot_excursion_alarm, maintenance_attention) if value is not None]
+    calibrated_risk = max(probability_values, default=min(1.0, float(packet.get("evidence", {}).get("anomaly_score", 0.0)) / 3.0))
+    anomaly_score = max(0.0, float(packet.get("evidence", {}).get("anomaly_score", 0.0)))
+    severity = max(0.0, min(1.0, anomaly_score / 3.0))
+    affected_scope = min(1.0, (len(chambers) + len(equipment)) / 6.0)
+    persistence = min(1.0, anomaly_score / 4.0)
+    uncertainty = (
+        sum(1.0 - abs(value - 0.5) * 2.0 for value in probability_values) / len(probability_values)
+        if probability_values
+        else 0.5
+    )
+    actionability = 1.0 if chambers or equipment else 0.35
+    yield_impact = min(1.0, yield_deficit)
+    priority_components = {
+        "calibrated_risk": round(calibrated_risk, 6),
+        "severity": round(severity, 6),
+        "affected_scope": round(affected_scope, 6),
+        "persistence": round(persistence, 6),
+        "yield_impact": round(yield_impact, 6),
+        "uncertainty": round(uncertainty, 6),
+        "human_actionability": round(actionability, 6),
+    }
+    priority_score = (
+        calibrated_risk * 0.35
+        + severity * 0.18
+        + affected_scope * 0.12
+        + persistence * 0.10
+        + yield_impact * 0.15
+        + uncertainty * 0.05
+        + actionability * 0.05
+    )
+
+    if next_lot_excursion_alarm is not None and next_lot_excursion_alarm >= 0.75:
         signal = "ESCALATE_REVIEW"
         urgency = "HIGH"
-        headline = f"{lot_id}: 다음 LOT 실패 위험 {_percent(failure)} — 선제 검토 필요"
-        dominant_reason = f"next-lot failure model이 {_percent(failure)}로 HIGH 구간에 진입했습니다."
+        headline = f"{lot_id}: 다음 LOT excursion/alarm 위험 {_percent(next_lot_excursion_alarm)} — 선제 검토 필요"
+        dominant_reason = f"next-lot excursion/alarm model이 {_percent(next_lot_excursion_alarm)}로 HIGH 구간에 진입했습니다. 실제 장비 failure 확률을 뜻하지 않습니다."
     elif excursion is not None and excursion >= 0.70:
         signal = "VERIFY_PHYSICAL"
         urgency = "HIGH"
         headline = f"{lot_id}: 공정 이상 위험 {_percent(excursion)} — 물리 근거 확인 우선"
         dominant_reason = f"excursion model이 {_percent(excursion)}로 물리 이상 가능성을 높게 보고 있습니다."
-    elif maintenance is not None and maintenance >= 0.65:
+    elif maintenance_attention is not None and maintenance_attention >= 0.65:
         signal = "MAINTENANCE_WATCH"
         urgency = "WATCH"
-        headline = f"{lot_id}: 유지보수 위험 {_percent(maintenance)} — 장비 상태 확인 필요"
-        dominant_reason = f"maintenance model이 {_percent(maintenance)}로 다음 LOT 전 점검 필요성을 시사합니다."
+        headline = f"{lot_id}: 유지보수 attention 위험 {_percent(maintenance_attention)} — 장비 상태 확인 필요"
+        dominant_reason = f"maintenance-attention proxy가 {_percent(maintenance_attention)}로 다음 LOT 전 점검 우선순위를 높입니다. RUL 예측이 아닙니다."
     elif predicted_yield is not None and predicted_yield < 0.86:
         signal = "YIELD_WATCH"
         urgency = "WATCH"
@@ -94,10 +124,10 @@ def build_live_decision_intelligence(
         why_now.append(f"예상 수율 {_percent(predicted_yield)} · 목표 90% 대비 {abs(gap):.1f}pp {direction}")
     if excursion is not None:
         why_now.append(f"공정 excursion 위험 {_percent(excursion)}")
-    if failure is not None:
-        why_now.append(f"다음 LOT failure 위험 {_percent(failure)}")
-    if maintenance is not None:
-        why_now.append(f"다음 LOT maintenance 필요 위험 {_percent(maintenance)}")
+    if next_lot_excursion_alarm is not None:
+        why_now.append(f"다음 LOT excursion/alarm 위험 {_percent(next_lot_excursion_alarm)} · equipment failure와 구분")
+    if maintenance_attention is not None:
+        why_now.append(f"다음 LOT maintenance attention 위험 {_percent(maintenance_attention)} · RUL 아님")
 
     next_actions: list[dict[str, str]] = []
     if classification == "data_quality_incident":
@@ -115,12 +145,12 @@ def build_live_decision_intelligence(
                 "purpose": "현재 이상이 일시적 spike인지 누적 drift인지 구분",
             }
         )
-        if failure is not None and failure >= 0.60:
+        if next_lot_excursion_alarm is not None and next_lot_excursion_alarm >= 0.60:
             next_actions.append(
                 {
                     "action": f"{primary_equipment}의 alarm / maintenance sequence 검토",
                     "target": primary_equipment,
-                    "purpose": "다음 LOT failure precursor 확인",
+                    "purpose": "다음 LOT excursion/alarm precursor 확인",
                 }
             )
         if predicted_yield is not None and predicted_yield < 0.90:
@@ -135,17 +165,17 @@ def build_live_decision_intelligence(
             next_actions.append(
                 {
                     "action": "다음 LOT prediction 변화를 감시",
-                    "target": "next 1–3 lots",
+                    "target": "next lot",
                     "purpose": "risk band 전환 여부 확인",
                 }
             )
 
     trigger_conditions = [
         {
-            "condition": "future_failure_probability >= 0.80",
-            "meaning": "다음 LOT 실패 위험이 80% 이상이면 human containment review 준비",
-            "current": failure,
-            "met": bool(failure is not None and failure >= 0.80),
+            "condition": "next_lot_excursion_alarm_probability >= 0.80",
+            "meaning": "다음 LOT excursion/alarm 위험이 80% 이상이면 human containment review 준비",
+            "current": next_lot_excursion_alarm,
+            "met": bool(next_lot_excursion_alarm is not None and next_lot_excursion_alarm >= 0.80),
         },
         {
             "condition": "excursion_probability >= 0.75",
@@ -167,20 +197,21 @@ def build_live_decision_intelligence(
         llm_summary = brief.get("summary") or brief.get("headline")
 
     return {
-        "schema_version": "fabops-live-decision-intelligence-v1",
+        "schema_version": "fabops-live-decision-intelligence-v2",
         "signal": signal,
         "urgency": urgency,
         "priority_score": round(float(priority_score), 6),
+        "priority_components": priority_components,
         "headline": headline,
         "why_now": why_now[:5],
         "next_actions": next_actions[:3],
         "trigger_conditions": trigger_conditions,
-        "watch_horizon": "next 1–3 lots",
+        "watch_horizon": "next lot",
         "predictions": {
-            "yield": predicted_yield,
-            "excursion_probability": excursion,
-            "future_failure_probability": failure,
-            "maintenance_probability": maintenance,
+            "final_yield": predicted_yield,
+            "final_excursion_probability": excursion,
+            "next_lot_excursion_alarm_probability": next_lot_excursion_alarm,
+            "next_lot_maintenance_attention_probability": maintenance_attention,
         },
         "llm": {
             "provider": report.get("provider") if isinstance(report, dict) else None,

@@ -99,13 +99,16 @@ export interface LearnedPrediction {
   lot_id: string;
   model_name: string;
   model_version: string;
-  target: "yield" | "excursion_probability" | "future_failure_probability" | "maintenance_probability" | string;
+  target: "final_yield" | "final_excursion_probability" | "next_lot_excursion_alarm_probability" | "next_lot_maintenance_attention_probability" | string;
   score: number;
   risk_band: string;
   source_event_time: string;
   generated_at: string;
   trained_model: boolean;
   calibrated: boolean;
+  feature_set_version?: string;
+  prediction_cutoff?: string;
+  target_definition?: string;
 }
 
 export interface ChampionModel {
@@ -114,31 +117,67 @@ export interface ChampionModel {
   training_rows: number;
   trained_at: string;
   feature_schema: string[];
-  parameters: {kind?: string; weights?: number[]; bias?: number};
-  metrics: {mae?: number; brier?: number; accuracy?: number; validation_rows?: number; trained_rows?: number};
+  parameters: {kind?: string; weights?: number[]; bias?: number; temperature?: number; interval_radius?: number};
+  metrics: {mae?: number; rmse?: number; bias?: number; brier?: number; accuracy?: number; auprc?: number; precision?: number; recall?: number; false_positive_rate?: number; calibration_error?: number; train_rows?: number; calibration_rows?: number; shadow_test_rows?: number; horizon?: string};
+  feature_set_version?: string;
+  prediction_cutoff?: string;
+  training_window?: {start_lot?: string; end_lot?: string};
+  calibration_window?: {start_lot?: string; end_lot?: string};
+  test_window?: {start_lot?: string; end_lot?: string};
+  target_definition?: string;
+  dataset_fingerprint?: string;
+  code_git_sha?: string;
+  simulator_regime?: string;
+  promotion_reason?: string;
 }
 
 export interface IntelligenceReport {
+  report_id?: number;
+  assessment_run_id?: string | null;
   case_id: string;
   material_signature: string;
   trigger_type: string;
   mode: string;
   provider: string;
+  previous_report_id?: number | null;
+  reused_report_id?: number | null;
+  review_skipped_reason?: string | null;
+  created_at?: string;
   brief?: {
     headline?: string;
     summary?: string;
     generated_at?: string;
     sections?: Array<{title: string; body: string}>;
   };
+  situation_assessment?: {
+    schema_version?: string;
+    assessment_id?: string;
+    generated_at?: string;
+    provider?: string;
+    trigger?: string;
+    what_changed?: Array<{metric?: string; previous?: number | null; current?: number | null; delta?: number | null; status?: string}>;
+    why_it_changed?: string[];
+    current_risk?: Record<string, number | null>;
+    risk_trajectory?: string;
+    forecast_horizon?: string;
+    uncertainties?: string[];
+    recommended_investigations?: Array<{action?: string; target?: string; purpose?: string}>;
+    next_review_condition?: string;
+    model_versions?: Record<string, string>;
+    visualization_intent?: {decision_question?: string; primary?: string; secondary?: string; reason?: string};
+  };
 }
 
 export interface AdaptiveVisualizationPlan {
+  schema_version?: string;
   case_id: string;
+  lot_id?: string;
   material_signature: string;
   planner: string;
   rationale: string;
-  primary: {type: string; title: string; x?: string; y?: string; group_by?: string};
-  secondary: {type: string; title: string; x?: string; y?: string; group_by?: string};
+  decision_question?: string;
+  primary: {type: string; title: string; x?: string; y?: string; group_by?: string; case_id?: string; lot_id?: string; time_window?: string; evidence_refs?: string[]};
+  secondary: {type: string; title: string; x?: string; y?: string; group_by?: string; case_id?: string; lot_id?: string; time_window?: string; evidence_refs?: string[]};
 }
 
 export interface ContinuousIntelligenceStatus {
@@ -146,11 +185,13 @@ export interface ContinuousIntelligenceStatus {
   schema_version: string;
   learning_enabled: boolean;
   feedback_loop: string;
+  feature_set_version?: string;
+  prediction_cutoff?: string;
   outcome_count: number;
   champions: Record<string, ChampionModel>;
   latest_predictions: LearnedPrediction[];
   feedback: Record<string, {samples: number; mae: number; mse: number}>;
-  drift: {status: "warming" | "stable" | "drift" | string; score: number; recent_rows: number; baseline_rows: number; top_shifts?: Array<{feature: string; shift: number}>};
+  drift: {status: "warming" | "stable" | "watch" | "drift" | string; score: number; recent_rows: number; baseline_rows: number; drift_types?: string[]; retraining_recommended?: boolean; top_shifts?: Array<{feature: string; shift?: number; mean_shift?: number; psi?: number}>};
   reports: IntelligenceReport[];
   visualization_plans: AdaptiveVisualizationPlan[];
   degraded_reason?: string;
@@ -293,6 +334,19 @@ export interface DecisionPacket {
   evidence_refs: string[];
   provenance: Record<string, string | boolean>;
   live_intelligence?: LiveDecisionIntelligence;
+  incident_episode?: {
+    episode_id: string;
+    status: "NEW" | "ONGOING" | "ESCALATING" | "RECOVERING" | "RESOLVED" | "SUPPRESSED" | string;
+    classification: string;
+    equipment_id: string;
+    chamber_id: string;
+    case_count: number;
+    first_lot_id: string;
+    last_lot_id: string;
+    member_case_ids: string[];
+    grouping_basis: string;
+    latest_anomaly_score: number;
+  };
 }
 
 export interface LiveDecisionIntelligence {
@@ -300,16 +354,18 @@ export interface LiveDecisionIntelligence {
   signal: string;
   urgency: "HIGH" | "WATCH" | "NORMAL" | string;
   priority_score: number;
+  priority_components?: Record<string, number>;
+  why_ranked_above_next_case?: string | null;
   headline: string;
   why_now: string[];
   next_actions: Array<{action: string; target: string; purpose: string}>;
   trigger_conditions: Array<{condition: string; meaning: string; current: number | null; met: boolean}>;
   watch_horizon: string;
   predictions: {
-    yield: number | null;
-    excursion_probability: number | null;
-    future_failure_probability: number | null;
-    maintenance_probability: number | null;
+    final_yield: number | null;
+    final_excursion_probability: number | null;
+    next_lot_excursion_alarm_probability: number | null;
+    next_lot_maintenance_attention_probability: number | null;
   };
   llm: {provider: string | null; mode: string | null; summary: string | null; generated_at: string | null};
   authority: string;
@@ -322,6 +378,10 @@ export interface DecisionCockpitResponse {
   source: string;
   summary: {
     decision_count: number;
+    raw_case_count?: number;
+    incident_episode_count?: number;
+    active_incident_episode_count?: number;
+    decision_queue_count?: number;
     high_priority: number;
     medium_priority: number;
     data_verification: number;
@@ -332,6 +392,7 @@ export interface DecisionCockpitResponse {
 export interface DecisionBriefResponse {
   source: string;
   session_id?: string;
+  assessment_persisted?: boolean;
   packet: DecisionPacket;
   brief: {
     schema_version: string;

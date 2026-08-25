@@ -395,9 +395,11 @@ class PostgresRepository:
             ).fetchall()
         return [deepcopy(row["outcome_document"]) for row in rows]
 
-    def register_model(self, model: dict[str, Any], *, champion: bool) -> None:
+    def register_model(self, model: dict[str, Any], *, status: str) -> None:
+        if status not in {"candidate", "champion", "rejected"}:
+            raise ValueError(f"unsupported model registry status: {status}")
         with self._connection() as connection:
-            if champion:
+            if status == "champion":
                 connection.execute(
                     "UPDATE fabops_model_registry SET status = 'retired' WHERE model_name = %s AND status = 'champion'",
                     (model["model_name"],),
@@ -406,20 +408,36 @@ class PostgresRepository:
                 """
                 INSERT INTO fabops_model_registry(
                     model_name, model_version, status, training_rows, feature_schema,
-                    parameters, metrics
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    parameters, metrics, feature_set_version, prediction_cutoff,
+                    training_window, calibration_window, test_window, target_definition,
+                    dataset_fingerprint, code_git_sha, simulator_regime, promotion_reason
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (model_name, model_version) DO UPDATE SET
                     status = EXCLUDED.status,
                     training_rows = EXCLUDED.training_rows,
                     feature_schema = EXCLUDED.feature_schema,
                     parameters = EXCLUDED.parameters,
                     metrics = EXCLUDED.metrics,
+                    feature_set_version = EXCLUDED.feature_set_version,
+                    prediction_cutoff = EXCLUDED.prediction_cutoff,
+                    training_window = EXCLUDED.training_window,
+                    calibration_window = EXCLUDED.calibration_window,
+                    test_window = EXCLUDED.test_window,
+                    target_definition = EXCLUDED.target_definition,
+                    dataset_fingerprint = EXCLUDED.dataset_fingerprint,
+                    code_git_sha = EXCLUDED.code_git_sha,
+                    simulator_regime = EXCLUDED.simulator_regime,
+                    promotion_reason = EXCLUDED.promotion_reason,
                     trained_at = now()
                 """,
                 (
-                    model["model_name"], model["model_version"], "champion" if champion else "candidate",
+                    model["model_name"], model["model_version"], status,
                     int(model["training_rows"]), Jsonb(model["feature_schema"]), Jsonb(model["parameters"]),
-                    Jsonb(model["metrics"]),
+                    Jsonb(model["metrics"]), model.get("feature_set_version"), model.get("prediction_cutoff"),
+                    Jsonb(model.get("training_window", {})), Jsonb(model.get("calibration_window", {})),
+                    Jsonb(model.get("test_window", {})), model.get("target_definition"),
+                    model.get("dataset_fingerprint"), model.get("code_git_sha"), model.get("simulator_regime"),
+                    model.get("promotion_reason"),
                 ),
             )
 
@@ -427,7 +445,9 @@ class PostgresRepository:
         with self._connection() as connection:
             rows = connection.execute(
                 """
-                SELECT model_name, model_version, training_rows, feature_schema, parameters, metrics, trained_at
+                SELECT model_name, model_version, training_rows, feature_schema, parameters, metrics, trained_at,
+                       feature_set_version, prediction_cutoff, training_window, calibration_window, test_window,
+                       target_definition, dataset_fingerprint, code_git_sha, simulator_regime, promotion_reason
                 FROM fabops_model_registry WHERE status = 'champion' ORDER BY model_name
                 """
             ).fetchall()
@@ -439,6 +459,16 @@ class PostgresRepository:
                 "feature_schema": deepcopy(row["feature_schema"]),
                 "parameters": deepcopy(row["parameters"]),
                 "metrics": deepcopy(row["metrics"]),
+                "feature_set_version": row["feature_set_version"],
+                "prediction_cutoff": row["prediction_cutoff"],
+                "training_window": deepcopy(row["training_window"]),
+                "calibration_window": deepcopy(row["calibration_window"]),
+                "test_window": deepcopy(row["test_window"]),
+                "target_definition": row["target_definition"],
+                "dataset_fingerprint": row["dataset_fingerprint"],
+                "code_git_sha": row["code_git_sha"],
+                "simulator_regime": row["simulator_regime"],
+                "promotion_reason": row["promotion_reason"],
                 "trained_at": row["trained_at"].isoformat(),
             }
             for row in rows
@@ -536,19 +566,18 @@ class PostgresRepository:
             row = connection.execute(
                 """
                 INSERT INTO fabops_intelligence_reports(
-                    case_id, material_signature, trigger_type, mode, provider, report_document
-                ) VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (case_id, material_signature) DO UPDATE SET
-                    trigger_type = EXCLUDED.trigger_type,
-                    mode = EXCLUDED.mode,
-                    provider = EXCLUDED.provider,
-                    report_document = EXCLUDED.report_document,
-                    created_at = now()
-                RETURNING report_id
+                    case_id, material_signature, trigger_type, mode, provider, report_document,
+                    assessment_run_id, previous_report_id, reused_report_id, review_skipped_reason,
+                    unchanged_since, input_context_fingerprint, provider_model, latency_ms
+                ) VALUES (%s, %s, %s, %s, %s, %s, COALESCE(%s, gen_random_uuid()), %s, %s, %s, %s, %s, %s, %s)
+                RETURNING report_id, assessment_run_id, created_at
                 """,
                 (
                     report["case_id"], report["material_signature"], report["trigger_type"],
-                    report["mode"], report["provider"], Jsonb(report),
+                    report["mode"], report["provider"], Jsonb(report), report.get("assessment_run_id"),
+                    report.get("previous_report_id"), report.get("reused_report_id"), report.get("review_skipped_reason"),
+                    report.get("unchanged_since"), report.get("input_context_fingerprint"), report.get("provider_model"),
+                    report.get("latency_ms"),
                 ),
             ).fetchone()
         return row is not None
@@ -556,10 +585,32 @@ class PostgresRepository:
     def latest_intelligence_reports(self, limit: int = 20) -> list[dict[str, Any]]:
         with self._connection() as connection:
             rows = connection.execute(
-                "SELECT report_document FROM fabops_intelligence_reports ORDER BY created_at DESC, report_id DESC LIMIT %s",
+                """
+                SELECT report_id, assessment_run_id, previous_report_id, reused_report_id, review_skipped_reason,
+                       unchanged_since, provider_model, latency_ms, created_at, report_document
+                FROM fabops_intelligence_reports
+                ORDER BY created_at DESC, report_id DESC LIMIT %s
+                """,
                 (limit,),
             ).fetchall()
-        return [deepcopy(row["report_document"]) for row in rows]
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            document = deepcopy(row["report_document"])
+            document.update(
+                {
+                    "report_id": int(row["report_id"]),
+                    "assessment_run_id": str(row["assessment_run_id"]) if row["assessment_run_id"] else None,
+                    "previous_report_id": int(row["previous_report_id"]) if row["previous_report_id"] else None,
+                    "reused_report_id": int(row["reused_report_id"]) if row["reused_report_id"] else None,
+                    "review_skipped_reason": row["review_skipped_reason"],
+                    "unchanged_since": row["unchanged_since"].isoformat() if row["unchanged_since"] else None,
+                    "provider_model": row["provider_model"],
+                    "latency_ms": float(row["latency_ms"]) if row["latency_ms"] is not None else None,
+                    "created_at": row["created_at"].isoformat(),
+                }
+            )
+            result.append(document)
+        return result
 
     def latest_intelligence_reports_for_cases(self, case_ids: list[str]) -> dict[str, dict[str, Any]]:
         if not case_ids:
@@ -567,14 +618,29 @@ class PostgresRepository:
         with self._connection() as connection:
             rows = connection.execute(
                 """
-                SELECT DISTINCT ON (case_id) case_id, report_document
+                SELECT DISTINCT ON (case_id) case_id, report_id, assessment_run_id, created_at, report_document
                 FROM fabops_intelligence_reports
                 WHERE case_id = ANY(%s)
                 ORDER BY case_id, created_at DESC, report_id DESC
                 """,
                 (case_ids,),
             ).fetchall()
-        return {str(row["case_id"]): deepcopy(row["report_document"]) for row in rows}
+        result: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            document = deepcopy(row["report_document"])
+            document.update(
+                {
+                    "report_id": int(row["report_id"]),
+                    "assessment_run_id": str(row["assessment_run_id"]) if row["assessment_run_id"] else None,
+                    "created_at": row["created_at"].isoformat(),
+                }
+            )
+            result[str(row["case_id"])] = document
+        return result
+
+    def latest_intelligence_report_for_case(self, case_id: str) -> dict[str, Any] | None:
+        reports = self.latest_intelligence_reports_for_cases([case_id])
+        return reports.get(case_id)
 
     def append_visualization_plan(self, plan: dict[str, Any]) -> bool:
         with self._connection() as connection:
