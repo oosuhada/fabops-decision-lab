@@ -123,6 +123,9 @@ export default function App() {
   const [detail, setDetail] = useState<CaseDetailResponse | null>(null);
   const [advisory, setAdvisory] = useState<AdvisoryResponse | null>(null);
   const [decisionBrief, setDecisionBrief] = useState<DecisionBriefResponse | null>(null);
+  const [cockpitBrief, setCockpitBrief] = useState<DecisionBriefResponse | null>(null);
+  const [cockpitAnalyzing, setCockpitAnalyzing] = useState(false);
+  const [cockpitAnalysisFeedback, setCockpitAnalysisFeedback] = useState<string | null>(null);
   const [briefAudience, setBriefAudience] = useState<"manager" | "engineer">("manager");
   const [demoSessionToken, setDemoSessionToken] = useState<string | null>(null);
   const [narrationBusy, setNarrationBusy] = useState(false);
@@ -216,6 +219,8 @@ export default function App() {
   useEffect(() => { void api.narrationStatus().then(setNarrationStatus).catch(() => setNarrationStatus(null)); }, []);
   useEffect(() => {
     setSelectedEvidenceNode(null);
+    setCockpitBrief(null);
+    setCockpitAnalysisFeedback(null);
     if (selectedCaseId) void loadCase(selectedCaseId);
   }, [loadCase, selectedCaseId]);
   useEffect(() => {
@@ -298,37 +303,57 @@ export default function App() {
     }
   }
 
+  async function requestDemoNarration(caseId: string, audience: "manager" | "engineer", intent: NarrationIntent) {
+    let token = demoSessionToken;
+    if (!token) {
+      const session = await api.demoSession();
+      token = session.token;
+      setDemoSessionToken(token);
+    }
+    try {
+      return await api.demoNarration(token, caseId, audience, intent);
+    } catch (reason) {
+      const status = typeof reason === "object" && reason !== null && "status" in reason ? Number((reason as {status: number}).status) : 0;
+      if (status !== 401) throw reason;
+      const session = await api.demoSession();
+      setDemoSessionToken(session.token);
+      return api.demoNarration(session.token, caseId, audience, intent);
+    }
+  }
+
   async function generateDemoBrief(intent: NarrationIntent) {
     if (!selectedCaseId) return;
     setNarrationBusy(true);
     setNarrationFeedback(null);
     try {
-      let token = demoSessionToken;
-      if (!token) {
-        const session = await api.demoSession();
-        token = session.token;
-        setDemoSessionToken(token);
-      }
-      try {
-        const generated = await api.demoNarration(token, selectedCaseId, briefAudience, intent);
-        setDecisionBrief(generated);
-        setNarrationFeedback(`Bounded AI demo · ${generated.brief.provider} · ${generated.brief.mode}`);
-        void api.narrationStatus().then(setNarrationStatus).catch(() => undefined);
-      } catch (reason) {
-        const status = typeof reason === "object" && reason !== null && "status" in reason ? Number((reason as {status: number}).status) : 0;
-        if (status !== 401) throw reason;
-        const session = await api.demoSession();
-        setDemoSessionToken(session.token);
-        const generated = await api.demoNarration(session.token, selectedCaseId, briefAudience, intent);
-        setDecisionBrief(generated);
-        setNarrationFeedback(`Bounded AI demo · ${generated.brief.provider} · ${generated.brief.mode}`);
-        void api.narrationStatus().then(setNarrationStatus).catch(() => undefined);
-      }
+      const generated = await requestDemoNarration(selectedCaseId, briefAudience, intent);
+      setDecisionBrief(generated);
+      setNarrationFeedback(`Bounded AI demo · ${generated.brief.provider} · ${generated.brief.mode}`);
+      void api.narrationStatus().then(setNarrationStatus).catch(() => undefined);
     } catch (reason) {
       const status = typeof reason === "object" && reason !== null && "status" in reason ? Number((reason as {status: number}).status) : 0;
       setNarrationFeedback(status === 429 ? "AI demo limit reached. Cached/deterministic wording remains available." : "Live AI demo is unavailable; grounded deterministic wording remains available.");
     } finally {
       setNarrationBusy(false);
+    }
+  }
+
+  async function analyzeCockpitNow() {
+    const caseId = selectedPacket?.case_id ?? selectedCaseId;
+    if (!caseId) return;
+    setCockpitAnalyzing(true);
+    setCockpitAnalysisFeedback("현재 prediction·RCA·최근 변화로 상황을 다시 분석하고 있습니다.");
+    try {
+      const generated = await requestDemoNarration(caseId, "engineer", "situation_update");
+      setCockpitBrief(generated);
+      setCockpitAnalysisFeedback(`${generated.brief.provider} · ${generated.brief.mode} · 방금 갱신`);
+      void loadRoot();
+      void loadIntelligenceStatus();
+    } catch (reason) {
+      const status = typeof reason === "object" && reason !== null && "status" in reason ? Number((reason as {status: number}).status) : 0;
+      setCockpitAnalysisFeedback(status === 429 ? "AI 분석 호출 한도에 도달했습니다. 자동 분석 결과는 계속 갱신됩니다." : "즉시 AI 분석에 실패했습니다. 자동 분석과 학습 모델 결과는 계속 유지됩니다.");
+    } finally {
+      setCockpitAnalyzing(false);
     }
   }
 
@@ -343,7 +368,7 @@ export default function App() {
   }
 
   let workSurface;
-  if (screen === "cockpit") workSurface = <DecisionCockpit cockpit={cockpit} detail={detail} projection={overview.projection} sourceTimestamp={overview.source_timestamp} liveStatus={liveStatus} intelligence={intelligenceStatus} selectedCaseId={selectedCaseId} onOpenCase={selectCase} onOpenDecision={openDecision} />;
+  if (screen === "cockpit") workSurface = <DecisionCockpit cockpit={cockpit} detail={detail} projection={overview.projection} sourceTimestamp={overview.source_timestamp} liveStatus={liveStatus} intelligence={intelligenceStatus} manualBrief={cockpitBrief} analyzing={cockpitAnalyzing} analysisFeedback={cockpitAnalysisFeedback} selectedCaseId={selectedCaseId} onAnalyzeNow={analyzeCockpitNow} onOpenCase={selectCase} onOpenDecision={openDecision} />;
   else if (screen === "overview") workSurface = <OperationsOverview overview={overview} liveStatus={liveStatus} intelligence={intelligenceStatus} onSelectCase={selectCase} />;
   else if ((screen === "case" || screen === "graph" || screen === "analysis" || screen === "decision") && !detail) workSurface = <WorkbenchState kind="loading" title={screen === "graph" ? "Hydrating evidence graph" : "Loading selected case"} detail={screen === "graph" ? "Streaming the selected case first. RCA nodes and graph relationships appear as soon as source-linked evidence arrives." : "Loading source-linked case evidence first. Advisory and replay context continue hydrating in parallel."} />;
   else if (screen === "case" && detail) workSurface = <ExcursionCase detail={detail} advisory={advisory} />;

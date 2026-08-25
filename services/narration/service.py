@@ -109,6 +109,7 @@ def _system_prompt(audience: str, intent: str = "decision_brief") -> str:
         "engineer_checklist": "Produce an engineer-facing diagnostic checklist using only grounded evidence and next checks.",
         "tradeoff_compare": "Emphasize comparison of the supplied decision options and their stated tradeoffs.",
         "counter_evidence": "Emphasize contradicting evidence, missing evidence, and what would reduce uncertainty.",
+        "situation_update": "Explain what changed now, why it matters over the next 1–3 lots, which concrete check should happen next, and which supplied trigger threshold would justify escalation. Use predictive intelligence only as decision support, never as equipment authority.",
     }.get(intent, "Produce a balanced decision brief.")
     return f"""You generate grounded FabOps decision wording for a {audience}.
 

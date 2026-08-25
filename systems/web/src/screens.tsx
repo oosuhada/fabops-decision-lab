@@ -254,14 +254,18 @@ function SignalKpis({casePoints, stepPoints, sensor, step}: {casePoints: Measure
   </div>;
 }
 
-export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, liveStatus, intelligence, selectedCaseId, onOpenCase, onOpenDecision}: {
+export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, liveStatus, intelligence, manualBrief, analyzing, analysisFeedback, selectedCaseId, onAnalyzeNow, onOpenCase, onOpenDecision}: {
   cockpit: DecisionCockpitResponse;
   detail: CaseDetailResponse | null;
   projection: ProjectionStatus;
   sourceTimestamp: string;
   liveStatus: LiveStatusResponse | null;
   intelligence: ContinuousIntelligenceStatus | null;
+  manualBrief: DecisionBriefResponse | null;
+  analyzing: boolean;
+  analysisFeedback: string | null;
   selectedCaseId: string | null;
+  onAnalyzeNow: () => void;
   onOpenCase: (caseId: string) => void;
   onOpenDecision: (caseId: string) => void;
 }) {
@@ -279,13 +283,20 @@ export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, l
   const topProcess = matchingDetail?.trace.process_path[0] ?? null;
   const topForecast = liveStatus?.prediction.top_sensor_forecasts[0] ?? null;
   const topCaseRisk = liveStatus?.prediction.case_risks[0] ?? null;
+  const liveDecision = top?.live_intelligence ?? null;
   const learnedByTarget = new Map<string, ContinuousIntelligenceStatus["latest_predictions"][number]>();
   for (const prediction of intelligence?.latest_predictions ?? []) if (!learnedByTarget.has(prediction.target)) learnedByTarget.set(prediction.target, prediction);
   const learnedYield = learnedByTarget.get("yield");
   const learnedFailure = learnedByTarget.get("future_failure_probability");
   const learnedMaintenance = learnedByTarget.get("maintenance_probability");
   const learnedExcursion = learnedByTarget.get("excursion_probability");
-  const autoReport = intelligence?.reports[0] ?? null;
+  const autoReport = intelligence?.reports.find((report) => report.case_id === top?.case_id) ?? null;
+  const visibleBrief = manualBrief?.brief.case_id === top?.case_id ? manualBrief.brief : autoReport?.brief ?? null;
+  const visibleProvider = manualBrief?.brief.case_id === top?.case_id ? manualBrief.brief.provider : autoReport?.provider ?? liveDecision?.llm.provider ?? null;
+  const predictedYield = liveDecision?.predictions.yield ?? learnedYield?.score ?? null;
+  const predictedExcursion = liveDecision?.predictions.excursion_probability ?? learnedExcursion?.score ?? null;
+  const predictedFailure = liveDecision?.predictions.future_failure_probability ?? learnedFailure?.score ?? null;
+  const predictedMaintenance = liveDecision?.predictions.maintenance_probability ?? learnedMaintenance?.score ?? null;
   return <div className="screen-stack decision-cockpit">
     <section className="cockpit-hero">
       <div className="cockpit-hero__intro">
@@ -307,12 +318,50 @@ export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, l
       <div><span>Predictive case risk</span><strong>{topCaseRisk?.lot_id ?? "—"}</strong><small>{topCaseRisk ? `${topCaseRisk.risk_band} · ${(topCaseRisk.risk_score * 100).toFixed(0)} risk score` : "no active forecast"}</small></div>
     </section>
     <section className="learned-intelligence-strip" aria-label="Learned predictive intelligence">
-      <div><span>Learned yield</span><strong>{learnedYield ? `${(learnedYield.score * 100).toFixed(1)}%` : "—"}</strong><small>{learnedYield?.model_version ?? "champion warming"}</small></div>
-      <div><span>Excursion model</span><strong>{learnedExcursion ? `${(learnedExcursion.score * 100).toFixed(0)}%` : "—"}</strong><small>{learnedExcursion?.calibrated ? "calibrated champion" : "learning"}</small></div>
-      <div><span>Next-lot failure</span><strong>{learnedFailure ? `${(learnedFailure.score * 100).toFixed(0)}%` : "—"}</strong><small>{learnedFailure?.risk_band ?? "waiting"}</small></div>
-      <div><span>Maintenance need</span><strong>{learnedMaintenance ? `${(learnedMaintenance.score * 100).toFixed(0)}%` : "—"}</strong><small>{learnedMaintenance?.risk_band ?? "waiting"}</small></div>
-      <div><span>Auto analyst</span><strong>{autoReport?.provider?.toUpperCase() ?? "WAITING"}</strong><small>{autoReport?.brief?.headline ?? "material-change reporting"}</small></div>
+      <div><span>Learned yield</span><strong>{predictedYield != null ? `${(predictedYield * 100).toFixed(1)}%` : "—"}</strong><small>{learnedYield?.model_version ?? "champion model"}</small></div>
+      <div><span>Excursion model</span><strong>{predictedExcursion != null ? `${(predictedExcursion * 100).toFixed(0)}%` : "—"}</strong><small>{learnedExcursion?.calibrated ? "calibrated champion" : "live case score"}</small></div>
+      <div><span>Next-lot failure</span><strong>{predictedFailure != null ? `${(predictedFailure * 100).toFixed(0)}%` : "—"}</strong><small>{predictedFailure != null && predictedFailure >= .7 ? "HIGH" : predictedFailure != null && predictedFailure >= .4 ? "WATCH" : "NORMAL"}</small></div>
+      <div><span>Maintenance need</span><strong>{predictedMaintenance != null ? `${(predictedMaintenance * 100).toFixed(0)}%` : "—"}</strong><small>{predictedMaintenance != null && predictedMaintenance >= .7 ? "HIGH" : predictedMaintenance != null && predictedMaintenance >= .4 ? "WATCH" : "NORMAL"}</small></div>
+      <div><span>Auto analyst</span><strong>{visibleProvider?.toUpperCase() ?? "WAITING"}</strong><small>{visibleBrief?.headline ?? "5-minute risk review + material-change trigger"}</small></div>
     </section>
+    {top && liveDecision ? <section className={`live-decision-command live-decision-command--${liveDecision.urgency.toLowerCase()}`} aria-label="Live decision intelligence">
+      <header>
+        <div>
+          <span className="eyebrow">Live decision intelligence · {liveDecision.watch_horizon}</span>
+          <h2>{liveDecision.headline}</h2>
+          <p>고정 문구가 아니라 현재 champion prediction, case evidence, RCA와 최신 LLM 분석을 합쳐 만든 실시간 의사결정 맥락입니다.</p>
+        </div>
+        <div className="live-decision-command__status">
+          <span>{liveDecision.signal.replaceAll("_", " ")}</span>
+          <strong>{liveDecision.urgency}</strong>
+          <small>priority {(liveDecision.priority_score * 100).toFixed(0)}</small>
+        </div>
+      </header>
+      <div className="live-decision-command__grid">
+        <article>
+          <span>왜 지금 봐야 하나</span>
+          <ul>{liveDecision.why_now.map((item) => <li key={item}>{item}</li>)}</ul>
+        </article>
+        <article>
+          <span>다음 확인 순서</span>
+          <ol>{liveDecision.next_actions.map((item, index) => <li key={`${item.action}-${index}`}><b>{item.action}</b><small>{item.target} · {item.purpose}</small></li>)}</ol>
+        </article>
+        <article>
+          <span>Escalation trigger</span>
+          <ul>{liveDecision.trigger_conditions.map((item) => <li className={item.met ? "is-met" : ""} key={item.condition}><b>{item.met ? "TRIGGERED" : "WATCH"}</b><span>{item.meaning}</span><small>{item.current == null ? "current —" : `current ${(item.current * 100).toFixed(0)}%`}</small></li>)}</ul>
+        </article>
+      </div>
+      <div className="live-analyst-brief">
+        <div>
+          <span>AI 상황 분석</span>
+          <strong>{visibleBrief?.headline ?? "자동 Analyst가 다음 주기에서 업데이트합니다."}</strong>
+          <p>{visibleBrief?.summary ?? liveDecision.llm.summary ?? "현재는 학습 모델과 deterministic evidence를 기준으로 판단 맥락을 제공하고 있습니다."}</p>
+          <small>{visibleProvider ? `${visibleProvider} · ${manualBrief?.brief.case_id === top.case_id ? "manual refresh" : autoReport?.trigger_type ?? "periodic review"}` : "LLM report warming"}{visibleBrief?.generated_at ? ` · ${visibleBrief.generated_at}` : ""}</small>
+        </div>
+        <button type="button" className="primary live-analyze-button" disabled={analyzing} onClick={onAnalyzeNow}>{analyzing ? "분석 중…" : "지금 다시 분석"}</button>
+      </div>
+      {analysisFeedback ? <p className="live-analysis-feedback" aria-live="polite">{analysisFeedback}</p> : null}
+    </section> : null}
     <section className="evidence-authority-matrix" aria-label="Evidence authority separation">
       <article><span>OBSERVED</span><strong>Source records</strong><small>Event, measurement, inspection</small></article>
       <article><span>COMPUTED</span><strong>Deterministic logic</strong><small>Anomaly, classification, RCA score</small></article>
@@ -328,8 +377,9 @@ export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, l
           <span>{top.lot_id}</span>
           <ClassificationBadge value={top.classification} />
         </div>
-        <span className="eyebrow">Highest-ranked unresolved decision</span>
-        <h2>{top.decision_question}</h2>
+        <span className="eyebrow">Highest-ranked live decision signal</span>
+        <h2>{liveDecision?.headline ?? top.decision_question}</h2>
+        {liveDecision ? <p className="guardrail-question">Guardrail question · {top.decision_question}</p> : null}
         {classification ? <div className={`forensic-classification forensic-classification--${top.classification}`}><span>{classification.label}</span><p>{classification.detail}</p></div> : null}
         <div className="decision-context-grid" aria-label="Affected semiconductor scope">
           <div><span>Lot</span><strong>{top.lot_id}</strong><small>current decision object</small></div>
@@ -339,9 +389,9 @@ export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, l
         </div>
         {topEvidence ? <div className="mobile-evidence-summary" aria-label="Evidence sufficiency summary"><span>Evidence sufficiency</span><strong>{topEvidence.label}</strong><small>{topEvidence.support} supporting · {topEvidence.contradict} contradicting</small></div> : null}
         <div className="recommended-callout">
-          <span>Deterministic recommended next stance</span>
+          <span>Deterministic guardrail stance</span>
           <strong>{top.options.find((option) => option.option_id === top.recommended_option_id)?.label}</strong>
-          <p>{top.options.find((option) => option.option_id === top.recommended_option_id)?.tradeoff}</p>
+          <p>{top.options.find((option) => option.option_id === top.recommended_option_id)?.tradeoff} · 이 항목은 안전 경계이며 위 live intelligence보다 우선하는 상황 설명이 아닙니다.</p>
         </div>
         <div className="decision-impact-grid">
           <div><span>Affected scope</span><strong>{top.impact.affected_chamber_count}</strong><small>chambers</small></div>
@@ -378,7 +428,7 @@ export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, l
       <DecisionOptionCards packet={top} compact />
     </section> : null}
     <section className="panel decision-queue-panel">
-      <header><div><span className="eyebrow">Ranked decision backlog</span><h2>Next decisions</h2></div><small>Classification-aware priority · deterministic ordering</small></header>
+      <header><div><span className="eyebrow">Ranked decision backlog</span><h2>Next decisions</h2></div><small>Learned risk priority · deterministic guardrails preserved</small></header>
       <div className="decision-queue">{cockpit.queue.map((packet) => {
         const recommended = packet.options.find((option) => option.option_id === packet.recommended_option_id);
         const balance = evidenceBalance(packet);
@@ -388,7 +438,7 @@ export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, l
             <strong>{packet.lot_id}</strong>
             <small>#{packet.priority_rank} · {packet.classification.replaceAll("_", " ")}</small>
           </div>
-          <div className="decision-queue-item__question"><strong>{packet.decision_question}</strong><span>Recommended: {recommended?.label}</span></div>
+          <div className="decision-queue-item__question"><strong>{packet.live_intelligence?.headline ?? packet.decision_question}</strong><span>{packet.live_intelligence ? `${packet.live_intelligence.urgency} · priority ${(packet.live_intelligence.priority_score * 100).toFixed(0)} · guardrail: ${recommended?.label}` : `Guardrail: ${recommended?.label}`}</span></div>
           <div className="decision-queue-item__evidence">
             <strong>{balance.label}</strong>
             <span>{balance.support} support / {balance.contradict} contradict · RCA {packet.evidence.top_candidate?.score.toFixed(2) ?? "—"}</span>

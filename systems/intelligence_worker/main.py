@@ -8,6 +8,7 @@ from threading import Event
 
 from adapters.postgres import PostgresConfig, PostgresRepository
 from services.decision import DecisionSupportService
+from services.intelligence import build_live_decision_intelligence
 from services.intelligence.planner import material_signature, visualization_plan
 from services.intelligence.service import ContinuousIntelligenceService
 from services.narration import NarrationService
@@ -30,8 +31,12 @@ def main() -> None:
     narration = NarrationService()
     interval = max(10.0, float(os.getenv("FABOPS_INTELLIGENCE_INTERVAL_SECONDS", "30")))
     retrain_every = max(1, int(os.getenv("FABOPS_RETRAIN_EVERY_OUTCOMES", "6")))
+    report_interval = max(120.0, float(os.getenv("FABOPS_LLM_REPORT_INTERVAL_SECONDS", "300")))
+    report_case_limit = max(1, min(4, int(os.getenv("FABOPS_LLM_REPORT_CASE_LIMIT", "2"))))
     last_training_rows = 0
     prediction_keys: set[tuple[str, str, str]] = set()
+    last_report_at: dict[str, float] = {}
+    last_report_signature: dict[str, str] = {}
     while not stop_event.is_set():
         try:
             snapshots = service.lot_snapshots()
@@ -57,16 +62,46 @@ def main() -> None:
                         prediction_keys.add(key)
 
             cases = repository.list_cases()
+            report_candidates: list[tuple[float, dict[str, object], list[dict[str, object]], str, dict[str, object]]] = []
             if cases:
-                latest_case = max(cases, key=lambda item: str(item.get("lot_id", "")))
-                case_predictions = [item for item in service.predict_snapshot(next((snapshot for snapshot in snapshots if snapshot["lot_id"] == latest_case["lot_id"]), latest or snapshots[-1]))] if snapshots else []
-                signature = material_signature(latest_case, case_predictions)
-                plan = visualization_plan(latest_case, case_predictions, signature)
-                plan_added = repository.append_visualization_plan(plan)
-                if plan_added:
-                    runtime = build_database_readonly_runtime()
-                    try:
-                        packet = DecisionSupportService(runtime).packet(str(latest_case["case_id"]))
+                recent_cases = sorted(cases, key=lambda item: str(item.get("lot_id", "")), reverse=True)[:16]
+                predictions_by_lot = repository.latest_predictions_for_lots([str(case["lot_id"]) for case in recent_cases])
+                reports_by_case = repository.latest_intelligence_reports_for_cases([str(case["case_id"]) for case in recent_cases])
+                for case in recent_cases:
+                    case_predictions = list(predictions_by_lot.get(str(case["lot_id"]), []))
+                    packet_seed = {
+                        "case_id": case["case_id"],
+                        "lot_id": case["lot_id"],
+                        "classification": case["classification"],
+                        "evidence": {
+                            "anomaly_score": case.get("anomaly_score", 0.0),
+                            "mean_yield": case.get("mean_yield"),
+                            "affected_scope": case.get("affected_scope", {}),
+                        },
+                    }
+                    existing_report = reports_by_case.get(str(case["case_id"]))
+                    context = build_live_decision_intelligence(packet_seed, case_predictions, existing_report)
+                    signature = material_signature(case, case_predictions)
+                    report_candidates.append((float(context["priority_score"]), case, case_predictions, signature, context))
+
+            due_candidates: list[tuple[float, dict[str, object], list[dict[str, object]], str, dict[str, object]]] = []
+            now = time.monotonic()
+            for candidate in sorted(report_candidates, key=lambda item: (-item[0], str(item[1].get("case_id", ""))))[:report_case_limit]:
+                _priority, case, _predictions, signature, _context = candidate
+                case_id = str(case["case_id"])
+                signature_changed = last_report_signature.get(case_id) != signature
+                interval_elapsed = now - last_report_at.get(case_id, 0.0) >= report_interval
+                if signature_changed or interval_elapsed:
+                    due_candidates.append(candidate)
+
+            if due_candidates:
+                runtime = build_database_readonly_runtime()
+                try:
+                    for _priority, case, case_predictions, signature, context in due_candidates:
+                        case_id = str(case["case_id"])
+                        plan = visualization_plan(case, case_predictions, signature)
+                        repository.append_visualization_plan(plan)
+                        packet = DecisionSupportService(runtime).packet(case_id)
                         packet["predictive_intelligence"] = {
                             item["target"]: {
                                 "score": item["score"],
@@ -75,23 +110,27 @@ def main() -> None:
                             }
                             for item in case_predictions
                         }
+                        packet["live_decision_context"] = context
                         packet["evidence_refs"] = sorted(set(packet.get("evidence_refs", [])) | {f"prediction.{item['target']}" for item in case_predictions})
-                        brief = narration.generate(packet, "engineer", intent="engineer_checklist")
+                        brief = narration.generate(packet, "engineer", intent="situation_update")
                         repository.append_intelligence_report(
                             {
-                                "case_id": latest_case["case_id"],
+                                "case_id": case_id,
                                 "material_signature": signature,
-                                "trigger_type": "material_intelligence_change",
+                                "trigger_type": "periodic_risk_review" if last_report_signature.get(case_id) == signature else "material_intelligence_change",
                                 "mode": brief.get("mode", "deterministic_fallback"),
                                 "provider": brief.get("provider", "deterministic"),
                                 "brief": brief,
+                                "decision_context": context,
                                 "visualization_plan": plan,
                             }
                         )
-                    finally:
-                        close_graph = getattr(runtime.graph, "close", None)
-                        if callable(close_graph):
-                            close_graph()
+                        last_report_at[case_id] = now
+                        last_report_signature[case_id] = signature
+                finally:
+                    close_graph = getattr(runtime.graph, "close", None)
+                    if callable(close_graph):
+                        close_graph()
             print(
                 json.dumps(
                     {
@@ -104,6 +143,7 @@ def main() -> None:
                         "champions": sorted(repository.champion_models()),
                         "latest_lot": latest.get("lot_id") if latest else None,
                         "predictions": len(latest_predictions),
+                        "periodic_reports": len(due_candidates),
                     },
                     sort_keys=True,
                 ),

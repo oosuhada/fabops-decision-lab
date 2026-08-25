@@ -17,6 +17,7 @@ DEMO_INTENTS = {
     "engineer_checklist",
     "tradeoff_compare",
     "counter_evidence",
+    "situation_update",
 }
 
 

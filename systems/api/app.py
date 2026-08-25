@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.responses import StreamingResponse
 
 from services.decision import DecisionSupportService
-from services.intelligence import ContinuousIntelligenceService
+from services.intelligence import ContinuousIntelligenceService, build_live_decision_intelligence
 from services.narration import NarrationService
 from services.narration.demo import DemoPolicyError, DemoSessionPolicy, demo_policy_from_env
 from services.prediction import PredictiveIntelligenceService
@@ -165,6 +165,45 @@ def _continuous_intelligence_status(runtime: Runtime) -> dict[str, Any]:
         }
 
 
+def _attach_live_decision_intelligence(runtime: Runtime, packets: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not packets:
+        return packets
+    lot_ids = [str(packet.get("lot_id") or "") for packet in packets if packet.get("lot_id")]
+    case_ids = [str(packet.get("case_id") or "") for packet in packets if packet.get("case_id")]
+    prediction_reader = getattr(runtime.event_repository, "latest_predictions_for_lots", None)
+    report_reader = getattr(runtime.event_repository, "latest_intelligence_reports_for_cases", None)
+    predictions_by_lot = prediction_reader(lot_ids) if callable(prediction_reader) else {}
+    reports_by_case = report_reader(case_ids) if callable(report_reader) else {}
+    enriched: list[dict[str, Any]] = []
+    for packet in packets:
+        lot_id = str(packet.get("lot_id") or "")
+        case_id = str(packet.get("case_id") or "")
+        predictions = list(predictions_by_lot.get(lot_id, []))
+        report = reports_by_case.get(case_id)
+        enriched.append(
+            {
+                **packet,
+                "live_intelligence": build_live_decision_intelligence(packet, predictions, report),
+            }
+        )
+    return enriched
+
+
+def _augment_packet_for_narration(runtime: Runtime, packet: dict[str, Any]) -> dict[str, Any]:
+    enriched = _attach_live_decision_intelligence(runtime, [packet])[0]
+    live_context = enriched.get("live_intelligence", {})
+    predictions = live_context.get("predictions", {}) if isinstance(live_context, dict) else {}
+    enriched["predictive_intelligence"] = {
+        target: {"score": score, "source": "champion-model"}
+        for target, score in predictions.items()
+        if score is not None
+    }
+    refs = set(enriched.get("evidence_refs", []))
+    refs.update(f"prediction.{target}" for target, score in predictions.items() if score is not None)
+    enriched["evidence_refs"] = sorted(refs)
+    return enriched
+
+
 def get_narration_service() -> NarrationService:
     service = getattr(app.state, "narration_service", None)
     if service is None:
@@ -225,7 +264,7 @@ class DemoNarrationRequest(BaseModel):
 
     case_id: str = Field(min_length=3, max_length=120)
     audience: Literal["manager", "engineer"] = "manager"
-    intent: Literal["manager_summary", "engineer_checklist", "tradeoff_compare", "counter_evidence"] = "manager_summary"
+    intent: Literal["manager_summary", "engineer_checklist", "tradeoff_compare", "counter_evidence", "situation_update"] = "manager_summary"
 
 
 class NarrationPrecomputeRequest(BaseModel):
@@ -520,7 +559,21 @@ def advisory(case_id: str, runtime: Annotated[Runtime, Depends(get_runtime)]) ->
 @app.get("/api/decision-cockpit")
 def decision_cockpit(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
     with runtime.telemetry.operation("decision.cockpit"):
-        return DecisionSupportService(runtime).cockpit()
+        payload = DecisionSupportService(runtime).cockpit()
+        queue = _attach_live_decision_intelligence(runtime, list(payload.get("queue", [])))
+        queue.sort(
+            key=lambda packet: (
+                -float(packet.get("live_intelligence", {}).get("priority_score", 0.0)),
+                -int(packet.get("priority_rank", 0)),
+                str(packet.get("case_id", "")),
+            )
+        )
+        payload["queue"] = queue
+        payload["source"] = "live-learned-and-deterministic-decision-support"
+        payload["summary"]["live_high_priority"] = sum(
+            packet.get("live_intelligence", {}).get("urgency") == "HIGH" for packet in queue
+        )
+        return payload
 
 
 @app.get("/api/narration/status")
@@ -544,7 +597,7 @@ def decision_brief(
         raise HTTPException(status_code=422, detail="audience must be manager or engineer")
     with case_telemetry(runtime, case_id):
         try:
-            packet = DecisionSupportService(runtime).packet(case_id)
+            packet = _augment_packet_for_narration(runtime, DecisionSupportService(runtime).packet(case_id))
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="case not found") from exc
         with runtime.telemetry.operation("decision.narrate", case_id=case_id, audience=audience):
@@ -589,7 +642,7 @@ def demo_narration(
         raise HTTPException(status_code=status, detail=exc.reason) from exc
     with case_telemetry(runtime, body.case_id):
         try:
-            packet = DecisionSupportService(runtime).packet(body.case_id)
+            packet = _augment_packet_for_narration(runtime, DecisionSupportService(runtime).packet(body.case_id))
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="case not found") from exc
         with runtime.telemetry.operation(
@@ -622,7 +675,7 @@ def precompute_narration(
     generated: list[dict[str, Any]] = []
     for case_id in case_ids:
         try:
-            packet = DecisionSupportService(runtime).packet(case_id)
+            packet = _augment_packet_for_narration(runtime, DecisionSupportService(runtime).packet(case_id))
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=f"case not found: {case_id}") from exc
         for audience in body.audiences:

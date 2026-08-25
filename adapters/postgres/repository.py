@@ -417,6 +417,24 @@ class PostgresRepository:
             ).fetchall()
         return [deepcopy(row["prediction_document"]) for row in rows]
 
+    def latest_predictions_for_lots(self, lot_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+        if not lot_ids:
+            return {}
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT DISTINCT ON (lot_id, target) lot_id, target, prediction_document
+                FROM fabops_predictions
+                WHERE lot_id = ANY(%s)
+                ORDER BY lot_id, target, prediction_id DESC
+                """,
+                (lot_ids,),
+            ).fetchall()
+        result: dict[str, list[dict[str, Any]]] = {}
+        for row in rows:
+            result.setdefault(str(row["lot_id"]), []).append(deepcopy(row["prediction_document"]))
+        return result
+
     def unevaluated_predictions(self, limit: int = 200) -> list[dict[str, Any]]:
         with self._connection() as connection:
             rows = connection.execute(
@@ -472,7 +490,13 @@ class PostgresRepository:
                 INSERT INTO fabops_intelligence_reports(
                     case_id, material_signature, trigger_type, mode, provider, report_document
                 ) VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (case_id, material_signature) DO NOTHING RETURNING report_id
+                ON CONFLICT (case_id, material_signature) DO UPDATE SET
+                    trigger_type = EXCLUDED.trigger_type,
+                    mode = EXCLUDED.mode,
+                    provider = EXCLUDED.provider,
+                    report_document = EXCLUDED.report_document,
+                    created_at = now()
+                RETURNING report_id
                 """,
                 (
                     report["case_id"], report["material_signature"], report["trigger_type"],
@@ -484,10 +508,25 @@ class PostgresRepository:
     def latest_intelligence_reports(self, limit: int = 20) -> list[dict[str, Any]]:
         with self._connection() as connection:
             rows = connection.execute(
-                "SELECT report_document FROM fabops_intelligence_reports ORDER BY report_id DESC LIMIT %s",
+                "SELECT report_document FROM fabops_intelligence_reports ORDER BY created_at DESC, report_id DESC LIMIT %s",
                 (limit,),
             ).fetchall()
         return [deepcopy(row["report_document"]) for row in rows]
+
+    def latest_intelligence_reports_for_cases(self, case_ids: list[str]) -> dict[str, dict[str, Any]]:
+        if not case_ids:
+            return {}
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT DISTINCT ON (case_id) case_id, report_document
+                FROM fabops_intelligence_reports
+                WHERE case_id = ANY(%s)
+                ORDER BY case_id, created_at DESC, report_id DESC
+                """,
+                (case_ids,),
+            ).fetchall()
+        return {str(row["case_id"]): deepcopy(row["report_document"]) for row in rows}
 
     def append_visualization_plan(self, plan: dict[str, Any]) -> bool:
         with self._connection() as connection:
@@ -495,7 +534,10 @@ class PostgresRepository:
                 """
                 INSERT INTO fabops_visualization_plans(case_id, material_signature, plan_document)
                 VALUES (%s, %s, %s)
-                ON CONFLICT (case_id, material_signature) DO NOTHING RETURNING plan_id
+                ON CONFLICT (case_id, material_signature) DO UPDATE SET
+                    plan_document = EXCLUDED.plan_document,
+                    created_at = now()
+                RETURNING plan_id
                 """,
                 (plan["case_id"], plan["material_signature"], Jsonb(plan)),
             ).fetchone()

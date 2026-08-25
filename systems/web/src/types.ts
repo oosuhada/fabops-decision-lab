@@ -292,6 +292,29 @@ export interface DecisionPacket {
   };
   evidence_refs: string[];
   provenance: Record<string, string | boolean>;
+  live_intelligence?: LiveDecisionIntelligence;
+}
+
+export interface LiveDecisionIntelligence {
+  schema_version: string;
+  signal: string;
+  urgency: "HIGH" | "WATCH" | "NORMAL" | string;
+  priority_score: number;
+  headline: string;
+  why_now: string[];
+  next_actions: Array<{action: string; target: string; purpose: string}>;
+  trigger_conditions: Array<{condition: string; meaning: string; current: number | null; met: boolean}>;
+  watch_horizon: string;
+  predictions: {
+    yield: number | null;
+    excursion_probability: number | null;
+    future_failure_probability: number | null;
+    maintenance_probability: number | null;
+  };
+  llm: {provider: string | null; mode: string | null; summary: string | null; generated_at: string | null};
+  authority: string;
+  equipment_control: false;
+  generated_at: string;
 }
 
 export interface DecisionCockpitResponse {
@@ -365,7 +388,7 @@ export interface NarrationStatusResponse {
   };
 }
 
-export type NarrationIntent = "manager_summary" | "engineer_checklist" | "tradeoff_compare" | "counter_evidence";
+export type NarrationIntent = "manager_summary" | "engineer_checklist" | "tradeoff_compare" | "counter_evidence" | "situation_update";
 
 export interface DemoSessionResponse {
   source: string;
