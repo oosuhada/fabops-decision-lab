@@ -42,6 +42,7 @@ class _ProviderState:
     total_requests_started: int = 0
     total_successes: int = 0
     total_failures: int = 0
+    total_busy_responses: int = 0
     circuit_openings: int = 0
     block_counts: dict[str, int] = field(default_factory=dict)
 
@@ -126,6 +127,10 @@ class ProviderGovernor:
         except Exception as exc:
             with self._lock:
                 state = self._state(provider_name)
+                if bool(getattr(exc, "provider_busy", False)):
+                    state.total_busy_responses += 1
+                    state.last_failure = None
+                    raise
                 state.consecutive_failures += 1
                 state.total_failures += 1
                 state.last_failure = type(exc).__name__
@@ -171,9 +176,11 @@ class ProviderGovernor:
                     "daily_estimated_token_limit": policy.daily_estimated_token_limit,
                     "last_block_reason": state.last_block_reason,
                     "last_failure": state.last_failure,
+                    "consecutive_failures": state.consecutive_failures,
                     "total_requests_started": state.total_requests_started,
                     "total_successes": state.total_successes,
                     "total_failures": state.total_failures,
+                    "total_busy_responses": state.total_busy_responses,
                     "circuit_openings": state.circuit_openings,
                     "block_counts": dict(sorted(state.block_counts.items())),
                 }

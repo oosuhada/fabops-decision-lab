@@ -665,6 +665,363 @@ class PostgresRepository:
             ).fetchall()
         return [deepcopy(row["plan_document"]) for row in rows]
 
+    @staticmethod
+    def _inference_job_payload(row: dict[str, Any] | None) -> dict[str, Any] | None:
+        if row is None:
+            return None
+        payload = dict(row)
+        for key in (
+            "job_id",
+            "assessment_run_id",
+        ):
+            if payload.get(key) is not None:
+                payload[key] = str(payload[key])
+        for key in (
+            "created_at",
+            "not_before",
+            "expires_at",
+            "started_at",
+            "completed_at",
+            "lease_expires_at",
+            "updated_at",
+        ):
+            if payload.get(key) is not None:
+                payload[key] = payload[key].isoformat()
+        for key in ("request_document", "result_document"):
+            if payload.get(key) is not None:
+                payload[key] = deepcopy(payload[key])
+        return payload
+
+    def enqueue_inference_job(self, job: dict[str, Any]) -> dict[str, Any]:
+        """Persist a durable low-volume inference request with active-job dedupe."""
+
+        max_queue_age_seconds = job.get("max_queue_age_seconds")
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                INSERT INTO fabops_inference_jobs(
+                    case_id, assessment_run_id, intent, trigger_type, priority, status,
+                    not_before, expires_at, max_attempts, input_context_fingerprint,
+                    material_signature, provider_preference, allow_vertex_fallback,
+                    fallback_after_seconds, dedupe_key, request_document
+                ) VALUES (
+                    %s, COALESCE(%s, gen_random_uuid()), %s, %s, %s, 'QUEUED', now(),
+                    CASE WHEN %s IS NULL THEN NULL ELSE now() + (%s * interval '1 second') END,
+                    %s, %s, %s, %s, %s, %s, %s, %s
+                )
+                ON CONFLICT DO NOTHING
+                RETURNING *
+                """,
+                (
+                    job["case_id"],
+                    job.get("assessment_run_id"),
+                    job["intent"],
+                    job["trigger_type"],
+                    int(job["priority"]),
+                    max_queue_age_seconds,
+                    max_queue_age_seconds,
+                    int(job.get("max_attempts", 3)),
+                    job["input_context_fingerprint"],
+                    job["material_signature"],
+                    job.get("provider_preference", "local-qwen"),
+                    bool(job.get("allow_vertex_fallback", False)),
+                    job.get("fallback_after_seconds"),
+                    job["dedupe_key"],
+                    Jsonb(job["request_document"]),
+                ),
+            ).fetchone()
+            if row is None:
+                row = connection.execute(
+                    """
+                    SELECT * FROM fabops_inference_jobs
+                    WHERE dedupe_key = %s
+                      AND status IN ('QUEUED', 'WAITING_FOR_LOCAL', 'RUNNING', 'RETRY')
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """,
+                    (job["dedupe_key"],),
+                ).fetchone()
+        payload = self._inference_job_payload(row)
+        if payload is None:
+            raise RuntimeError("inference job enqueue did not return a job")
+        return payload
+
+    def expire_inference_jobs(self) -> int:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                UPDATE fabops_inference_jobs
+                SET status = 'EXPIRED', completed_at = now(), lease_owner = NULL,
+                    lease_expires_at = NULL, updated_at = now(),
+                    error_class = COALESCE(error_class, 'QueueExpired'),
+                    error_detail_bounded = COALESCE(error_detail_bounded, 'local inference queue age exceeded')
+                WHERE status IN ('QUEUED', 'WAITING_FOR_LOCAL', 'RETRY')
+                  AND expires_at IS NOT NULL
+                  AND expires_at <= now()
+                RETURNING job_id
+                """
+            ).fetchall()
+        return len(rows)
+
+    def recover_expired_inference_leases(self) -> int:
+        """Return abandoned RUNNING jobs to RETRY after their worker lease expires."""
+
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                UPDATE fabops_inference_jobs
+                SET status = 'RETRY',
+                    not_before = now(),
+                    lease_owner = NULL,
+                    lease_expires_at = NULL,
+                    error_class = 'LeaseExpired',
+                    error_detail_bounded = 'inference worker lease expired before terminal completion',
+                    updated_at = now()
+                WHERE status = 'RUNNING'
+                  AND lease_expires_at IS NOT NULL
+                  AND lease_expires_at <= now()
+                  AND (expires_at IS NULL OR expires_at > now())
+                RETURNING job_id
+                """
+            ).fetchall()
+        return len(rows)
+
+    def claim_inference_job(self, lease_owner: str, *, lease_seconds: int = 90) -> dict[str, Any] | None:
+        self.recover_expired_inference_leases()
+        self.expire_inference_jobs()
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                WITH candidate AS (
+                    SELECT job_id
+                    FROM fabops_inference_jobs
+                    WHERE status IN ('QUEUED', 'WAITING_FOR_LOCAL', 'RETRY')
+                      AND not_before <= now()
+                      AND (expires_at IS NULL OR expires_at > now())
+                      AND (lease_expires_at IS NULL OR lease_expires_at <= now())
+                    ORDER BY priority DESC, created_at ASC
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT 1
+                )
+                UPDATE fabops_inference_jobs j
+                SET status = 'RUNNING',
+                    lease_owner = %s,
+                    lease_expires_at = now() + (%s * interval '1 second'),
+                    started_at = COALESCE(started_at, now()),
+                    attempt_count = attempt_count + 1,
+                    updated_at = now()
+                FROM candidate
+                WHERE j.job_id = candidate.job_id
+                RETURNING j.*
+                """,
+                (lease_owner, max(10, int(lease_seconds))),
+            ).fetchone()
+        return self._inference_job_payload(row)
+
+    def requeue_inference_job(
+        self,
+        job_id: str,
+        *,
+        status: str,
+        backoff_seconds: float,
+        error_class: str | None = None,
+        error_detail_bounded: str | None = None,
+        busy: bool = False,
+    ) -> dict[str, Any] | None:
+        if status not in {"WAITING_FOR_LOCAL", "RETRY"}:
+            raise ValueError(f"invalid inference requeue status: {status}")
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                UPDATE fabops_inference_jobs
+                SET status = %s,
+                    not_before = now() + (%s * interval '1 second'),
+                    lease_owner = NULL,
+                    lease_expires_at = NULL,
+                    busy_count = busy_count + %s,
+                    failure_count = failure_count + %s,
+                    error_class = %s,
+                    error_detail_bounded = %s,
+                    updated_at = now()
+                WHERE job_id = %s
+                RETURNING *
+                """,
+                (
+                    status,
+                    max(0.2, float(backoff_seconds)),
+                    1 if busy else 0,
+                    0 if busy else 1,
+                    error_class,
+                    (error_detail_bounded or "")[:240] or None,
+                    job_id,
+                ),
+            ).fetchone()
+        return self._inference_job_payload(row)
+
+    def finish_inference_job(
+        self,
+        job_id: str,
+        *,
+        status: str,
+        result_document: dict[str, Any] | None,
+        error_class: str | None = None,
+        error_detail_bounded: str | None = None,
+    ) -> dict[str, Any] | None:
+        if status not in {"COMPLETED", "FALLBACK", "FAILED", "CANCELLED", "EXPIRED"}:
+            raise ValueError(f"invalid inference terminal status: {status}")
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                UPDATE fabops_inference_jobs
+                SET status = %s,
+                    result_document = %s,
+                    completed_at = now(),
+                    lease_owner = NULL,
+                    lease_expires_at = NULL,
+                    error_class = %s,
+                    error_detail_bounded = %s,
+                    updated_at = now()
+                WHERE job_id = %s
+                RETURNING *
+                """,
+                (
+                    status,
+                    Jsonb(result_document) if result_document is not None else None,
+                    error_class,
+                    (error_detail_bounded or "")[:240] or None,
+                    job_id,
+                ),
+            ).fetchone()
+        return self._inference_job_payload(row)
+
+    def inference_job(self, job_id: str) -> dict[str, Any] | None:
+        with self._connection() as connection:
+            row = connection.execute("SELECT * FROM fabops_inference_jobs WHERE job_id = %s", (job_id,)).fetchone()
+        return self._inference_job_payload(row)
+
+    def inference_queue_status(self) -> dict[str, Any]:
+        with self._connection() as connection:
+            aggregate = connection.execute(
+                """
+                SELECT
+                    count(*) FILTER (WHERE status IN ('QUEUED', 'WAITING_FOR_LOCAL', 'RETRY')) AS queued,
+                    count(*) FILTER (WHERE status = 'RUNNING') AS running,
+                    count(*) FILTER (WHERE status = 'WAITING_FOR_LOCAL') AS waiting_for_local,
+                    COALESCE(max(EXTRACT(EPOCH FROM (now() - created_at))) FILTER (
+                        WHERE status IN ('QUEUED', 'WAITING_FOR_LOCAL', 'RETRY')
+                    ), 0) AS oldest_queue_age_seconds,
+                    COALESCE(sum(busy_count), 0) AS local_busy_count,
+                    COALESCE(sum(failure_count), 0) AS local_failure_count,
+                    COALESCE(sum(attempt_count), 0) AS local_attempt_count,
+                    count(*) FILTER (
+                        WHERE status IN ('COMPLETED', 'FALLBACK')
+                          AND result_document#>>'{brief,provider}' = 'local-qwen'
+                    ) AS local_success_count,
+                    count(*) FILTER (
+                        WHERE status = 'FALLBACK'
+                          AND result_document#>>'{brief,provider}' = 'vertex-ai-gemini'
+                    ) AS vertex_fallback_after_wait_count,
+                    avg(EXTRACT(EPOCH FROM (started_at - created_at)) * 1000.0) FILTER (
+                        WHERE started_at IS NOT NULL
+                    ) AS average_queue_wait_ms
+                FROM fabops_inference_jobs
+                """
+            ).fetchone()
+            runtime_rows = connection.execute(
+                "SELECT provider, state, model, model_loaded, active_jobs, provider_metadata, last_success_at, last_error_class, updated_at FROM fabops_inference_runtime_state"
+            ).fetchall()
+            queued_rows = connection.execute(
+                """
+                SELECT job_id, case_id, status, priority, created_at,
+                       EXTRACT(EPOCH FROM (now() - created_at)) AS age_seconds
+                FROM fabops_inference_jobs
+                WHERE status IN ('QUEUED', 'WAITING_FOR_LOCAL', 'RUNNING', 'RETRY')
+                ORDER BY priority DESC, created_at ASC
+                LIMIT 8
+                """
+            ).fetchall()
+        providers = {
+            str(row["provider"]): {
+                "state": str(row["state"]),
+                "model": row["model"],
+                "loaded": row["model_loaded"],
+                "active_jobs": int(row["active_jobs"]),
+                "metadata": deepcopy(row["provider_metadata"]),
+                "last_success_at": row["last_success_at"].isoformat() if row["last_success_at"] else None,
+                "last_error_class": row["last_error_class"],
+                "updated_at": row["updated_at"].isoformat(),
+            }
+            for row in runtime_rows
+        }
+        queue = [
+            {
+                "job_id": str(row["job_id"]),
+                "case_id": str(row["case_id"]),
+                "status": str(row["status"]),
+                "priority": int(row["priority"]),
+                "created_at": row["created_at"].isoformat(),
+                "age_seconds": round(float(row["age_seconds"]), 3),
+                "position": index + 1,
+            }
+            for index, row in enumerate(queued_rows)
+        ]
+        return {
+            "queue_depth": int(aggregate["queued"]),
+            "running": int(aggregate["running"]),
+            "waiting_for_local": int(aggregate["waiting_for_local"]),
+            "oldest_queue_age_seconds": round(float(aggregate["oldest_queue_age_seconds"]), 3),
+            "local_busy_count": int(aggregate["local_busy_count"]),
+            "local_failure_count": int(aggregate["local_failure_count"]),
+            "local_attempt_count": int(aggregate["local_attempt_count"]),
+            "local_success_count": int(aggregate["local_success_count"]),
+            "vertex_fallback_after_wait_count": int(aggregate["vertex_fallback_after_wait_count"]),
+            "average_queue_wait_ms": round(float(aggregate["average_queue_wait_ms"]), 3) if aggregate["average_queue_wait_ms"] is not None else None,
+            "providers": providers,
+            "jobs": queue,
+        }
+
+    def update_inference_runtime_state(
+        self,
+        provider: str,
+        *,
+        state: str,
+        model: str | None,
+        model_loaded: bool | None,
+        active_jobs: int,
+        metadata: dict[str, Any],
+        success: bool = False,
+        error_class: str | None = None,
+    ) -> None:
+        with self._connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO fabops_inference_runtime_state(
+                    provider, state, model, model_loaded, active_jobs, provider_metadata,
+                    last_success_at, last_error_class
+                ) VALUES (%s, %s, %s, %s, %s, %s, CASE WHEN %s THEN now() ELSE NULL END, %s)
+                ON CONFLICT (provider) DO UPDATE SET
+                    state = EXCLUDED.state,
+                    model = EXCLUDED.model,
+                    model_loaded = EXCLUDED.model_loaded,
+                    active_jobs = EXCLUDED.active_jobs,
+                    provider_metadata = EXCLUDED.provider_metadata,
+                    last_success_at = CASE WHEN %s THEN now() ELSE fabops_inference_runtime_state.last_success_at END,
+                    last_error_class = EXCLUDED.last_error_class,
+                    updated_at = now()
+                """,
+                (
+                    provider,
+                    state,
+                    model,
+                    model_loaded,
+                    int(active_jobs),
+                    Jsonb(metadata),
+                    bool(success),
+                    error_class,
+                    bool(success),
+                ),
+            )
+
 
 class ReadOnlyPostgresRepository(PostgresRepository):
     """PostgreSQL adapter that enforces read-only transactions at the server boundary.

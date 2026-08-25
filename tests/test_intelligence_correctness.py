@@ -5,7 +5,10 @@ from collections import defaultdict
 from services.decision.service import DecisionSupportService
 from services.intelligence import build_live_decision_intelligence, build_situation_assessment
 from services.intelligence.planner import material_signature, visualization_plan
-from services.intelligence.service import FEATURE_SET_VERSION, PREDICTION_CUTOFF, FeatureBuilder
+from services.intelligence.service import FEATURE_SET_VERSION, PREDICTION_CUTOFF, ContinuousIntelligenceService, FeatureBuilder
+from services.narration.governance import ProviderGovernor, ProviderPolicy
+from services.narration.providers import ProviderBusyError
+from services.narration.queue import build_inference_job, queue_policy
 from simulator.config import load_config
 from simulator.fabtwin import FabTwinSimulator
 from simulator.live import LiveFabTwinStream
@@ -43,6 +46,19 @@ def test_live_domain_randomization_is_seed_reproducible_but_cycle_variant() -> N
 
     assert first_cycle_yield == repeated_first_cycle_yield
     assert first_cycle_yield != second_cycle_yield
+
+
+def test_randomized_live_regime_provenance_reaches_feature_snapshot() -> None:
+    stream = LiveFabTwinStream(seed=42, profile="test")
+    lot_events = [stream._rewrite_event(event, 7) for event in stream.template if event.get("lot_id") == "LOT-00001"]
+
+    snapshot = FeatureBuilder().build(lot_events)
+
+    assert snapshot["regime_version"] == "fabops-live-regime-v2"
+    assert snapshot["domain_randomized"] is True
+    assert snapshot["live_cycle"] == 7
+    assert snapshot["scenario_family"]
+    assert snapshot["regime_id"] != "legacy-repeat"
 
 
 def test_live_decision_uses_exact_next_lot_semantics_and_composite_priority() -> None:
@@ -113,6 +129,96 @@ def test_incident_episode_clustering_preserves_members_and_reduces_objects() -> 
     assert episodes[0]["case_count"] == 3
     assert episodes[0]["member_case_ids"] == ["CASE-0", "CASE-1", "CASE-2"]
     assert episodes[0]["status"] in {"ONGOING", "ESCALATING"}
+
+
+def test_incident_episode_clustering_continues_recurrence_but_splits_long_gap() -> None:
+    cases = [
+        {
+            "case_id": f"CASE-{lot}",
+            "lot_id": f"LOT-{lot:05d}",
+            "classification": "physical_excursion",
+            "state": "detected",
+            "anomaly_score": 1.0,
+            "affected_scope": {"equipment": ["CMP-01"], "chambers": ["CMP-01-B"]},
+        }
+        for lot in (100, 104, 112, 124, 160)
+    ]
+
+    episodes = DecisionSupportService._incident_episodes(cases)
+
+    assert len(episodes) == 2
+    assert episodes[0]["raw_case_count"] == 4
+    assert episodes[0]["grouping_basis"].endswith("gap<=12lots+max-span-48lots")
+    assert episodes[1]["raw_case_count"] == 1
+
+
+def test_semantic_v2_status_filters_legacy_predictions_and_champions() -> None:
+    predictions = [
+        {"target": "future_failure_probability", "feature_set_version": "legacy-v1"},
+        {"target": "next_lot_excursion_alarm_probability", "feature_set_version": FEATURE_SET_VERSION},
+        {"target": "maintenance_probability", "feature_set_version": "legacy-v1"},
+        {"target": "final_yield", "feature_set_version": FEATURE_SET_VERSION},
+    ]
+    champions = {
+        "future_failure": {"feature_set_version": "legacy-v1"},
+        "final_yield_post_cmp": {"feature_set_version": FEATURE_SET_VERSION},
+        "next_lot_excursion_alarm_risk": {"feature_set_version": FEATURE_SET_VERSION},
+    }
+
+    filtered_predictions = ContinuousIntelligenceService.semantic_v2_predictions(predictions)
+    filtered_champions = ContinuousIntelligenceService.semantic_v2_champions(champions)
+
+    assert [item["target"] for item in filtered_predictions] == ["next_lot_excursion_alarm_probability", "final_yield"]
+    assert set(filtered_champions) == {"final_yield_post_cmp", "next_lot_excursion_alarm_risk"}
+
+
+def test_inference_queue_policy_never_uses_vertex_for_normal_auto_busy_state() -> None:
+    normal = queue_policy("material_intelligence_change", "NORMAL")
+    high = queue_policy("material_intelligence_change", "HIGH")
+    manual = queue_policy("manual_user_refresh", "HIGH")
+
+    assert normal["allow_vertex_fallback"] is False
+    assert normal["max_queue_age_seconds"] == 900
+    assert high["allow_vertex_fallback"] is True
+    assert high["fallback_after_seconds"] == 180
+    assert manual["priority"] > high["priority"] > normal["priority"]
+
+    job = build_inference_job(
+        case_id="CASE-QUEUE",
+        material_signature="sig-1",
+        trigger_type="material_intelligence_change",
+        urgency="NORMAL",
+        request_document={"intent": "situation_update", "packet": {"case_id": "CASE-QUEUE"}},
+    )
+    assert job["allow_vertex_fallback"] is False
+    assert job["provider_preference"] == "local-qwen"
+
+
+def test_provider_busy_does_not_open_local_failure_circuit() -> None:
+    governor = ProviderGovernor(
+        {
+            "local-qwen": ProviderPolicy(
+                max_requests_per_minute=20,
+                max_concurrency=1,
+                daily_request_limit=100,
+                daily_estimated_token_limit=100_000,
+                circuit_failure_threshold=2,
+                circuit_cooldown_seconds=60,
+            )
+        }
+    )
+
+    for _ in range(3):
+        try:
+            governor.run("local-qwen", 10, lambda: (_ for _ in ()).throw(ProviderBusyError("busy")))
+        except ProviderBusyError:
+            pass
+
+    status = governor.status()["local-qwen"]
+    assert status["state"] == "available"
+    assert status["consecutive_failures"] == 0
+    assert status["total_failures"] == 0
+    assert status["total_busy_responses"] == 3
 
 
 def test_situation_assessment_exposes_prediction_delta_without_extra_claims() -> None:

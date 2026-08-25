@@ -272,58 +272,93 @@ class DecisionSupportService:
         suffix = str(case.get("lot_id", "")).split("-")[-1]
         return int(suffix) if suffix.isdigit() else 0
 
-    @classmethod
-    def _episode_key(cls, case: dict[str, Any], window_lots: int = 4) -> tuple[str, str, str, int]:
+    @staticmethod
+    def _episode_base_key(case: dict[str, Any]) -> tuple[str, str, str]:
         scope = case.get("affected_scope", {}) if isinstance(case.get("affected_scope"), dict) else {}
         equipment = sorted(str(value) for value in scope.get("equipment", []) if value)
         chambers = sorted(str(value) for value in scope.get("chambers", []) if value)
-        lot_bucket = cls._lot_sequence(case) // max(1, window_lots)
         return (
             str(case.get("classification") or "unknown"),
             equipment[0] if equipment else "data-path",
             chambers[0] if chambers else "unscoped",
-            lot_bucket,
         )
 
     @classmethod
-    def _incident_episodes(cls, cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        grouped: dict[tuple[str, str, str, int], list[dict[str, Any]]] = {}
+    def _incident_episodes(
+        cls,
+        cases: list[dict[str, Any]],
+        *,
+        continuation_gap_lots: int = 12,
+        max_episode_span_lots: int = 48,
+        resolve_after_inactive_lots: int = 18,
+    ) -> list[dict[str, Any]]:
+        grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
         for case in cases:
-            grouped.setdefault(cls._episode_key(case), []).append(case)
+            grouped.setdefault(cls._episode_base_key(case), []).append(case)
+        latest_global_lot = max((cls._lot_sequence(case) for case in cases), default=0)
         episodes: list[dict[str, Any]] = []
         for key, members in grouped.items():
             ordered = sorted(members, key=cls._lot_sequence)
-            latest = ordered[-1]
-            latest_score = float(latest.get("anomaly_score", 0.0))
-            previous_score = float(ordered[-2].get("anomaly_score", latest_score)) if len(ordered) > 1 else latest_score
-            state = str(latest.get("state") or "")
-            if state in {"closed", "resolved", "rejected"}:
-                status = "RESOLVED"
-            elif len(ordered) == 1:
-                status = "NEW"
-            elif latest_score >= previous_score + 0.25:
-                status = "ESCALATING"
-            elif latest_score <= previous_score - 0.25:
-                status = "RECOVERING"
-            else:
-                status = "ONGOING"
-            episode_id = "EP-" + hashlib.sha256("|".join(map(str, key)).encode("utf-8")).hexdigest()[:12].upper()
-            episodes.append(
-                {
-                    "episode_id": episode_id,
-                    "status": status,
-                    "classification": key[0],
-                    "equipment_id": key[1],
-                    "chamber_id": key[2],
-                    "case_count": len(ordered),
-                    "first_lot_id": ordered[0].get("lot_id"),
-                    "last_lot_id": latest.get("lot_id"),
-                    "representative_case": latest,
-                    "member_case_ids": [str(item["case_id"]) for item in ordered[-8:]],
-                    "grouping_basis": "classification+equipment+chamber+4-lot-window",
-                    "latest_anomaly_score": latest_score,
-                }
-            )
+            chunks: list[list[dict[str, Any]]] = []
+            current: list[dict[str, Any]] = []
+            for case in ordered:
+                lot_no = cls._lot_sequence(case)
+                if current:
+                    previous_lot = cls._lot_sequence(current[-1])
+                    first_lot = cls._lot_sequence(current[0])
+                    if lot_no - previous_lot > continuation_gap_lots or lot_no - first_lot > max_episode_span_lots:
+                        chunks.append(current)
+                        current = []
+                current.append(case)
+            if current:
+                chunks.append(current)
+
+            for chunk in chunks:
+                latest = chunk[-1]
+                first = chunk[0]
+                latest_lot = cls._lot_sequence(latest)
+                latest_score = float(latest.get("anomaly_score", 0.0))
+                early_scores = [float(item.get("anomaly_score", 0.0)) for item in chunk[: min(2, len(chunk))]]
+                recent_scores = [float(item.get("anomaly_score", 0.0)) for item in chunk[-min(2, len(chunk)) :]]
+                trajectory_delta = (sum(recent_scores) / len(recent_scores)) - (sum(early_scores) / len(early_scores))
+                state = str(latest.get("state") or "")
+                inactive = latest_global_lot - latest_lot > resolve_after_inactive_lots
+                if state in {"closed", "resolved", "rejected"} or inactive:
+                    status = "RESOLVED"
+                elif len(chunk) == 1:
+                    status = "NEW"
+                elif trajectory_delta >= 0.15:
+                    status = "ESCALATING"
+                elif trajectory_delta <= -0.15:
+                    status = "RECOVERING"
+                else:
+                    status = "ONGOING"
+                episode_key = (*key, cls._lot_sequence(first))
+                episode_id = "EP-" + hashlib.sha256("|".join(map(str, episode_key)).encode("utf-8")).hexdigest()[:12].upper()
+                episodes.append(
+                    {
+                        "episode_id": episode_id,
+                        "status": status,
+                        "classification": key[0],
+                        "dominant_mechanism": key[0],
+                        "equipment_id": key[1],
+                        "chamber_id": key[2],
+                        "affected_chambers": [key[2]] if key[2] != "unscoped" else [],
+                        "case_count": len(chunk),
+                        "raw_case_count": len(chunk),
+                        "lot_count": len({str(item.get("lot_id")) for item in chunk}),
+                        "first_lot_id": first.get("lot_id"),
+                        "last_lot_id": latest.get("lot_id"),
+                        "representative_case": latest,
+                        "member_case_ids": [str(item["case_id"]) for item in chunk[-8:]],
+                        "latest_supporting_case_ids": [str(item["case_id"]) for item in chunk[-3:]],
+                        "grouping_basis": "classification+equipment+chamber+gap<=12lots+max-span-48lots",
+                        "latest_anomaly_score": latest_score,
+                        "risk_trajectory": [round(float(item.get("anomaly_score", 0.0)), 6) for item in chunk[-6:]],
+                        "trajectory_delta": round(trajectory_delta, 6),
+                        "inactive_lots": max(0, latest_global_lot - latest_lot),
+                    }
+                )
         return episodes
 
     def packet(self, case_id: str) -> dict[str, Any]:
@@ -491,6 +526,7 @@ class DecisionSupportService:
         for episode in selected_episodes:
             packet = self._cockpit_packet(episode["representative_case"], hydrate=False)
             packet["incident_episode"] = {key: value for key, value in episode.items() if key != "representative_case"}
+            packet["incident_episode"]["current_decision"] = packet["decision_question"]
             queue.append(packet)
         counts: dict[str, int] = {"HIGH": 0, "MEDIUM": 0, "VERIFY_DATA": 0}
         for case in ordered_cases:

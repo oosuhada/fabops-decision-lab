@@ -1,4 +1,4 @@
-import type {AdvisoryResponse, CaseDetailResponse, CaseReplayTraceResponse, ContinuousIntelligenceStatus, DecisionBriefResponse, DecisionCockpitResponse, DemoSessionResponse, DeploymentIdentityResponse, EvaluationResponse, LiveStatusResponse, NarrationIntent, NarrationStatusResponse, OverviewResponse, PredictiveSnapshot, ReplayResponse} from "./types";
+import type {AdvisoryResponse, CaseDetailResponse, CaseReplayTraceResponse, ContinuousIntelligenceStatus, DecisionBriefResponse, DecisionCockpitResponse, DemoSessionResponse, DeploymentIdentityResponse, EvaluationResponse, InferenceJobResponse, InferenceQueueStatus, LiveStatusResponse, NarrationIntent, NarrationStatusResponse, OverviewResponse, PredictiveSnapshot, ReplayResponse} from "./types";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
 
@@ -25,6 +25,8 @@ export const api = {
   liveStatus: () => request<LiveStatusResponse>("/api/live/status"),
   predictions: () => request<PredictiveSnapshot & {source: string}>("/api/predictions"),
   intelligenceStatus: () => request<ContinuousIntelligenceStatus>("/api/intelligence/status"),
+  inferenceStatus: () => request<InferenceQueueStatus & {source: string; available: boolean}>("/api/inference/status"),
+  inferenceJob: (jobId: string) => request<InferenceJobResponse>(`/api/inference/jobs/${jobId}`),
   liveStreamUrl: () => `${API_BASE}/api/live/stream`,
   decisionCockpit: () => request<DecisionCockpitResponse>("/api/decision-cockpit"),
   decisionBrief: (caseId: string, audience: "manager" | "engineer") => request<DecisionBriefResponse>(`/api/cases/${caseId}/decision-brief?audience=${audience}`),

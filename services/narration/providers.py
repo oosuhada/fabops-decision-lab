@@ -105,6 +105,17 @@ class NarrationProviderPort(Protocol):
     def generate_json(self, system_prompt: str, payload: dict[str, Any]) -> dict[str, Any]: ...
 
 
+class ProviderBusyError(RuntimeError):
+    """The local inference provider is healthy but currently occupied.
+
+    BUSY is intentionally distinct from provider failure. Durable FabOps jobs
+    should remain queued rather than falling through to cloud merely because an
+    interactive local generation is already running.
+    """
+
+    provider_busy = True
+
+
 def _extract_json(content: str) -> dict[str, Any]:
     value = content.strip()
     if value.startswith("```"):
@@ -178,8 +189,13 @@ class OpenAICompatibleNarrationProvider:
         if self.bearer_token:
             headers["Authorization"] = f"Bearer {self.bearer_token}"
         request = urllib.request.Request(f"{self.base_url.rstrip('/')}/chat/completions", data=body, headers=headers, method="POST")
-        with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
-            result = json.load(response)
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+                result = json.load(response)
+        except urllib.error.HTTPError as exc:
+            if exc.code in {409, 429}:
+                raise ProviderBusyError("local inference provider is busy") from exc
+            raise
         choice = result["choices"][0]
         if choice.get("finish_reason") == "length":
             raise RuntimeError("provider output token limit reached")

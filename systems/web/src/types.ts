@@ -118,7 +118,7 @@ export interface ChampionModel {
   trained_at: string;
   feature_schema: string[];
   parameters: {kind?: string; weights?: number[]; bias?: number; temperature?: number; interval_radius?: number};
-  metrics: {mae?: number; rmse?: number; bias?: number; brier?: number; accuracy?: number; auprc?: number; precision?: number; recall?: number; false_positive_rate?: number; calibration_error?: number; train_rows?: number; calibration_rows?: number; shadow_test_rows?: number; horizon?: string};
+  metrics: {mae?: number; rmse?: number; bias?: number; brier?: number; accuracy?: number; auprc?: number; precision?: number; recall?: number; false_positive_rate?: number; calibration_error?: number; train_rows?: number; calibration_rows?: number; shadow_test_rows?: number; horizon?: string; shadow_test_by_regime?: Record<string, Record<string, number>>; shadow_test_by_scenario_family?: Record<string, Record<string, number>>; dataset_mix?: DatasetMix};
   feature_set_version?: string;
   prediction_cutoff?: string;
   training_window?: {start_lot?: string; end_lot?: string};
@@ -188,13 +188,77 @@ export interface ContinuousIntelligenceStatus {
   feature_set_version?: string;
   prediction_cutoff?: string;
   outcome_count: number;
+  dataset_mix?: DatasetMix;
   champions: Record<string, ChampionModel>;
   latest_predictions: LearnedPrediction[];
   feedback: Record<string, {samples: number; mae: number; mse: number}>;
   drift: {status: "warming" | "stable" | "watch" | "drift" | string; score: number; recent_rows: number; baseline_rows: number; drift_types?: string[]; retraining_recommended?: boolean; top_shifts?: Array<{feature: string; shift?: number; mean_shift?: number; psi?: number}>};
   reports: IntelligenceReport[];
   visualization_plans: AdaptiveVisualizationPlan[];
+  inference_queue?: InferenceQueueStatus;
   degraded_reason?: string;
+}
+
+export interface DatasetMix {
+  rows: number;
+  randomized_rows: number;
+  randomized_share: number;
+  regime_versions: Record<string, number>;
+  scenario_families: Record<string, number>;
+}
+
+export type InferenceJobStatus = "QUEUED" | "WAITING_FOR_LOCAL" | "RUNNING" | "COMPLETED" | "RETRY" | "EXPIRED" | "FALLBACK" | "FAILED" | "CANCELLED" | string;
+
+export interface InferenceJobSummary {
+  job_id: string;
+  case_id: string;
+  assessment_run_id?: string;
+  intent?: string;
+  trigger_type?: string;
+  priority?: number;
+  status: InferenceJobStatus;
+  queue_position?: number | null;
+  created_at?: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+  attempt_count?: number;
+  busy_count?: number;
+  allow_vertex_fallback?: boolean;
+  fallback_after_seconds?: number | null;
+  error_class?: string | null;
+  result?: {
+    brief?: DecisionBriefResponse["brief"];
+    assessment_persisted?: boolean;
+    queue_wait_ms?: number;
+  } | null;
+}
+
+export interface InferenceQueueStatus {
+  queue_depth: number;
+  running: number;
+  waiting_for_local: number;
+  oldest_queue_age_seconds: number;
+  local_busy_count: number;
+  local_failure_count: number;
+  local_attempt_count: number;
+  local_success_count: number;
+  vertex_fallback_after_wait_count: number;
+  average_queue_wait_ms: number | null;
+  providers: Record<string, {
+    state: "READY" | "BUSY" | "QUEUED" | "LOADING" | "DEGRADED" | "OFFLINE" | string;
+    model?: string | null;
+    loaded?: boolean | null;
+    active_jobs?: number;
+    last_success_at?: string | null;
+    last_error_class?: string | null;
+    updated_at?: string;
+  }>;
+  jobs: Array<{job_id: string; case_id: string; status: InferenceJobStatus; priority: number; created_at: string; age_seconds: number; position: number}>;
+}
+
+export interface InferenceJobResponse {
+  source: string;
+  job: InferenceJobSummary;
 }
 
 export interface RcaCandidate {
@@ -393,6 +457,7 @@ export interface DecisionBriefResponse {
   source: string;
   session_id?: string;
   assessment_persisted?: boolean;
+  inference_job?: InferenceJobSummary;
   packet: DecisionPacket;
   brief: {
     schema_version: string;

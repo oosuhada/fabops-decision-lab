@@ -342,11 +342,54 @@ export default function App() {
     const caseId = selectedPacket?.case_id ?? selectedCaseId;
     if (!caseId) return;
     setCockpitAnalyzing(true);
-    setCockpitAnalysisFeedback("현재 prediction·RCA·최근 변화로 상황을 다시 분석하고 있습니다.");
+    setCockpitAnalysisFeedback("LOCAL QWEN QUEUE · 요청을 등록하고 있습니다.");
     try {
       const generated = await requestDemoNarration(caseId, "engineer", "situation_update");
       setCockpitBrief(generated);
-      setCockpitAnalysisFeedback(`${generated.brief.cache_hit ? "CACHED" : generated.brief.provider.toUpperCase()} · ${generated.brief.mode} · ${generated.assessment_persisted ? "서버 assessment history 저장 완료" : "현재 응답만 갱신"}`);
+      const queued = generated.inference_job;
+      if (!queued) {
+        setCockpitAnalysisFeedback(`${generated.brief.cache_hit ? "CACHED" : generated.brief.provider.toUpperCase()} · ${generated.brief.mode}`);
+        void loadRoot();
+        void loadIntelligenceStatus();
+        return;
+      }
+      let currentJob = queued;
+      const terminal = new Set(["COMPLETED", "FALLBACK", "FAILED", "EXPIRED", "CANCELLED"]);
+      for (let attempt = 0; attempt < 100 && !terminal.has(currentJob.status); attempt += 1) {
+        const position = currentJob.queue_position ? ` · QUEUED #${currentJob.queue_position}` : "";
+        const label = currentJob.status === "WAITING_FOR_LOCAL"
+          ? "LOCAL QWEN BUSY · WAITING FOR LOCAL MODEL"
+          : currentJob.status === "RUNNING"
+            ? "LOCAL QWEN RUNNING"
+            : currentJob.status === "RETRY"
+              ? "LOCAL QWEN RETRY"
+              : "LOCAL QWEN QUEUED";
+        setCockpitAnalysisFeedback(`${label}${position}`);
+        await new Promise((resolve) => window.setTimeout(resolve, 1500));
+        currentJob = (await api.inferenceJob(currentJob.job_id)).job;
+      }
+      const resultBrief = currentJob.result?.brief;
+      if (resultBrief) {
+        setCockpitBrief({
+          ...generated,
+          source: "durable-inference-queue",
+          brief: resultBrief,
+          assessment_persisted: Boolean(currentJob.result?.assessment_persisted),
+          inference_job: currentJob,
+        });
+      }
+      if (currentJob.status === "COMPLETED") {
+        setCockpitAnalysisFeedback(`LOCAL QWEN · COMPLETE · ${currentJob.result?.assessment_persisted ? "assessment history 저장 완료" : "result ready"}`);
+      } else if (currentJob.status === "FALLBACK") {
+        const provider = resultBrief?.provider === "vertex-ai-gemini" ? "VERTEX FALLBACK" : resultBrief?.provider === "deterministic" ? "DETERMINISTIC" : "FALLBACK";
+        setCockpitAnalysisFeedback(`${provider} · local wait budget 이후 완료`);
+      } else if (currentJob.status === "EXPIRED") {
+        setCockpitAnalysisFeedback("LOCAL QWEN QUEUE EXPIRED · 기존 assessment를 유지합니다.");
+      } else if (currentJob.status === "FAILED" || currentJob.status === "CANCELLED") {
+        setCockpitAnalysisFeedback(`${currentJob.status} · 기존 assessment를 유지합니다.`);
+      } else {
+        setCockpitAnalysisFeedback(`${currentJob.status} · background queue에서 계속 처리됩니다.`);
+      }
       void loadRoot();
       void loadIntelligenceStatus();
     } catch (reason) {

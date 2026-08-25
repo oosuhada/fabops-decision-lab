@@ -12,6 +12,12 @@ from services.detection.service import SENSOR_INDEX, STEP_INDEX, DetectorConfig
 
 FEATURE_SET_VERSION = "fabops-feature-set-v2"
 PREDICTION_CUTOFF = "POST_CMP"
+SEMANTIC_V2_TARGETS = {
+    "final_yield",
+    "final_excursion_probability",
+    "next_lot_excursion_alarm_probability",
+    "next_lot_maintenance_attention_probability",
+}
 FEATURE_NAMES = [
     "measurement_density",
     "mean_abs_deviation",
@@ -123,6 +129,29 @@ class FeatureBuilder:
             _clamp(len(recipe_mismatches) / max(1, len(process_starts))),
         ]
 
+        release_event = next((event for event in events if event.get("event_type") == "lot.released.v1"), None)
+        release_payload = release_event.get("payload", {}) if isinstance(release_event, dict) else {}
+        live_regime = release_payload.get("live_regime") if isinstance(release_payload, dict) else None
+        if isinstance(live_regime, dict):
+            regime_version = str(live_regime.get("regime_version") or "fabops-live-regime-v2")
+            fault_mix = sorted(str(value) for value in live_regime.get("fault_mix", []) if value)
+            scenario_family = "+".join(fault_mix) if fault_mix else "benign_randomized"
+            regime_id = str(release_payload.get("live_regime_id") or live_regime.get("regime_id") or "unknown")
+            live_cycle = release_payload.get("live_cycle")
+            domain_randomized = bool(release_payload.get("domain_randomized", True))
+        elif release_event and release_event.get("source") == "fabtwin-live":
+            regime_version = "legacy-live-repeat-v1"
+            scenario_family = "legacy-repeat"
+            regime_id = str(release_payload.get("live_regime_id") or "legacy-repeat")
+            live_cycle = release_payload.get("live_cycle")
+            domain_randomized = False
+        else:
+            regime_version = "canonical-fixture-v1"
+            scenario_family = "canonical-fixture"
+            regime_id = "canonical-fixture"
+            live_cycle = None
+            domain_randomized = False
+
         inspections = [event for event in events if event.get("event_type") == "inspection.completed.v1"]
         maintenance = [event for event in events if event.get("event_type") == "maintenance.completed.v1"]
         all_alarms = [event for event in events if event.get("event_type") == "equipment.alarm.raised.v1"]
@@ -137,6 +166,11 @@ class FeatureBuilder:
             "feature_timestamp": feature_timestamp,
             "features": {name: round(vector[index], 6) for index, name in enumerate(FEATURE_NAMES)},
             "vector": vector,
+            "regime_version": regime_version,
+            "regime_id": regime_id,
+            "scenario_family": scenario_family,
+            "live_cycle": live_cycle,
+            "domain_randomized": domain_randomized,
             "yield_value": round(sum(yields) / len(yields), 6) if yields else None,
             "physical_excursion": bool(yields and (sum(yields) / len(yields)) < self.detector_config.excursion_yield_threshold),
             "equipment_alarm": bool(all_alarms),
@@ -156,6 +190,23 @@ class ContinuousIntelligenceService:
         "next_lot_excursion_alarm_risk",
         "next_lot_maintenance_attention_risk",
     }
+
+    @staticmethod
+    def semantic_v2_predictions(predictions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return [
+            item
+            for item in predictions
+            if item.get("target") in SEMANTIC_V2_TARGETS
+            and item.get("feature_set_version") == FEATURE_SET_VERSION
+        ]
+
+    @classmethod
+    def semantic_v2_champions(cls, champions: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+        return {
+            name: model
+            for name, model in champions.items()
+            if name in cls.REQUIRED_MODELS and model.get("feature_set_version") == FEATURE_SET_VERSION
+        }
 
     def __init__(self, repository: Any) -> None:
         self.repository = repository
@@ -195,6 +246,11 @@ class ContinuousIntelligenceService:
                 "prediction_cutoff": snapshot["prediction_cutoff"],
                 "feature_timestamp": snapshot["feature_timestamp"],
                 "target_timestamp": snapshot["target_timestamp"],
+                "regime_version": snapshot.get("regime_version"),
+                "regime_id": snapshot.get("regime_id"),
+                "scenario_family": snapshot.get("scenario_family"),
+                "live_cycle": snapshot.get("live_cycle"),
+                "domain_randomized": bool(snapshot.get("domain_randomized", False)),
                 "yield_value": snapshot["yield_value"],
                 "physical_excursion": snapshot["physical_excursion"],
                 "equipment_alarm": snapshot["equipment_alarm"],
@@ -211,6 +267,11 @@ class ContinuousIntelligenceService:
                     "prediction_cutoff",
                     "feature_timestamp",
                     "target_timestamp",
+                    "regime_version",
+                    "regime_id",
+                    "scenario_family",
+                    "live_cycle",
+                    "domain_randomized",
                     "yield_value",
                     "physical_excursion",
                     "equipment_alarm",
@@ -369,6 +430,9 @@ class ContinuousIntelligenceService:
                 outcome["lot_id"],
                 outcome.get("feature_timestamp"),
                 outcome.get("target_timestamp"),
+                outcome.get("regime_version"),
+                outcome.get("regime_id"),
+                outcome.get("scenario_family"),
                 outcome.get("features", {}),
                 target,
             )
@@ -394,6 +458,49 @@ class ContinuousIntelligenceService:
         calibration_end = max(train_end + 2, int(length * 0.80))
         calibration_end = min(calibration_end, length - 2)
         return train_end, calibration_end
+
+    @classmethod
+    def _shadow_metrics_by_group(
+        cls,
+        *,
+        parameters: dict[str, Any],
+        vectors: list[list[float]],
+        targets: list[float],
+        outcomes: list[dict[str, Any]],
+        kind: str,
+        group_key: str,
+    ) -> dict[str, dict[str, Any]]:
+        groups: dict[str, list[int]] = defaultdict(list)
+        for index, outcome in enumerate(outcomes):
+            groups[str(outcome.get(group_key) or "unknown")].append(index)
+        result: dict[str, dict[str, Any]] = {}
+        for group, indices in sorted(groups.items()):
+            group_vectors = [vectors[index] for index in indices]
+            group_targets = [targets[index] for index in indices]
+            metrics = (
+                cls._classification_metrics(parameters, group_vectors, group_targets)
+                if kind == "logistic"
+                else cls._regression_metrics(parameters, group_vectors, group_targets)
+            )
+            result[group] = {"rows": len(indices), **metrics}
+        return result
+
+    @staticmethod
+    def _dataset_mix(outcomes: list[dict[str, Any]]) -> dict[str, Any]:
+        regime_counts: dict[str, int] = defaultdict(int)
+        scenario_counts: dict[str, int] = defaultdict(int)
+        randomized = 0
+        for outcome in outcomes:
+            regime_counts[str(outcome.get("regime_version") or "unknown")] += 1
+            scenario_counts[str(outcome.get("scenario_family") or "unknown")] += 1
+            randomized += int(bool(outcome.get("domain_randomized")))
+        return {
+            "rows": len(outcomes),
+            "randomized_rows": randomized,
+            "randomized_share": round(randomized / max(1, len(outcomes)), 6),
+            "regime_versions": dict(sorted(regime_counts.items())),
+            "scenario_families": dict(sorted(scenario_counts.items(), key=lambda item: (-item[1], item[0]))),
+        }
 
     def retrain(self, *, minimum_rows: int = 12) -> dict[str, Any]:
         outcomes = self._ordered_outcomes(self.repository.learning_outcomes())
@@ -443,6 +550,7 @@ class ContinuousIntelligenceService:
             train_end, calibration_end = self._temporal_split(len(vectors))
             train_vectors, calibration_vectors, test_vectors = vectors[:train_end], vectors[train_end:calibration_end], vectors[calibration_end:]
             train_targets, calibration_targets, test_targets = targets[:train_end], targets[train_end:calibration_end], targets[calibration_end:]
+            test_outcomes = model_outcomes[calibration_end:]
             parameters = self._fit_linear(train_vectors, train_targets) if kind == "linear" else self._fit_logistic(train_vectors, train_targets)
             if kind == "logistic":
                 parameters = self._calibrate_temperature(parameters, calibration_vectors, calibration_targets)
@@ -477,7 +585,7 @@ class ContinuousIntelligenceService:
                 "target_definition": target_definition,
                 "dataset_fingerprint": dataset_fingerprint,
                 "code_git_sha": os.getenv("FABOPS_GIT_SHA", "unknown"),
-                "simulator_regime": os.getenv("FABOPS_SIMULATOR_REGIME", "live-seeded-v2"),
+                "simulator_regime": ",".join(sorted({str(item.get("regime_version") or "unknown") for item in model_outcomes})),
                 "parameters": parameters,
                 "metrics": {
                     **metrics,
@@ -485,6 +593,23 @@ class ContinuousIntelligenceService:
                     "calibration_rows": len(calibration_targets),
                     "shadow_test_rows": len(test_targets),
                     "horizon": horizon,
+                    "shadow_test_by_regime": self._shadow_metrics_by_group(
+                        parameters=parameters,
+                        vectors=test_vectors,
+                        targets=test_targets,
+                        outcomes=test_outcomes,
+                        kind=kind,
+                        group_key="regime_version",
+                    ),
+                    "shadow_test_by_scenario_family": self._shadow_metrics_by_group(
+                        parameters=parameters,
+                        vectors=test_vectors,
+                        targets=test_targets,
+                        outcomes=test_outcomes,
+                        kind=kind,
+                        group_key="scenario_family",
+                    ),
+                    "dataset_mix": self._dataset_mix(model_outcomes),
                 },
             }
             incumbent = champions.get(model_name)
@@ -628,9 +753,10 @@ class ContinuousIntelligenceService:
         return predictions
 
     def status(self) -> dict[str, Any]:
-        champions = self.repository.champion_models()
+        champions = self.semantic_v2_champions(self.repository.champion_models())
         outcomes = self._ordered_outcomes(self.repository.learning_outcomes())
-        predictions = self.repository.latest_predictions(24)
+        predictions = self.semantic_v2_predictions(self.repository.latest_predictions(48))[:24]
+        queue_status_reader = getattr(self.repository, "inference_queue_status", None)
         return {
             "schema_version": "fabops-continuous-intelligence-v2",
             "learning_enabled": True,
@@ -638,10 +764,12 @@ class ContinuousIntelligenceService:
             "feature_set_version": FEATURE_SET_VERSION,
             "prediction_cutoff": PREDICTION_CUTOFF,
             "outcome_count": len(outcomes),
+            "dataset_mix": self._dataset_mix(outcomes),
             "champions": champions,
             "latest_predictions": predictions,
             "feedback": self.repository.prediction_feedback_summary(),
             "drift": self.drift_status(),
             "reports": self.repository.latest_intelligence_reports(12),
             "visualization_plans": self.repository.latest_visualization_plans(12),
+            "inference_queue": queue_status_reader() if callable(queue_status_reader) else {},
         }

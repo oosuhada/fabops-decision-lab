@@ -297,6 +297,8 @@ export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, l
   const learnedMaintenanceAttention = learnedByTarget.get("next_lot_maintenance_attention_probability");
   const learnedExcursion = learnedByTarget.get("final_excursion_probability");
   const autoReport = intelligence?.reports.find((report) => report.case_id === top?.case_id) ?? null;
+  const localQueue = intelligence?.inference_queue;
+  const localProviderState = localQueue?.providers?.["local-qwen"];
   const situationAssessment = autoReport?.situation_assessment ?? null;
   const visibleBrief = manualBrief?.brief.case_id === top?.case_id ? manualBrief.brief : autoReport?.brief ?? null;
   const visibleProvider = manualBrief?.brief.case_id === top?.case_id ? manualBrief.brief.provider : autoReport?.provider ?? liveDecision?.llm.provider ?? null;
@@ -330,6 +332,7 @@ export function DecisionCockpit({cockpit, detail, projection, sourceTimestamp, l
       <div><span>Next-lot excursion / alarm</span><strong>{predictedExcursionAlarm != null ? `${(predictedExcursionAlarm * 100).toFixed(0)}%` : "—"}</strong><small>{predictedExcursionAlarm != null && predictedExcursionAlarm >= .7 ? "HIGH · NOT FAILURE PROBABILITY" : predictedExcursionAlarm != null && predictedExcursionAlarm >= .4 ? "WATCH · NOT FAILURE PROBABILITY" : "NORMAL · NOT FAILURE PROBABILITY"}</small></div>
       <div><span>Maintenance attention</span><strong>{predictedMaintenanceAttention != null ? `${(predictedMaintenanceAttention * 100).toFixed(0)}%` : "—"}</strong><small>{predictedMaintenanceAttention != null && predictedMaintenanceAttention >= .7 ? "HIGH · NOT RUL" : predictedMaintenanceAttention != null && predictedMaintenanceAttention >= .4 ? "WATCH · NOT RUL" : "NORMAL · NOT RUL"}</small></div>
       <div><span>Auto analyst</span><strong>{visibleProvider?.toUpperCase() ?? "WAITING"}</strong><small>{visibleBrief?.headline ?? "5-minute risk review + material-change trigger"}</small></div>
+      <div><span>Local Qwen</span><strong>{localProviderState?.state ?? (localQueue?.queue_depth ? "QUEUED" : "WAITING")}</strong><small>{localQueue ? `${localQueue.queue_depth} queued · ${localQueue.running} running · ${localQueue.local_success_count} local complete` : "queue telemetry warming"}</small></div>
     </section>
     {top && liveDecision ? <section className={`live-decision-command live-decision-command--${liveDecision.urgency.toLowerCase()}`} aria-label="Live decision intelligence">
       <header>
@@ -514,6 +517,7 @@ export function OperationsOverview({overview, liveStatus, intelligence, onSelect
       <header><div><span className="eyebrow">Continuous learning engine</span><h2>{intelligence?.learning_enabled ? "Models learn from completed lots" : "Learning registry unavailable"}</h2></div><small>{intelligence?.feedback_loop ?? "waiting for intelligence worker"}</small></header>
       <div className="learning-kpis">
         <article><span>Outcome memory</span><strong>{intelligence?.outcome_count ?? 0}</strong><small>completed lots available for feedback</small></article>
+        <article><span>Randomized regime mix</span><strong>{intelligence?.dataset_mix ? `${(intelligence.dataset_mix.randomized_share * 100).toFixed(0)}%` : "—"}</strong><small>{intelligence?.dataset_mix ? `${intelligence.dataset_mix.randomized_rows}/${intelligence.dataset_mix.rows} semantic-v2 outcomes` : "regime provenance warming"}</small></article>
         <article><span>Champion models</span><strong>{champions.length}</strong><small>cutoff yield · excursion · next-lot alarm · maintenance attention</small></article>
         <article><span>Prediction feedback</span><strong>{feedbackSamples}</strong><small>predictions compared with realized outcomes</small></article>
         <article><span>Feature drift</span><strong>{intelligence?.drift.status?.toUpperCase() ?? "WAITING"}</strong><small>{intelligence ? `drift score ${intelligence.drift.score.toFixed(3)}` : "learning window warming"}</small></article>

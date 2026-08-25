@@ -18,10 +18,12 @@ from starlette.responses import StreamingResponse
 
 from adapters.postgres import PostgresConfig, PostgresRepository
 from services.decision import DecisionSupportService
-from services.intelligence import ContinuousIntelligenceService, build_live_decision_intelligence, build_situation_assessment
+from services.intelligence import ContinuousIntelligenceService, build_live_decision_intelligence
+from services.intelligence.inference import assessment_request_document
 from services.intelligence.planner import material_signature, visualization_plan
 from services.narration import NarrationService
 from services.narration.demo import DemoPolicyError, DemoSessionPolicy, demo_policy_from_env
+from services.narration.queue import build_inference_job
 from services.prediction import PredictiveIntelligenceService
 from services.rca.cqrs import RankRootCausesQuery, TraceAffectedLotsQuery
 from services.release import RELEASE_VERSION, load_deployment_identity, load_release_identity
@@ -157,12 +159,14 @@ def _continuous_intelligence_status(runtime: Runtime) -> dict[str, Any]:
             "learning_enabled": False,
             "feedback_loop": "unavailable",
             "outcome_count": 0,
+            "dataset_mix": {"rows": 0, "randomized_rows": 0, "randomized_share": 0.0, "regime_versions": {}, "scenario_families": {}},
             "champions": {},
             "latest_predictions": [],
             "feedback": {},
             "drift": {"status": "unavailable", "score": 0.0, "recent_rows": 0, "baseline_rows": 0},
             "reports": [],
             "visualization_plans": [],
+            "inference_queue": {},
             "degraded_reason": type(exc).__name__,
         }
 
@@ -180,7 +184,7 @@ def _attach_live_decision_intelligence(runtime: Runtime, packets: list[dict[str,
     for packet in packets:
         lot_id = str(packet.get("lot_id") or "")
         case_id = str(packet.get("case_id") or "")
-        predictions = list(predictions_by_lot.get(lot_id, []))
+        predictions = ContinuousIntelligenceService.semantic_v2_predictions(list(predictions_by_lot.get(lot_id, [])))
         report = reports_by_case.get(case_id)
         enriched.append(
             {
@@ -214,18 +218,24 @@ def get_narration_service() -> NarrationService:
     return service
 
 
-def _persist_manual_situation_assessment(runtime: Runtime, case_id: str, brief: dict[str, Any]) -> bool:
-    """Persist a bounded manual situation refresh without enabling workflow mutation."""
+def _queue_manual_situation_assessment(
+    runtime: Runtime,
+    case_id: str,
+    packet: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """Persist a durable manual inference job without blocking the dashboard."""
 
     dsn = os.getenv("FABOPS_POSTGRES_DSN", "").strip()
     if not dsn:
-        return False
+        raise RuntimeError("manual inference queue requires FABOPS_POSTGRES_DSN")
     case = runtime.case_repository.get_case(case_id)
     if case is None:
-        return False
+        raise KeyError(case_id)
     prediction_reader = getattr(runtime.event_repository, "latest_predictions_for_lots", None)
     predictions_by_lot = prediction_reader([str(case.get("lot_id") or "")]) if callable(prediction_reader) else {}
-    predictions = list(predictions_by_lot.get(str(case.get("lot_id") or ""), []))
+    predictions = ContinuousIntelligenceService.semantic_v2_predictions(
+        list(predictions_by_lot.get(str(case.get("lot_id") or ""), []))
+    )
     signature = material_signature(case, predictions)
     repository = PostgresRepository(PostgresConfig(dsn))
     previous = repository.latest_intelligence_report_for_case(case_id)
@@ -242,40 +252,55 @@ def _persist_manual_situation_assessment(runtime: Runtime, case_id: str, brief: 
         },
     }
     context = build_live_decision_intelligence(packet_seed, predictions, previous)
-    cache_hit = bool(brief.get("cache_hit"))
-    assessment_run_id = str(uuid.uuid4())
-    situation_assessment = build_situation_assessment(
-        assessment_id=assessment_run_id,
-        case_id=case_id,
-        trigger="manual_user_refresh",
-        provider="cached" if cache_hit else str(brief.get("provider", "deterministic")),
+    packet["live_decision_context"] = context
+    packet["previous_assessment"] = previous.get("brief") if previous else None
+    packet["evidence_refs"] = sorted(
+        set(packet.get("evidence_refs", [])) | {f"prediction.{item['target']}" for item in predictions}
+    )
+    request_document = assessment_request_document(
+        packet=packet,
         decision_context=context,
-        brief=brief,
-        previous_report=previous,
-        model_versions={str(item["target"]): str(item["model_version"]) for item in predictions},
         visualization_plan=plan,
-        uncertainties=[],
+        previous_report=previous,
+        case_predictions=predictions,
+        trigger_type="manual_user_refresh",
     )
-    repository.append_intelligence_report(
-        {
-            "assessment_run_id": assessment_run_id,
-            "case_id": case_id,
-            "material_signature": signature,
-            "trigger_type": "manual_user_refresh",
-            "mode": "cached" if cache_hit else brief.get("mode", "deterministic_fallback"),
-            "provider": "cached" if cache_hit else brief.get("provider", "deterministic"),
-            "provider_model": brief.get("provider_model"),
-            "latency_ms": brief.get("latency_ms"),
-            "previous_report_id": previous.get("report_id") if previous else None,
-            "reused_report_id": previous.get("report_id") if cache_hit and previous else None,
-            "input_context_fingerprint": signature,
-            "brief": brief,
-            "situation_assessment": situation_assessment,
-            "decision_context": context,
-            "visualization_plan": plan,
-        }
+    job = repository.enqueue_inference_job(
+        build_inference_job(
+            case_id=case_id,
+            material_signature=signature,
+            trigger_type="manual_user_refresh",
+            urgency=str(context.get("urgency") or "NORMAL"),
+            request_document=request_document,
+        )
     )
-    return True
+    return job, previous
+
+
+def _public_inference_job(job: dict[str, Any], queue_status: dict[str, Any] | None = None) -> dict[str, Any]:
+    queue_position = None
+    if queue_status:
+        match = next((item for item in queue_status.get("jobs", []) if item.get("job_id") == job.get("job_id")), None)
+        queue_position = match.get("position") if match else None
+    return {
+        "job_id": job.get("job_id"),
+        "case_id": job.get("case_id"),
+        "assessment_run_id": job.get("assessment_run_id"),
+        "intent": job.get("intent"),
+        "trigger_type": job.get("trigger_type"),
+        "priority": job.get("priority"),
+        "status": job.get("status"),
+        "queue_position": queue_position,
+        "created_at": job.get("created_at"),
+        "started_at": job.get("started_at"),
+        "completed_at": job.get("completed_at"),
+        "attempt_count": job.get("attempt_count"),
+        "busy_count": job.get("busy_count"),
+        "allow_vertex_fallback": job.get("allow_vertex_fallback"),
+        "fallback_after_seconds": job.get("fallback_after_seconds"),
+        "result": job.get("result_document"),
+        "error_class": job.get("error_class"),
+    }
 
 
 def get_demo_policy() -> DemoSessionPolicy | None:
@@ -394,6 +419,45 @@ def predictions(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, 
 @app.get("/api/intelligence/status")
 def continuous_intelligence_status(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
     return {"source": "continuous-learning-registry", **_continuous_intelligence_status(runtime)}
+
+
+@app.get("/api/inference/status")
+def inference_status(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
+    reader = getattr(runtime.event_repository, "inference_queue_status", None)
+    if not callable(reader):
+        return {"source": "inference-queue", "available": False, "queue_depth": 0, "running": 0, "providers": {}, "jobs": []}
+    try:
+        return {"source": "inference-queue", "available": True, **reader()}
+    except Exception as exc:  # noqa: BLE001 - old schemas degrade without hiding the rest of the candidate
+        return {
+            "source": "inference-queue",
+            "available": False,
+            "queue_depth": 0,
+            "running": 0,
+            "providers": {},
+            "jobs": [],
+            "degraded_reason": type(exc).__name__,
+        }
+
+
+@app.get("/api/inference/jobs/{job_id}")
+def inference_job(job_id: str, runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
+    try:
+        uuid.UUID(job_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="invalid inference job id") from exc
+    reader = getattr(runtime.event_repository, "inference_job", None)
+    status_reader = getattr(runtime.event_repository, "inference_queue_status", None)
+    if not callable(reader):
+        raise HTTPException(status_code=404, detail="inference queue unavailable")
+    try:
+        job = reader(job_id)
+        queue_status = status_reader() if callable(status_reader) else None
+    except Exception as exc:  # noqa: BLE001 - schema/provider availability is reported without leaking internals
+        raise HTTPException(status_code=503, detail=f"inference queue unavailable: {type(exc).__name__}") from exc
+    if job is None:
+        raise HTTPException(status_code=404, detail="inference job not found")
+    return {"source": "durable-inference-queue", "job": _public_inference_job(job, queue_status)}
 
 
 @app.get("/api/live/stream")
@@ -736,6 +800,35 @@ def demo_narration(
             packet = _augment_packet_for_narration(runtime, DecisionSupportService(runtime).packet(body.case_id))
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="case not found") from exc
+        if body.intent == "situation_update":
+            try:
+                job, previous = _queue_manual_situation_assessment(runtime, body.case_id, packet)
+                dsn = os.getenv("FABOPS_POSTGRES_DSN", "").strip()
+                repository = PostgresRepository(PostgresConfig(dsn))
+                queue_status = repository.inference_queue_status()
+            except Exception as exc:  # noqa: BLE001 - queue errors fail closed to current grounded wording
+                runtime.telemetry.emit(
+                    "decision.manual_assessment_queue_failed",
+                    severity="ERROR",
+                    outcome="error",
+                    case_id=body.case_id,
+                    error_classification=type(exc).__name__,
+                )
+                raise HTTPException(status_code=503, detail="manual analysis queue unavailable") from exc
+            previous_brief = previous.get("brief") if isinstance(previous, dict) else None
+            brief = (
+                previous_brief
+                if isinstance(previous_brief, dict) and previous_brief.get("case_id") == body.case_id
+                else get_narration_service().cached_or_deterministic(packet, body.audience, intent=body.intent)
+            )
+            return {
+                "source": "queued-public-demo-narration",
+                "session_id": session_id,
+                "packet": packet,
+                "brief": brief,
+                "assessment_persisted": False,
+                "inference_job": _public_inference_job(job, queue_status),
+            }
         with runtime.telemetry.operation(
             "decision.demo_narrate",
             case_id=body.case_id,
@@ -743,24 +836,12 @@ def demo_narration(
             intent=body.intent,
         ):
             brief = get_narration_service().generate(packet, body.audience, intent=body.intent)
-    persisted = False
-    if body.intent == "situation_update":
-        try:
-            persisted = _persist_manual_situation_assessment(runtime, body.case_id, brief)
-        except Exception as exc:  # noqa: BLE001 - narration result remains usable if persistence is temporarily unavailable
-            runtime.telemetry.emit(
-                "decision.manual_assessment_persist_failed",
-                severity="ERROR",
-                outcome="error",
-                case_id=body.case_id,
-                error_classification=type(exc).__name__,
-            )
     return {
         "source": "bounded-public-demo-narration",
         "session_id": session_id,
         "packet": packet,
         "brief": brief,
-        "assessment_persisted": persisted,
+        "assessment_persisted": False,
     }
 
 

@@ -9,10 +9,11 @@ from threading import Event
 
 from adapters.postgres import PostgresConfig, PostgresRepository
 from services.decision import DecisionSupportService
-from services.intelligence import build_live_decision_intelligence, build_situation_assessment
+from services.intelligence import build_live_decision_intelligence
+from services.intelligence.inference import assessment_request_document
 from services.intelligence.planner import material_signature, visualization_plan
 from services.intelligence.service import ContinuousIntelligenceService
-from services.narration import NarrationService
+from services.narration.queue import build_inference_job
 from systems.api.runtime import build_database_readonly_runtime
 
 
@@ -29,7 +30,6 @@ def main() -> None:
     signal.signal(signal.SIGINT, stop)
     repository = PostgresRepository(PostgresConfig(dsn))
     service = ContinuousIntelligenceService(repository)
-    narration = NarrationService()
     interval = max(10.0, float(os.getenv("FABOPS_INTELLIGENCE_INTERVAL_SECONDS", "30")))
     retrain_every = max(1, int(os.getenv("FABOPS_RETRAIN_EVERY_OUTCOMES", "6")))
     report_interval = max(120.0, float(os.getenv("FABOPS_LLM_REPORT_INTERVAL_SECONDS", "300")))
@@ -45,9 +45,10 @@ def main() -> None:
             feedback_evaluated = service.synchronize_prediction_feedback()
             outcome_count = len(repository.learning_outcomes())
             champions = repository.champion_models()
-            champion_rows = max((int(model.get("training_rows", 0)) for model in champions.values()), default=0)
+            semantic_champions = ContinuousIntelligenceService.semantic_v2_champions(champions)
+            champion_rows = max((int(model.get("training_rows", 0)) for model in semantic_champions.values()), default=0)
             drift = service.drift_status()
-            missing_semantic_champions = not ContinuousIntelligenceService.REQUIRED_MODELS.issubset(champions)
+            missing_semantic_champions = not ContinuousIntelligenceService.REQUIRED_MODELS.issubset(semantic_champions)
             should_train = outcome_count >= 12 and (
                 missing_semantic_champions
                 or outcome_count - max(last_training_rows, champion_rows) >= retrain_every
@@ -74,7 +75,9 @@ def main() -> None:
                 predictions_by_lot = repository.latest_predictions_for_lots([str(case["lot_id"]) for case in recent_cases])
                 reports_by_case = repository.latest_intelligence_reports_for_cases([str(case["case_id"]) for case in recent_cases])
                 for case in recent_cases:
-                    case_predictions = list(predictions_by_lot.get(str(case["lot_id"]), []))
+                    case_predictions = ContinuousIntelligenceService.semantic_v2_predictions(
+                        list(predictions_by_lot.get(str(case["lot_id"]), []))
+                    )
                     packet_seed = {
                         "case_id": case["case_id"],
                         "lot_id": case["lot_id"],
@@ -138,43 +141,22 @@ def main() -> None:
                             for target, score in context.get("predictions", {}).items()
                         }
                         packet["evidence_refs"] = sorted(set(packet.get("evidence_refs", [])) | {f"prediction.{item['target']}" for item in case_predictions})
-                        brief = narration.generate(
-                            packet,
-                            "engineer",
-                            intent="situation_update",
-                            allow_cloud_fallback=context.get("urgency") == "HIGH",
-                        )
-                        assessment_run_id = str(uuid.uuid4())
-                        situation_assessment = build_situation_assessment(
-                            assessment_id=assessment_run_id,
-                            case_id=case_id,
-                            trigger="material_intelligence_change",
-                            provider=str(brief.get("provider", "deterministic")),
+                        request_document = assessment_request_document(
+                            packet=packet,
                             decision_context=context,
-                            brief=brief,
-                            previous_report=previous_report,
-                            model_versions={str(item["target"]): str(item["model_version"]) for item in case_predictions},
                             visualization_plan=plan,
-                            uncertainties=list(packet.get("uncertainties", [])),
+                            previous_report=previous_report,
+                            case_predictions=case_predictions,
+                            trigger_type="material_intelligence_change",
                         )
-                        context_fingerprint = material_signature(case, case_predictions)
-                        repository.append_intelligence_report(
-                            {
-                                "assessment_run_id": assessment_run_id,
-                                "case_id": case_id,
-                                "material_signature": signature,
-                                "trigger_type": "material_intelligence_change",
-                                "mode": brief.get("mode", "deterministic_fallback"),
-                                "provider": brief.get("provider", "deterministic"),
-                                "provider_model": brief.get("provider_model"),
-                                "latency_ms": brief.get("latency_ms"),
-                                "previous_report_id": previous_report.get("report_id") if previous_report else None,
-                                "input_context_fingerprint": context_fingerprint,
-                                "brief": brief,
-                                "situation_assessment": situation_assessment,
-                                "decision_context": context,
-                                "visualization_plan": plan,
-                            }
+                        repository.enqueue_inference_job(
+                            build_inference_job(
+                                case_id=case_id,
+                                material_signature=signature,
+                                trigger_type="material_intelligence_change",
+                                urgency=str(context.get("urgency") or "NORMAL"),
+                                request_document=request_document,
+                            )
                         )
                         last_report_at[case_id] = now
                         last_report_signature[case_id] = signature
@@ -226,8 +208,9 @@ def main() -> None:
                         "champions": sorted(repository.champion_models()),
                         "latest_lot": latest.get("lot_id") if latest else None,
                         "predictions": len(latest_predictions),
-                        "generated_reports": len(generation_candidates),
+                        "queued_reports": len(generation_candidates),
                         "skipped_unchanged_reviews": len(unchanged_reviews),
+                        "inference_queue_depth": repository.inference_queue_status().get("queue_depth", 0),
                     },
                     sort_keys=True,
                 ),

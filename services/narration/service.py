@@ -14,9 +14,13 @@ from .demo import DEMO_INTENTS
 from .governance import ProviderBlockedError, ProviderGovernor, governor_from_env
 from .grounding import allowed_evidence_refs, reference_allowed
 from .presentation import build_presentation_spec
-from .providers import NarrationProviderPort, providers_from_env
+from .providers import NarrationProviderPort, ProviderBusyError, providers_from_env
 
 AUDIENCES = {"manager", "engineer"}
+
+
+class LocalNarrationBusyError(RuntimeError):
+    """Raised when queue-aware callers should defer instead of falling back."""
 
 
 def _deterministic_brief(packet: dict[str, Any], audience: str, *, mode: str, provider: str, fallback_reason: str | None = None) -> dict[str, Any]:
@@ -310,6 +314,7 @@ class NarrationService:
         *,
         intent: str = "decision_brief",
         allow_cloud_fallback: bool = True,
+        defer_on_local_busy: bool = False,
     ) -> dict[str, Any]:
         if audience not in AUDIENCES:
             raise ValueError(f"unsupported audience: {audience}")
@@ -362,7 +367,17 @@ class NarrationService:
                 self._cache[cache_key] = (now, payload)
                 self._record_live_result(payload, float(payload["latency_ms"]))
                 return payload
+            except ProviderBusyError as exc:
+                if provider.name == "local-qwen" and defer_on_local_busy:
+                    raise LocalNarrationBusyError("local-qwen busy") from exc
+                failures.append(f"{provider.name}:busy")
             except ProviderBlockedError as exc:
+                if provider.name == "local-qwen" and defer_on_local_busy and exc.reason in {
+                    "concurrency_exhausted",
+                    "rate_limit_exhausted",
+                    "circuit_open",
+                }:
+                    raise LocalNarrationBusyError(f"local-qwen {exc.reason}") from exc
                 failures.append(f"{provider.name}:{exc.reason}")
             except Exception as exc:  # noqa: BLE001 - provider/schema/grounding failures fail closed to deterministic wording
                 if isinstance(exc, ValueError):
@@ -376,6 +391,12 @@ class NarrationService:
         payload["intent"] = intent
         payload["latency_ms"] = round((time.perf_counter() - started) * 1000, 3)
         payload["presentation"] = build_presentation_spec(packet, payload, intent)
-        self._cache[cache_key] = (now, payload)
+        # A queue-aware local-first attempt must not cache a deterministic
+        # fallback caused by local provider failure before its cloud wait budget
+        # elapses. Otherwise a later HIGH/manual retry would hit that cache and
+        # never get the chance to use the explicitly allowed Vertex fallback.
+        cache_fallback = allow_cloud_fallback or "local-qwen" not in reason
+        if cache_fallback:
+            self._cache[cache_key] = (now, payload)
         self._record_live_result(payload, float(payload["latency_ms"]))
         return payload
