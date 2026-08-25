@@ -89,7 +89,9 @@ def build_live_decision_intelligence(
 
     why_now = [dominant_reason]
     if predicted_yield is not None:
-        why_now.append(f"예상 수율 {_percent(predicted_yield)} · 목표 90% 대비 {(0.90 - predicted_yield) * 100:+.1f}pp")
+        gap = (predicted_yield - 0.90) * 100
+        direction = "높음" if gap >= 0 else "낮음"
+        why_now.append(f"예상 수율 {_percent(predicted_yield)} · 목표 90% 대비 {abs(gap):.1f}pp {direction}")
     if excursion is not None:
         why_now.append(f"공정 excursion 위험 {_percent(excursion)}")
     if failure is not None:

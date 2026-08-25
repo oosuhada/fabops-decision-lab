@@ -561,9 +561,14 @@ def decision_cockpit(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[
     with runtime.telemetry.operation("decision.cockpit"):
         payload = DecisionSupportService(runtime).cockpit()
         queue = _attach_live_decision_intelligence(runtime, list(payload.get("queue", [])))
+        def lot_sequence(packet: dict[str, Any]) -> int:
+            suffix = str(packet.get("lot_id", "")).split("-")[-1]
+            return int(suffix) if suffix.isdigit() else 0
+
         queue.sort(
             key=lambda packet: (
                 -float(packet.get("live_intelligence", {}).get("priority_score", 0.0)),
+                -lot_sequence(packet),
                 -int(packet.get("priority_rank", 0)),
                 str(packet.get("case_id", "")),
             )

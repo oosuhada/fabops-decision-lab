@@ -403,11 +403,27 @@ class DecisionSupportService:
                 str(case["case_id"]),
             ),
         )
-        # The cockpit is an index, not a case-detail endpoint. Detailed RCA is
-        # hydrated only after a case is opened so boot latency stays bounded as
-        # the live corpus grows.
+        # Keep both the highest deterministic-risk cases and the newest live
+        # cases in the bounded cockpit window. Learned risk is attached by the
+        # API layer and then becomes the final ordering signal. This prevents a
+        # historically severe case from permanently hiding today's live lots.
         queue_limit = 100
-        queue = [self._cockpit_packet(case, hydrate=False) for case in ordered_cases[:queue_limit]]
+        recent_cases = sorted(
+            cases,
+            key=lambda case: int(str(case.get("lot_id", "LOT-00000")).split("-")[-1]) if str(case.get("lot_id", "")).split("-")[-1].isdigit() else 0,
+            reverse=True,
+        )[:60]
+        selected: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for case in [*recent_cases, *ordered_cases]:
+            case_id = str(case["case_id"])
+            if case_id in seen:
+                continue
+            seen.add(case_id)
+            selected.append(case)
+            if len(selected) >= queue_limit:
+                break
+        queue = [self._cockpit_packet(case, hydrate=False) for case in selected]
         counts: dict[str, int] = {"HIGH": 0, "MEDIUM": 0, "VERIFY_DATA": 0}
         for case in ordered_cases:
             band = str(_decision_definition(str(case["classification"]))["priority_band"])
