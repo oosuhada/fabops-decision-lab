@@ -404,8 +404,9 @@ def build_database_readonly_runtime(seed: int = 42, profile: str = "test", telem
         raise RuntimeError("configured PostgreSQL source is unavailable")
 
     graph = InMemoryGraphProjection()
-    projection = RcaProjectionWorker(repository, graph, telemetry=recorder)
-    projection.rebuild()
+    graph_window_lots = max(50, int(os.environ.get("FABOPS_GRAPH_WINDOW_LOTS", "250")))
+    projection = RcaProjectionWorker(repository, graph, telemetry=recorder, window_lots=graph_window_lots)
+    projection.rebuild_recent()
     detector = DeterministicDetector(repository, telemetry=recorder)
     ingestion = IngestionService(repository, repository, repository, detector.consume, telemetry=recorder, transaction_factory=repository.transaction)
     queries = RcaQueryService(graph, repository, projection, telemetry=recorder)

@@ -25,11 +25,13 @@ class RcaProjectionWorker:
         event_repository: EventRepositoryPort,
         graph: GraphProjectionPort,
         telemetry: TelemetryRecorder | None = None,
+        window_lots: int | None = None,
     ) -> None:
         self.events = event_repository
         self.graph = graph
         self.telemetry = telemetry
         self.projection_checkpoint = 0
+        self.window_lots = window_lots
 
     def rebuild(self) -> ProjectionStatus:
         if self.telemetry is not None:
@@ -43,6 +45,29 @@ class RcaProjectionWorker:
         for stored in self.events.all_events():
             self.project_stored(stored)
         return self.status()
+
+    def rebuild_recent(self) -> ProjectionStatus:
+        recent_reader = getattr(self.events, "recent_lot_ids", None)
+        lot_event_reader = getattr(self.events, "events_for_lots", None)
+        latest_reader = getattr(self.events, "latest_event", None)
+        if not self.window_lots or not callable(recent_reader) or not callable(lot_event_reader):
+            return self.rebuild()
+        self.graph.clear()
+        recent_lots = recent_reader(self.window_lots)
+        for stored in lot_event_reader(recent_lots):
+            self.project_stored(stored)
+        latest = latest_reader() if callable(latest_reader) else None
+        if latest is not None:
+            self.projection_checkpoint = max(self.projection_checkpoint, latest.sequence)
+        return self.status()
+
+    def _prune_window(self) -> None:
+        if not self.window_lots:
+            return
+        recent_reader = getattr(self.events, "recent_lot_ids", None)
+        prune = getattr(self.graph, "prune_to_lots", None)
+        if callable(recent_reader) and callable(prune):
+            prune(set(recent_reader(self.window_lots)))
 
     def catch_up(self) -> ProjectionStatus:
         incremental = getattr(self.events, "events_after", None)
@@ -59,7 +84,22 @@ class RcaProjectionWorker:
             for stored in self.events.all_events():
                 if stored.sequence > self.projection_checkpoint:
                     self.project_stored(stored)
+        self._prune_window()
         return self.status()
+
+    def ensure_lot(self, lot_id: str) -> None:
+        nodes_for_lot = getattr(self.graph, "nodes_for_lot", None)
+        if callable(nodes_for_lot) and nodes_for_lot("Lot", lot_id):
+            return
+        lot_event_reader = getattr(self.events, "events_for_lots", None)
+        if not callable(lot_event_reader):
+            return
+        for stored in lot_event_reader([lot_id]):
+            # Ad-hoc historical hydration must not move the live source
+            # checkpoint backwards or forwards; it only materializes this lot.
+            previous_checkpoint = self.projection_checkpoint
+            self.project_stored(stored)
+            self.projection_checkpoint = previous_checkpoint
 
     def status(self) -> ProjectionStatus:
         counter = getattr(self.events, "event_count", None)

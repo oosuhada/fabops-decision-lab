@@ -3,6 +3,7 @@ services:
     environment:
       FABOPS_DATA_SOURCE: database
       FABOPS_LIVE_ENABLED: "true"
+      FABOPS_GRAPH_WINDOW_LOTS: ${FABOPS_GRAPH_WINDOW_LOTS:-250}
       FABOPS_POSTGRES_DSN: postgresql://fabops:${FABOPS_LIVE_POSTGRES_PASSWORD:?FABOPS_LIVE_POSTGRES_PASSWORD must be set}@live-postgres:5432/fabops
     depends_on:
       live-init:

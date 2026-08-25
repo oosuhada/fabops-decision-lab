@@ -104,9 +104,20 @@ class ContinuousIntelligenceService:
         self.repository = repository
         self.features = FeatureBuilder()
 
-    def lot_snapshots(self) -> list[dict[str, Any]]:
+    def lot_snapshots(self, recent_limit: int = 80, recovery_limit: int = 200) -> list[dict[str, Any]]:
         grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        for stored in self.repository.all_events():
+        recent_reader = getattr(self.repository, "recent_lot_ids", None)
+        recovery_reader = getattr(self.repository, "unlearned_completed_lot_ids", None)
+        lot_event_reader = getattr(self.repository, "events_for_lots", None)
+        if callable(recent_reader) and callable(recovery_reader) and callable(lot_event_reader):
+            selected_lots = list(dict.fromkeys([
+                *recovery_reader(recovery_limit),
+                *recent_reader(recent_limit),
+            ]))
+            stored_events = lot_event_reader(selected_lots)
+        else:
+            stored_events = self.repository.all_events()
+        for stored in stored_events:
             event = stored.event
             lot_id = event.get("lot_id")
             if lot_id:

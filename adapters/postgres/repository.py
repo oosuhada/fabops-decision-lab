@@ -169,6 +169,54 @@ class PostgresRepository:
         rows.reverse()
         return [StoredEvent(deepcopy(row["envelope"]), str(row["delivery_status"]), int(row["sequence"])) for row in rows]
 
+    def recent_lot_ids(self, limit: int = 250) -> list[str]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT lot_id, max(sequence) AS latest_sequence
+                FROM fabops_event_log
+                WHERE lot_id IS NOT NULL
+                GROUP BY lot_id
+                ORDER BY latest_sequence DESC
+                LIMIT %s
+                """,
+                (int(limit),),
+            ).fetchall()
+        return [str(row["lot_id"]) for row in rows]
+
+    def unlearned_completed_lot_ids(self, limit: int = 200) -> list[str]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT e.lot_id, min(e.sequence) AS first_sequence
+                FROM fabops_event_log e
+                LEFT JOIN fabops_learning_outcomes o ON o.lot_id = e.lot_id
+                WHERE e.event_type = 'inspection.completed.v1'
+                  AND e.lot_id IS NOT NULL
+                  AND o.lot_id IS NULL
+                GROUP BY e.lot_id
+                ORDER BY first_sequence
+                LIMIT %s
+                """,
+                (int(limit),),
+            ).fetchall()
+        return [str(row["lot_id"]) for row in rows]
+
+    def events_for_lots(self, lot_ids: list[str]) -> list[StoredEvent]:
+        if not lot_ids:
+            return []
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT sequence, envelope, delivery_status
+                FROM fabops_event_log
+                WHERE lot_id = ANY(%s)
+                ORDER BY sequence
+                """,
+                (lot_ids,),
+            ).fetchall()
+        return [StoredEvent(deepcopy(row["envelope"]), str(row["delivery_status"]), int(row["sequence"])) for row in rows]
+
     def delivery_status_counts(self) -> dict[str, int]:
         with self._connection() as connection:
             rows = connection.execute(

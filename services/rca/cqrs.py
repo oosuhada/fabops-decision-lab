@@ -67,6 +67,9 @@ class RcaQueryService:
         case = self.cases.get_case(query.case_id)
         if case is None:
             raise KeyError(query.case_id)
+        ensure_lot = getattr(self.worker, "ensure_lot", None)
+        if callable(ensure_lot):
+            ensure_lot(str(case["lot_id"]))
         if isinstance(query, RankRootCausesQuery):
             return {"case_id": query.case_id, "projection": status, "candidates": self.ranker.rank(case)}
         lot_id = case["lot_id"]

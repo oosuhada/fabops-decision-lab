@@ -27,6 +27,7 @@ class GraphProjectionPort(Protocol):
     def upsert_edge(self, source_kind: str, source_id: str, relation: str, target_kind: str, target_id: str) -> None: ...
     def get_node(self, kind: str, node_id: str) -> GraphNode | None: ...
     def nodes(self, kind: str | None = None) -> list[GraphNode]: ...
+    def nodes_for_lot(self, kind: str, lot_id: str) -> list[GraphNode]: ...
     def edges(self, relation: str | None = None) -> list[GraphEdge]: ...
     def outgoing(self, source_kind: str, source_id: str, relation: str | None = None) -> list[GraphEdge]: ...
     def incoming(self, target_kind: str, target_id: str, relation: str | None = None) -> list[GraphEdge]: ...
@@ -84,6 +85,39 @@ class InMemoryGraphProjection:
     def nodes_for_lot(self, kind: str, lot_id: str) -> list[GraphNode]:
         values = list(self._nodes_by_lot.get((kind, lot_id), {}).values())
         return deepcopy(sorted(values, key=lambda item: item.node_id))
+
+    def prune_to_lots(self, keep_lots: set[str]) -> None:
+        removable = [
+            key
+            for key, node in self._nodes.items()
+            if node.properties.get("lot_id") is not None and str(node.properties.get("lot_id")) not in keep_lots
+        ]
+        for kind, node_id in removable:
+            node = self._nodes.pop((kind, node_id), None)
+            if node is None:
+                continue
+            self._nodes_by_kind.get(kind, {}).pop(node_id, None)
+            lot_id = str(node.properties.get("lot_id"))
+            bucket = self._nodes_by_lot.get((kind, lot_id))
+            if bucket is not None:
+                bucket.pop(node_id, None)
+                if not bucket:
+                    self._nodes_by_lot.pop((kind, lot_id), None)
+            edge_keys = set(self._outgoing_edges.get((kind, node_id), {})) | set(self._incoming_edges.get((kind, node_id), {}))
+            for edge_key in edge_keys:
+                edge = self._edges.pop(edge_key, None)
+                if edge is None:
+                    continue
+                outgoing = self._outgoing_edges.get((edge.source_kind, edge.source_id))
+                incoming = self._incoming_edges.get((edge.target_kind, edge.target_id))
+                if outgoing is not None:
+                    outgoing.pop(edge_key, None)
+                    if not outgoing:
+                        self._outgoing_edges.pop((edge.source_kind, edge.source_id), None)
+                if incoming is not None:
+                    incoming.pop(edge_key, None)
+                    if not incoming:
+                        self._incoming_edges.pop((edge.target_kind, edge.target_id), None)
 
     def edges(self, relation: str | None = None) -> list[GraphEdge]:
         values = [edge for edge in self._edges.values() if relation is None or edge.relation == relation]
