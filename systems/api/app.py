@@ -521,7 +521,23 @@ async def live_stream(runtime: Annotated[Runtime, Depends(get_runtime)]) -> Stre
 
 @app.get("/api/overview")
 def overview(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any]:
-    cases = runtime.case_repository.list_cases()
+    case_limit = max(1, min(int(os.getenv("FABOPS_OVERVIEW_CASE_LIMIT", "120")), 500))
+    window_reader = getattr(runtime.case_repository, "overview_case_window", None)
+    if callable(window_reader):
+        case_window = window_reader(case_limit)
+        cases = list(case_window["cases"])
+        case_metrics = dict(case_window["metrics"])
+        total_cases = int(case_window["total_cases"])
+    else:
+        all_cases = runtime.case_repository.list_cases()
+        total_cases = len(all_cases)
+        cases = all_cases[-case_limit:]
+        case_metrics = {
+            "active_cases": sum(case["state"] != "closed" for case in all_cases),
+            "physical_excursions": sum(case["classification"] == "physical_excursion" for case in all_cases),
+            "sensor_bias_cases": sum(case["classification"] == "sensor_bias_suspected" for case in all_cases),
+            "data_quality_cases": sum(case["classification"] == "data_quality_incident" for case in all_cases),
+        }
     projection = asdict(runtime.projection.status())
     counter = getattr(runtime.event_repository, "event_count", None)
     event_count = int(counter()) if callable(counter) else len(runtime.event_repository.all_events())
@@ -533,11 +549,14 @@ def overview(runtime: Annotated[Runtime, Depends(get_runtime)]) -> dict[str, Any
         "source": "postgresql-read-only" if runtime.runtime_mode == "database-readonly" else "synthetic",
         "source_timestamp": latest_stored.event["event_time"] if latest_stored else "",
         "projection": projection,
+        "case_window": {
+            "returned_cases": len(cases),
+            "total_cases": total_cases,
+            "limit": case_limit,
+            "order": "latest-lot-first" if callable(window_reader) else "repository-order-tail",
+        },
         "metrics": {
-            "active_cases": sum(case["state"] != "closed" for case in cases),
-            "physical_excursions": sum(case["classification"] == "physical_excursion" for case in cases),
-            "sensor_bias_cases": sum(case["classification"] == "sensor_bias_suspected" for case in cases),
-            "data_quality_cases": sum(case["classification"] == "data_quality_incident" for case in cases),
+            **case_metrics,
             "event_count": event_count,
             "quarantine_count": runtime.event_repository.counts()["quarantine"] if hasattr(runtime.event_repository, "counts") else len(runtime.quarantine.all()),
         },

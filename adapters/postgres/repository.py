@@ -316,6 +316,40 @@ class PostgresRepository:
             rows = connection.execute("SELECT case_document FROM fabops_cases ORDER BY case_id").fetchall()
         return [deepcopy(row["case_document"]) for row in rows]
 
+    def overview_case_window(self, limit: int = 120) -> dict[str, Any]:
+        bounded_limit = max(1, min(int(limit), 500))
+        with self._connection() as connection:
+            summary = connection.execute(
+                """
+                SELECT
+                    count(*) AS total_cases,
+                    count(*) FILTER (WHERE state <> 'closed') AS active_cases,
+                    count(*) FILTER (WHERE classification = 'physical_excursion') AS physical_excursions,
+                    count(*) FILTER (WHERE classification = 'sensor_bias_suspected') AS sensor_bias_cases,
+                    count(*) FILTER (WHERE classification = 'data_quality_incident') AS data_quality_cases
+                FROM fabops_cases
+                """
+            ).fetchone()
+            rows = connection.execute(
+                """
+                SELECT case_document
+                FROM fabops_cases
+                ORDER BY lot_id DESC, updated_at DESC, case_id DESC
+                LIMIT %s
+                """,
+                (bounded_limit,),
+            ).fetchall()
+        return {
+            "cases": [deepcopy(row["case_document"]) for row in rows],
+            "total_cases": int(summary["total_cases"] if summary else 0),
+            "metrics": {
+                "active_cases": int(summary["active_cases"] if summary else 0),
+                "physical_excursions": int(summary["physical_excursions"] if summary else 0),
+                "sensor_bias_cases": int(summary["sensor_bias_cases"] if summary else 0),
+                "data_quality_cases": int(summary["data_quality_cases"] if summary else 0),
+            },
+        }
+
     def append_audit(self, record: dict[str, Any]) -> None:
         with self._connection() as connection:
             connection.execute(

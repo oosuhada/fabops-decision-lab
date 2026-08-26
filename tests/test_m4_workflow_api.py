@@ -156,6 +156,18 @@ def test_api_visible_metrics_match_case_and_replay_state():
     assert replay["event_count"] == replay["detection_checkpoint"] == replay["projection"]["projection_checkpoint"]
 
 
+def test_overview_case_window_bounds_render_payload_without_changing_metrics(monkeypatch):
+    app.state.runtime = build_local_runtime()
+    monkeypatch.setenv("FABOPS_OVERVIEW_CASE_LIMIT", "3")
+    client = TestClient(app)
+    overview = client.get("/api/overview").json()
+    all_cases = client.get("/api/cases").json()["items"]
+    assert len(overview["cases"]) == 3
+    assert overview["case_window"]["returned_cases"] == 3
+    assert overview["case_window"]["total_cases"] == len(all_cases)
+    assert overview["metrics"]["active_cases"] == len(all_cases)
+
+
 def test_case_replay_trace_is_source_backed_and_never_fabricates_missing_audit_timestamps():
     runtime = build_local_runtime()
     app.state.runtime = runtime

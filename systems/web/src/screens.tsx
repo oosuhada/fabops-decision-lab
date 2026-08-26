@@ -556,7 +556,7 @@ export function OperationsOverview({overview, liveStatus, intelligence, onSelect
       <article className="glass-visual-card glass-visual-card--yield">
         <div className="visual-card-head"><div><span className="eyebrow">Portfolio pulse</span><strong>Yield health</strong></div><small>synthetic case mean</small></div>
         <YieldHealthRing yieldValue={averageYield || null} />
-        <div className="visual-card-foot"><span>{overview.cases.length} cases in view</span><b>{overview.projection.stale ? "projection delayed" : "projection fresh"}</b></div>
+        <div className="visual-card-foot"><span>{overview.case_window ? `${overview.case_window.returned_cases} recent of ${overview.case_window.total_cases} total cases` : `${overview.cases.length} cases in view`}</span><b>{overview.projection.stale ? "projection delayed" : "projection fresh"}</b></div>
       </article>
       <article className="glass-visual-card glass-visual-card--mix">
         <div className="visual-card-head"><div><span className="eyebrow">Case mix</span><strong>Classification distribution</strong></div><small>read-only</small></div>

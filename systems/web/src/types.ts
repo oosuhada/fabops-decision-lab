@@ -31,6 +31,12 @@ export interface OverviewResponse {
   source: string;
   source_timestamp: string;
   projection: ProjectionStatus;
+  case_window?: {
+    returned_cases: number;
+    total_cases: number;
+    limit: number;
+    order: string;
+  };
   metrics: {
     active_cases: number;
     physical_excursions: number;
