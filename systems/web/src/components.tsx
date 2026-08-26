@@ -89,8 +89,10 @@ export function EvidenceInspector({selectedCase, selectedPacket, projection, sou
       <small>{selectedCase?.case_id ?? "Select a decision packet"}</small>
     </header>
     {selectedPacket ? <section className="inspector-decision-card">
-      <span className={`decision-priority ${selectedPacket.priority_band === "HIGH" ? "is-high" : selectedPacket.priority_band === "VERIFY_DATA" ? "is-verify" : "is-medium"}`}>{selectedPacket.priority_band}</span>
-      <h3>Decision now</h3>
+      <div className="inspector-decision-card__heading">
+        <h3>Decision now</h3>
+        <span className={`decision-priority ${selectedPacket.priority_band === "HIGH" ? "is-high" : selectedPacket.priority_band === "VERIFY_DATA" ? "is-verify" : "is-medium"}`}>{selectedPacket.priority_band}</span>
+      </div>
       <p>{selectedPacket.decision_question}</p>
       <div className="inspector-recommendation">
         <span>Recommended</span>

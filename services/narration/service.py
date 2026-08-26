@@ -126,10 +126,11 @@ Rules:
 3. Treat RCA as a ranked hypothesis. Never claim the root cause is confirmed unless the packet literally says so.
 4. Never claim equipment was held, stopped, changed, or controlled.
 5. Every citation and section evidence_ref must be copied exactly from allowed_evidence_refs supplied beside decision_packet. Never invent, rename, abbreviate, or extend an evidence path.
-6. Return one JSON object with keys: schema_version, case_id, audience, headline, summary, recommended_option_id, sections, citations, uncertainties, limitations.
+6. Return one JSON object with keys: schema_version, case_id, audience, headline, summary, recommended_option_id, sections, citations, uncertainties, limitations. For situation_update only, you may also include visualization_proposal with decision_question, primary_type, secondary_type, reason.
 7. schema_version must be decision-brief-v1. sections must be objects with section_id, title, body, evidence_refs.
 8. Write human-readable wording in Korean while leaving IDs unchanged.
-9. Keep the JSON compact enough to finish within the hard output-token limit: headline <= 40 Korean characters; summary <= 120 Korean characters; exactly 2 sections; each title <= 24 characters; each body <= 120 Korean characters; at most 2 evidence_refs per section; at most 4 citations; at most 2 uncertainties; exactly 2 short limitations. Do not repeat the packet. Return JSON only.
+9. If visualization_proposal is included, renderer types must be one of timeseries, heatmap, histogram, comparison, timeline, graph, table, metric. Never return HTML, JavaScript, executable code, case IDs, evidence references, or data field bindings inside visualization_proposal; the server owns all bindings and will reject invalid proposals.
+10. Keep the JSON compact enough to finish within the hard output-token limit: headline <= 40 Korean characters; summary <= 120 Korean characters; exactly 2 sections; each title <= 24 characters; each body <= 120 Korean characters; at most 2 evidence_refs per section; at most 4 citations; at most 2 uncertainties; exactly 2 short limitations. Do not repeat the packet. Return JSON only.
 """
 
 
@@ -268,6 +269,17 @@ class NarrationService:
         unknown = {reference for reference in referenced if not reference_allowed(packet, reference)}
         if unknown:
             raise ValueError(f"narration contains unknown evidence refs: {sorted(unknown)}")
+        proposal = payload.get("visualization_proposal")
+        if proposal is not None:
+            if not isinstance(proposal, dict):
+                raise ValueError("visualization_proposal must be an object")
+            if set(proposal) != {"decision_question", "primary_type", "secondary_type", "reason"}:
+                raise ValueError("visualization_proposal contains unsupported fields")
+            allowed_renderers = {"timeseries", "heatmap", "histogram", "comparison", "timeline", "graph", "table", "metric"}
+            if str(proposal.get("primary_type")) not in allowed_renderers or str(proposal.get("secondary_type")) not in allowed_renderers:
+                raise ValueError("visualization_proposal renderer is unsupported")
+            if not str(proposal.get("decision_question") or "").strip() or not str(proposal.get("reason") or "").strip():
+                raise ValueError("visualization_proposal requires grounded question and reason")
         text = " ".join(
             [
                 str(payload.get("headline", "")),

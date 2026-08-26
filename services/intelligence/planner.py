@@ -4,6 +4,8 @@ import hashlib
 import json
 from typing import Any
 
+ALLOWED_RENDERER_TYPES = ["timeseries", "heatmap", "histogram", "comparison", "timeline", "graph", "table", "metric"]
+
 
 def material_signature(case: dict[str, Any], predictions: list[dict[str, Any]]) -> str:
     payload = {
@@ -65,6 +67,57 @@ def visualization_plan(case: dict[str, Any], predictions: list[dict[str, Any]], 
         "secondary": secondary,
         "rationale": rationale,
         "planner": "deterministic-situation-aware-v1",
-        "allowed_renderer_types": ["timeseries", "heatmap", "histogram", "comparison", "timeline", "graph", "table", "metric"],
+        "allowed_renderer_types": ALLOWED_RENDERER_TYPES,
+    }
+
+
+def validated_llm_visualization_plan(base_plan: dict[str, Any], brief: dict[str, Any]) -> dict[str, Any]:
+    """Apply a bounded LLM visualization proposal to deterministic data bindings.
+
+    The LLM may choose the decision question and renderer pair only. It cannot
+    provide HTML/JS, arbitrary fields, case identity, evidence references, or
+    data coordinates. Those are reconstructed here from the deterministic plan.
+    Invalid proposals fall back to the deterministic plan unchanged.
+    """
+
+    proposal = brief.get("visualization_proposal")
+    if not isinstance(proposal, dict):
+        return base_plan
+    primary_type = str(proposal.get("primary_type") or "")
+    secondary_type = str(proposal.get("secondary_type") or "")
+    if primary_type not in ALLOWED_RENDERER_TYPES or secondary_type not in ALLOWED_RENDERER_TYPES:
+        return {**base_plan, "proposal_validation": "fallback_invalid_renderer"}
+    question = str(proposal.get("decision_question") or "").strip()
+    reason = str(proposal.get("reason") or "").strip()
+    if not question or not reason or len(question) > 180 or len(reason) > 320:
+        return {**base_plan, "proposal_validation": "fallback_invalid_text"}
+
+    common_source = base_plan.get("primary", {}) if isinstance(base_plan.get("primary"), dict) else {}
+    common = {
+        "case_id": base_plan.get("case_id"),
+        "lot_id": base_plan.get("lot_id"),
+        "time_window": common_source.get("time_window", "current lot through POST_CMP plus bounded recent baseline"),
+        "evidence_refs": list(common_source.get("evidence_refs", [])),
+    }
+    registry: dict[str, dict[str, Any]] = {
+        "timeseries": {"type": "timeseries", "x": "event_time", "y": "value", "group_by": "sensor_name", "title": "Evidence trajectory"},
+        "heatmap": {"type": "heatmap", "x": "chamber_id", "y": "value", "group_by": "sensor_name", "title": "Cross-chamber evidence"},
+        "histogram": {"type": "histogram", "x": "value", "title": "Recent vs baseline distribution"},
+        "comparison": {"type": "comparison", "x": "sensor_name", "y": "value", "title": "Evidence comparison"},
+        "timeline": {"type": "timeline", "x": "event_time", "title": "Evidence event sequence"},
+        "graph": {"type": "graph", "title": "RCA evidence relationships"},
+        "table": {"type": "table", "title": "Source evidence ledger"},
+        "metric": {"type": "metric", "y": "value", "title": "Current signal summary"},
+    }
+    return {
+        **base_plan,
+        "decision_question": question,
+        "primary": {**common, **registry[primary_type]},
+        "secondary": {**common, **registry[secondary_type]},
+        "rationale": reason,
+        "planner": "llm-proposed-validated-v1",
+        "proposal_provider": brief.get("provider"),
+        "proposal_validation": "accepted",
+        "allowed_renderer_types": ALLOWED_RENDERER_TYPES,
     }
 

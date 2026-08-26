@@ -4,7 +4,7 @@ from collections import defaultdict
 
 from services.decision.service import DecisionSupportService
 from services.intelligence import build_live_decision_intelligence, build_situation_assessment
-from services.intelligence.planner import material_signature, visualization_plan
+from services.intelligence.planner import material_signature, validated_llm_visualization_plan, visualization_plan
 from services.intelligence.service import FEATURE_SET_VERSION, PREDICTION_CUTOFF, ContinuousIntelligenceService, FeatureBuilder
 from services.narration import gateway
 from services.narration.governance import ProviderGovernor, ProviderPolicy
@@ -109,6 +109,65 @@ def test_visualization_spec_is_bound_to_case_and_lot() -> None:
     assert plan["primary"]["case_id"] == case["case_id"]
     assert plan["primary"]["lot_id"] == case["lot_id"]
     assert plan["primary"]["type"] in plan["allowed_renderer_types"]
+
+
+def test_llm_visualization_proposal_changes_renderer_but_not_case_or_evidence_binding() -> None:
+    case = {
+        "case_id": "CASE-VIZ",
+        "lot_id": "LOT-00124",
+        "classification": "physical_excursion",
+        "anomaly_score": 1.1,
+        "mean_yield": 0.84,
+        "affected_scope": {"equipment": ["CMP-02"], "chambers": ["CMP-02-A"]},
+    }
+    base = visualization_plan(case, [{"target": "final_excursion_probability", "score": 0.72}], "sig-viz")
+    brief = {
+        "provider": "local-qwen",
+        "visualization_proposal": {
+            "decision_question": "Did the distribution shift after the latest precursor drift?",
+            "primary_type": "histogram",
+            "secondary_type": "timeline",
+            "reason": "Compare the recent distribution with the bounded baseline, then align the change with source events.",
+        },
+    }
+
+    proposed = validated_llm_visualization_plan(base, brief)
+
+    assert proposed["planner"] == "llm-proposed-validated-v1"
+    assert proposed["primary"]["type"] == "histogram"
+    assert proposed["secondary"]["type"] == "timeline"
+    assert proposed["case_id"] == base["case_id"]
+    assert proposed["lot_id"] == base["lot_id"]
+    assert proposed["primary"]["evidence_refs"] == base["primary"]["evidence_refs"]
+    assert proposed["primary"]["case_id"] == base["case_id"]
+
+
+def test_invalid_llm_visualization_renderer_falls_back_to_deterministic_plan() -> None:
+    case = {
+        "case_id": "CASE-VIZ-INVALID",
+        "lot_id": "LOT-00125",
+        "classification": "physical_excursion",
+        "anomaly_score": 1.1,
+        "mean_yield": 0.84,
+        "affected_scope": {"equipment": ["CMP-02"], "chambers": ["CMP-02-A"]},
+    }
+    base = visualization_plan(case, [], "sig-invalid")
+    proposed = validated_llm_visualization_plan(
+        base,
+        {
+            "provider": "local-qwen",
+            "visualization_proposal": {
+                "decision_question": "Render arbitrary code",
+                "primary_type": "html",
+                "secondary_type": "timeline",
+                "reason": "unsupported renderer",
+            },
+        },
+    )
+
+    assert proposed["planner"] == "deterministic-situation-aware-v1"
+    assert proposed["proposal_validation"] == "fallback_invalid_renderer"
+    assert proposed["primary"] == base["primary"]
 
 
 def test_incident_episode_clustering_preserves_members_and_reduces_objects() -> None:
@@ -266,6 +325,37 @@ def test_provider_busy_does_not_open_local_failure_circuit() -> None:
     assert status["consecutive_failures"] == 0
     assert status["total_failures"] == 0
     assert status["total_busy_responses"] == 3
+
+
+def test_cpu_histogram_challenger_can_win_on_nonlinear_calibration_pattern() -> None:
+    train_vectors = []
+    train_targets = []
+    calibration_vectors = []
+    calibration_targets = []
+    for index in range(48):
+        value = (index % 16) / 15
+        vector = [value, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        target = 1.0 if 0.25 < value < 0.75 else 0.0
+        if index < 32:
+            train_vectors.append(vector)
+            train_targets.append(target)
+        else:
+            calibration_vectors.append(vector)
+            calibration_targets.append(target)
+
+    selected, comparison = ContinuousIntelligenceService._select_baseline_or_challenger(
+        kind="logistic",
+        train_vectors=train_vectors,
+        train_targets=train_targets,
+        calibration_vectors=calibration_vectors,
+        calibration_targets=calibration_targets,
+    )
+
+    assert comparison["selection_window"] == "CALIBRATION"
+    assert comparison["challenger_algorithm"] == "histogram-stump-boosting-logistic"
+    assert comparison["selected_algorithm"] == "histogram-stump-boosting-logistic"
+    assert comparison["challenger_metrics"]["brier"] < comparison["baseline_metrics"]["brier"]
+    assert selected["kind"] == "histogram-stump-boosting-logistic"
 
 
 def test_gateway_detects_active_loopback_lmstudio_connection(monkeypatch) -> None:

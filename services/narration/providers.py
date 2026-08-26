@@ -38,6 +38,17 @@ DECISION_BRIEF_RESPONSE_SCHEMA: dict[str, Any] = {
         "citations": {"type": "array", "maxItems": 4, "items": {"type": "string"}},
         "uncertainties": {"type": "array", "maxItems": 2, "items": {"type": "string", "maxLength": 240}},
         "limitations": {"type": "array", "minItems": 1, "maxItems": 2, "items": {"type": "string", "maxLength": 240}},
+        "visualization_proposal": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "decision_question": {"type": "string", "maxLength": 180},
+                "primary_type": {"type": "string", "enum": ["timeseries", "heatmap", "histogram", "comparison", "timeline", "graph", "table", "metric"]},
+                "secondary_type": {"type": "string", "enum": ["timeseries", "heatmap", "histogram", "comparison", "timeline", "graph", "table", "metric"]},
+                "reason": {"type": "string", "maxLength": 320},
+            },
+            "required": ["decision_question", "primary_type", "secondary_type", "reason"],
+        },
     },
     "required": [
         "schema_version",
@@ -83,6 +94,16 @@ def _vertex_response_schema(allowed_references: list[str]) -> dict[str, Any]:
             "citations": {"type": "ARRAY", "items": evidence_ref_schema},
             "uncertainties": {"type": "ARRAY", "items": {"type": "STRING"}},
             "limitations": {"type": "ARRAY", "items": {"type": "STRING"}},
+            "visualization_proposal": {
+                "type": "OBJECT",
+                "properties": {
+                    "decision_question": {"type": "STRING"},
+                    "primary_type": {"type": "STRING", "enum": ["timeseries", "heatmap", "histogram", "comparison", "timeline", "graph", "table", "metric"]},
+                    "secondary_type": {"type": "STRING", "enum": ["timeseries", "heatmap", "histogram", "comparison", "timeline", "graph", "table", "metric"]},
+                    "reason": {"type": "STRING"},
+                },
+                "required": ["decision_question", "primary_type", "secondary_type", "reason"],
+            },
         },
         "required": [
             "schema_version",

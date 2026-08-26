@@ -4,6 +4,7 @@ from copy import deepcopy
 from typing import Any
 
 from .assessment import build_situation_assessment
+from .planner import validated_llm_visualization_plan
 
 
 def assessment_request_document(
@@ -44,6 +45,12 @@ def persist_completed_inference(repository: Any, job: dict[str, Any], brief: dic
     visualization_plan = request_document.get("visualization_plan", {})
     previous_report = request_document.get("previous_report")
     trigger_type = str(request_document.get("trigger_type") or job.get("trigger_type") or "material_intelligence_change")
+    validated_plan = validated_llm_visualization_plan(
+        visualization_plan if isinstance(visualization_plan, dict) else {},
+        brief,
+    )
+    if validated_plan.get("planner") == "llm-proposed-validated-v1":
+        repository.append_visualization_plan(validated_plan)
     situation_assessment = build_situation_assessment(
         assessment_id=str(job["assessment_run_id"]),
         case_id=str(job["case_id"]),
@@ -53,7 +60,7 @@ def persist_completed_inference(repository: Any, job: dict[str, Any], brief: dic
         brief=brief,
         previous_report=previous_report if isinstance(previous_report, dict) else None,
         model_versions=dict(request_document.get("model_versions", {})),
-        visualization_plan=visualization_plan if isinstance(visualization_plan, dict) else {},
+        visualization_plan=validated_plan,
         uncertainties=list(request_document.get("uncertainties", [])),
     )
     return repository.append_intelligence_report(
@@ -72,7 +79,7 @@ def persist_completed_inference(repository: Any, job: dict[str, Any], brief: dic
             "brief": brief,
             "situation_assessment": situation_assessment,
             "decision_context": decision_context,
-            "visualization_plan": visualization_plan,
+            "visualization_plan": validated_plan,
             "packet_case_id": packet.get("case_id") if isinstance(packet, dict) else None,
         }
     )

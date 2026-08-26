@@ -593,7 +593,10 @@ html[data-locale="ko"] body { word-break: keep-all; overflow-wrap: break-word; }
 .evidence-inspector > header small { color: var(--ink-muted); font-size: 9px; }
 .evidence-inspector > section { padding: 16px 18px; }
 .inspector-decision-card { background: linear-gradient(160deg, #f5faff, #f8fbfc); }
-.inspector-decision-card > p { margin: 8px 0 12px; font-size: 12px; line-height: 1.45; }
+.inspector-decision-card__heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.inspector-decision-card__heading h3 { min-width: 0; margin: 0; }
+.inspector-decision-card__heading .decision-priority { flex: 0 0 auto; }
+.inspector-decision-card > p { margin: 0 0 14px; font-size: 12px; line-height: 1.5; }
 .inspector-recommendation { display: grid; gap: 3px; border-left: 3px solid #2689b8; padding: 8px 10px; background: #eef8fc; }
 .inspector-recommendation span { color: var(--ink-muted); font-size: 9px; text-transform: uppercase; letter-spacing: .06em; }
 .inspector-recommendation strong { font-size: 12px; }

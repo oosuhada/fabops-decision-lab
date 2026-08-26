@@ -527,7 +527,7 @@ export function OperationsOverview({overview, liveStatus, intelligence, onSelect
         {champions.length ? champions.map((model) => <article key={model.model_name}>
           <div><span>{model.model_name.replaceAll("_", " ")}</span><strong>{model.model_version}</strong></div>
           <div className="model-metric-row"><span>{model.training_rows} rows</span><span>{model.metrics.brier != null ? `Brier ${model.metrics.brier.toFixed(3)}` : `MAE ${(model.metrics.mae ?? 0).toFixed(3)}`}</span><span>{model.metrics.auprc != null ? `AUPRC ${model.metrics.auprc.toFixed(3)}` : model.metrics.rmse != null ? `RMSE ${model.metrics.rmse.toFixed(3)}` : "shadow test"}</span></div>
-          <small>{model.prediction_cutoff ?? "cutoff unknown"} · test {model.test_window?.start_lot ?? "—"}→{model.test_window?.end_lot ?? "—"}</small>
+          <small>{model.parameters.kind ?? "algorithm unknown"} · {model.prediction_cutoff ?? "cutoff unknown"} · test {model.test_window?.start_lot ?? "—"}→{model.test_window?.end_lot ?? "—"}</small>
         </article>) : <p className="muted">The first champion set appears after enough completed lot outcomes are persisted.</p>}
       </div>
       <div className="learned-prediction-grid">
@@ -547,7 +547,7 @@ export function OperationsOverview({overview, liveStatus, intelligence, onSelect
           <span className="eyebrow">Adaptive visualization planner</span>
           <strong>{latestPlan ? `${latestPlan.primary.type} → ${latestPlan.secondary.type}` : "Waiting"}</strong>
           <p>{latestPlan?.rationale ?? "The planner changes chart strategy when the dominant operational question changes."}</p>
-          <small>{latestPlan ? `${latestPlan.primary.title} · ${latestPlan.secondary.title}` : "no plan yet"}</small>
+          <small>{latestPlan ? `${latestPlan.planner} · ${latestPlan.primary.title} · ${latestPlan.secondary.title}` : "no plan yet"}</small>
         </article>
       </div> : null}
       <AdaptiveIntelligenceVisualization intelligence={intelligence} liveStatus={liveStatus} />

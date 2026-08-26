@@ -320,9 +320,79 @@ class ContinuousIntelligenceService:
                     weights[index] -= rate * error * value
         return {"weights": weights, "bias": bias, "temperature": 1.0, "kind": "online-logistic-sgd"}
 
+    @staticmethod
+    def _fit_histogram_boosting(
+        vectors: list[list[float]],
+        targets: list[float],
+        *,
+        classification: bool,
+        rounds: int = 28,
+        learning_rate: float = 0.18,
+    ) -> dict[str, Any]:
+        """Fit a tiny CPU-only boosted histogram stump challenger.
+
+        The feature set is already normalized to [0, 1], so fixed histogram
+        thresholds are deterministic and avoid introducing a heavy ML runtime.
+        This is deliberately a challenger, not an automatic replacement for
+        the online SGD baseline.
+        """
+
+        if classification:
+            positive_rate = (sum(targets) + 1.0) / (len(targets) + 2.0)
+            base = math.log(positive_rate / max(1e-6, 1.0 - positive_rate))
+            raw_predictions = [base] * len(targets)
+            kind = "histogram-stump-boosting-logistic"
+        else:
+            base = sum(targets) / max(1, len(targets))
+            raw_predictions = [base] * len(targets)
+            kind = "histogram-stump-boosting-regression"
+
+        stumps: list[dict[str, float | int]] = []
+        thresholds = (0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875)
+        for _ in range(rounds):
+            current = [_sigmoid(value) for value in raw_predictions] if classification else [_clamp(value) for value in raw_predictions]
+            residuals = [target - prediction for target, prediction in zip(targets, current, strict=True)]
+            best: tuple[float, int, float, float, float] | None = None
+            for feature_index in range(len(FEATURE_NAMES)):
+                for threshold in thresholds:
+                    left_indices = [index for index, vector in enumerate(vectors) if vector[feature_index] <= threshold]
+                    right_indices = [index for index, vector in enumerate(vectors) if vector[feature_index] > threshold]
+                    if len(left_indices) < 2 or len(right_indices) < 2:
+                        continue
+                    left_value = sum(residuals[index] for index in left_indices) / len(left_indices)
+                    right_value = sum(residuals[index] for index in right_indices) / len(right_indices)
+                    error = sum(
+                        (residuals[index] - (left_value if vectors[index][feature_index] <= threshold else right_value)) ** 2
+                        for index in range(len(vectors))
+                    )
+                    if best is None or error < best[0]:
+                        best = (error, feature_index, threshold, left_value, right_value)
+            if best is None:
+                break
+            _error, feature_index, threshold, left_value, right_value = best
+            stumps.append(
+                {
+                    "feature_index": feature_index,
+                    "threshold": threshold,
+                    "left_value": left_value,
+                    "right_value": right_value,
+                }
+            )
+            for index, vector in enumerate(vectors):
+                update = left_value if vector[feature_index] <= threshold else right_value
+                raw_predictions[index] += learning_rate * update
+        return {
+            "kind": kind,
+            "base": base,
+            "learning_rate": learning_rate,
+            "stumps": stumps,
+            "temperature": 1.0 if classification else None,
+            "interval_radius": 0.05 if not classification else None,
+        }
+
     @classmethod
     def _calibrate_temperature(cls, parameters: dict[str, Any], vectors: list[list[float]], targets: list[float]) -> dict[str, Any]:
-        if not vectors or parameters.get("kind") != "online-logistic-sgd":
+        if not vectors or parameters.get("kind") not in {"online-logistic-sgd", "histogram-stump-boosting-logistic"}:
             return parameters
         best_temperature = 1.0
         best_brier = float("inf")
@@ -345,12 +415,65 @@ class ContinuousIntelligenceService:
 
     @staticmethod
     def _predict(parameters: dict[str, Any], vector: list[float]) -> float:
+        kind = str(parameters.get("kind") or "")
+        if kind in {"histogram-stump-boosting-logistic", "histogram-stump-boosting-regression"}:
+            raw = float(parameters.get("base", 0.0))
+            learning_rate = float(parameters.get("learning_rate", 0.18))
+            for stump in parameters.get("stumps", []):
+                feature_index = int(stump["feature_index"])
+                threshold = float(stump["threshold"])
+                raw += learning_rate * float(stump["left_value"] if vector[feature_index] <= threshold else stump["right_value"])
+            if kind == "histogram-stump-boosting-logistic":
+                return _sigmoid(raw / max(0.1, float(parameters.get("temperature", 1.0))))
+            return _clamp(raw)
         raw = float(parameters.get("bias", 0.0)) + sum(
             float(weight) * value for weight, value in zip(parameters.get("weights", []), vector, strict=True)
         )
         if parameters.get("kind") == "online-logistic-sgd":
             return _sigmoid(raw / max(0.1, float(parameters.get("temperature", 1.0))))
         return _clamp(raw)
+
+    @classmethod
+    def _select_baseline_or_challenger(
+        cls,
+        *,
+        kind: str,
+        train_vectors: list[list[float]],
+        train_targets: list[float],
+        calibration_vectors: list[list[float]],
+        calibration_targets: list[float],
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        if kind == "logistic":
+            baseline = cls._calibrate_temperature(cls._fit_logistic(train_vectors, train_targets), calibration_vectors, calibration_targets)
+            challenger = cls._calibrate_temperature(
+                cls._fit_histogram_boosting(train_vectors, train_targets, classification=True),
+                calibration_vectors,
+                calibration_targets,
+            )
+            baseline_metrics = cls._classification_metrics(baseline, calibration_vectors, calibration_targets)
+            challenger_metrics = cls._classification_metrics(challenger, calibration_vectors, calibration_targets)
+            selected = challenger if challenger_metrics["brier"] + 0.002 < baseline_metrics["brier"] else baseline
+            comparison_metric = "brier"
+        else:
+            baseline = cls._calibrate_interval(cls._fit_linear(train_vectors, train_targets), calibration_vectors, calibration_targets)
+            challenger = cls._calibrate_interval(
+                cls._fit_histogram_boosting(train_vectors, train_targets, classification=False),
+                calibration_vectors,
+                calibration_targets,
+            )
+            baseline_metrics = cls._regression_metrics(baseline, calibration_vectors, calibration_targets)
+            challenger_metrics = cls._regression_metrics(challenger, calibration_vectors, calibration_targets)
+            selected = challenger if challenger_metrics["mae"] + 0.002 < baseline_metrics["mae"] else baseline
+            comparison_metric = "mae"
+        return selected, {
+            "selection_window": "CALIBRATION",
+            "comparison_metric": comparison_metric,
+            "baseline_algorithm": baseline.get("kind"),
+            "challenger_algorithm": challenger.get("kind"),
+            "selected_algorithm": selected.get("kind"),
+            "baseline_metrics": baseline_metrics,
+            "challenger_metrics": challenger_metrics,
+        }
 
     @staticmethod
     def _average_precision(predictions: list[float], targets: list[float]) -> float:
@@ -608,13 +731,18 @@ class ContinuousIntelligenceService:
             train_vectors, calibration_vectors, test_vectors = vectors[:train_end], vectors[train_end:calibration_end], vectors[calibration_end:]
             train_targets, calibration_targets, test_targets = targets[:train_end], targets[train_end:calibration_end], targets[calibration_end:]
             test_outcomes = model_outcomes[calibration_end:]
-            parameters = self._fit_linear(train_vectors, train_targets) if kind == "linear" else self._fit_logistic(train_vectors, train_targets)
-            if kind == "logistic":
-                parameters = self._calibrate_temperature(parameters, calibration_vectors, calibration_targets)
-                metrics = self._classification_metrics(parameters, test_vectors, test_targets)
-            else:
-                parameters = self._calibrate_interval(parameters, calibration_vectors, calibration_targets)
-                metrics = self._regression_metrics(parameters, test_vectors, test_targets)
+            parameters, algorithm_comparison = self._select_baseline_or_challenger(
+                kind=kind,
+                train_vectors=train_vectors,
+                train_targets=train_targets,
+                calibration_vectors=calibration_vectors,
+                calibration_targets=calibration_targets,
+            )
+            metrics = (
+                self._classification_metrics(parameters, test_vectors, test_targets)
+                if kind == "logistic"
+                else self._regression_metrics(parameters, test_vectors, test_targets)
+            )
             dataset_fingerprint = self._dataset_fingerprint(model_name, model_outcomes, targets)
             version = self._version(model_name, len(model_outcomes), dataset_fingerprint)
             training_window = {
@@ -650,6 +778,7 @@ class ContinuousIntelligenceService:
                     "calibration_rows": len(calibration_targets),
                     "shadow_test_rows": len(test_targets),
                     "horizon": horizon,
+                    "algorithm_comparison": algorithm_comparison,
                     "shadow_test_by_regime": self._shadow_metrics_by_group(
                         parameters=parameters,
                         vectors=test_vectors,
@@ -815,7 +944,7 @@ class ContinuousIntelligenceService:
                 "source_event_time": snapshot["feature_timestamp"],
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "trained_model": True,
-                "calibrated": model["parameters"].get("kind") == "online-logistic-sgd" and "temperature" in model["parameters"],
+                "calibrated": model["parameters"].get("kind") in {"online-logistic-sgd", "histogram-stump-boosting-logistic"} and "temperature" in model["parameters"],
                 "target_definition": model.get("target_definition"),
             }
             if target == "final_yield":
