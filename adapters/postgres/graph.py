@@ -156,28 +156,50 @@ class PostgresGraphProjection:
 
     def outgoing(self, source_kind: str, source_id: str, relation: str | None = None) -> list[GraphEdge]:
         with self._connection() as connection:
-            rows = connection.execute(
-                """
-                SELECT source_kind, source_id, relation, target_kind, target_id
-                FROM fabops_rca_edges
-                WHERE source_kind = %s AND source_id = %s AND (%s IS NULL OR relation = %s)
-                ORDER BY relation, target_kind, target_id
-                """,
-                (source_kind, source_id, relation, relation),
-            ).fetchall()
+            if relation is None:
+                rows = connection.execute(
+                    """
+                    SELECT source_kind, source_id, relation, target_kind, target_id
+                    FROM fabops_rca_edges
+                    WHERE source_kind = %s AND source_id = %s
+                    ORDER BY relation, target_kind, target_id
+                    """,
+                    (source_kind, source_id),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT source_kind, source_id, relation, target_kind, target_id
+                    FROM fabops_rca_edges
+                    WHERE source_kind = %s AND source_id = %s AND relation = %s
+                    ORDER BY relation, target_kind, target_id
+                    """,
+                    (source_kind, source_id, relation),
+                ).fetchall()
         return [self._edge(row) for row in rows]
 
     def incoming(self, target_kind: str, target_id: str, relation: str | None = None) -> list[GraphEdge]:
         with self._connection() as connection:
-            rows = connection.execute(
-                """
-                SELECT source_kind, source_id, relation, target_kind, target_id
-                FROM fabops_rca_edges
-                WHERE target_kind = %s AND target_id = %s AND (%s IS NULL OR relation = %s)
-                ORDER BY relation, source_kind, source_id
-                """,
-                (target_kind, target_id, relation, relation),
-            ).fetchall()
+            if relation is None:
+                rows = connection.execute(
+                    """
+                    SELECT source_kind, source_id, relation, target_kind, target_id
+                    FROM fabops_rca_edges
+                    WHERE target_kind = %s AND target_id = %s
+                    ORDER BY relation, source_kind, source_id
+                    """,
+                    (target_kind, target_id),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT source_kind, source_id, relation, target_kind, target_id
+                    FROM fabops_rca_edges
+                    WHERE target_kind = %s AND target_id = %s AND relation = %s
+                    ORDER BY relation, source_kind, source_id
+                    """,
+                    (target_kind, target_id, relation),
+                ).fetchall()
         return [self._edge(row) for row in rows]
 
     def prune_to_lots(self, keep_lots: set[str]) -> None:
