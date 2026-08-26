@@ -65,11 +65,11 @@ DECISION_BRIEF_RESPONSE_SCHEMA: dict[str, Any] = {
 }
 
 
-def _vertex_response_schema(allowed_references: list[str]) -> dict[str, Any]:
+def _vertex_response_schema(allowed_references: list[str], *, require_visualization: bool = False) -> dict[str, Any]:
     evidence_ref_schema: dict[str, Any] = {"type": "STRING"}
     if allowed_references:
         evidence_ref_schema["enum"] = allowed_references
-    return {
+    schema = {
         "type": "OBJECT",
         "properties": {
             "schema_version": {"type": "STRING", "enum": ["decision-brief-v1"]},
@@ -118,6 +118,9 @@ def _vertex_response_schema(allowed_references: list[str]) -> dict[str, Any]:
             "limitations",
         ],
     }
+    if require_visualization:
+        schema["required"] = [*schema["required"], "visualization_proposal"]
+    return schema
 
 
 class NarrationProviderPort(Protocol):
@@ -183,6 +186,8 @@ class OpenAICompatibleNarrationProvider:
 
     def generate_json(self, system_prompt: str, payload: dict[str, Any]) -> dict[str, Any]:
         response_schema = copy.deepcopy(DECISION_BRIEF_RESPONSE_SCHEMA)
+        if payload.get("intent") == "situation_update":
+            response_schema["required"] = [*response_schema["required"], "visualization_proposal"]
         allowed_references = [str(value) for value in payload.get("allowed_evidence_refs", []) if isinstance(value, str)]
         if allowed_references:
             response_schema["properties"]["citations"]["items"]["enum"] = allowed_references
@@ -276,7 +281,8 @@ class VertexAINarrationProvider:
                     "maxOutputTokens": self.max_output_tokens,
                     "responseMimeType": "application/json",
                     "responseSchema": _vertex_response_schema(
-                        [str(value) for value in payload.get("allowed_evidence_refs", []) if isinstance(value, str)]
+                        [str(value) for value in payload.get("allowed_evidence_refs", []) if isinstance(value, str)],
+                        require_visualization=payload.get("intent") == "situation_update",
                     ),
                     "thinkingConfig": {"thinkingBudget": 0},
                 },

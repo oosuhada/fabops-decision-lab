@@ -345,6 +345,7 @@ class NarrationService:
         prompt_payload = {
             "decision_packet": packet,
             "allowed_evidence_refs": allowed_evidence_refs(packet),
+            "allowed_visualization_types": ["timeseries", "heatmap", "histogram", "comparison", "timeline", "graph", "table", "metric"],
             "audience": audience,
             "intent": intent,
         }
