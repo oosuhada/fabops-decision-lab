@@ -6,6 +6,9 @@ export interface ProjectionStatus {
   projection_checkpoint: number;
   lag_events: number;
   stale: boolean;
+  lag_seconds?: number | null;
+  last_successful_projection?: string | null;
+  slo_state?: "MET" | "BREACHED" | "UNKNOWN" | string;
 }
 
 export interface FabCase {

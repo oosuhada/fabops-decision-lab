@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from adapters.neo4j import Neo4jConfig, Neo4jDriverProjectionAdapter
-from adapters.postgres import PostgresConfig, PostgresRepository, ReadOnlyPostgresRepository
+from adapters.postgres import PostgresConfig, PostgresGraphProjection, PostgresRepository, ReadOnlyPostgresRepository
 from adapters.redpanda.adapter import RedpandaConfig, RedpandaEventBusAdapter
 from services.advisory.provider import DeterministicAdvisoryProvider
 from services.advisory.tools import ToolRegistry
@@ -16,7 +16,7 @@ from services.ingestion.adapters import InMemoryCaseRepository, InMemoryEventRep
 from services.ingestion.service import IngestionService
 from services.observability.telemetry import TelemetryRecorder
 from services.rca.cqrs import RcaQueryService
-from services.rca.graph import InMemoryGraphProjection
+from services.rca.graph import GraphProjectionPort, InMemoryGraphProjection
 from services.rca.projection import RcaProjectionWorker
 from services.workflow.state_machine import AuthorizationError, CaseWorkflowService
 from simulator.config import SimulatorConfig, load_config
@@ -210,7 +210,7 @@ class DatabaseReadOnlyRuntime:
     quarantine: ReadOnlyPostgresRepository
     detector: DeterministicDetector
     ingestion: IngestionService
-    graph: InMemoryGraphProjection
+    graph: GraphProjectionPort
     projection: RcaProjectionWorker
     queries: RcaQueryService
     tools: ToolRegistry
@@ -239,7 +239,7 @@ class DatabaseReadOnlyRuntime:
             counter = getattr(self.event_repository, "event_count", None)
             event_count = int(counter()) if callable(counter) else len(self.event_repository.all_events())
             detection_checkpoint = self.event_repository.checkpoint("detection")
-            projection = self.projection.catch_up()
+            projection = self.projection.status() if getattr(self.graph, "writable", True) is False else self.projection.catch_up()
             source_ready = event_count > 0 and detection_checkpoint == event_count
             projection_payload = {
                 "projection_version": projection.projection_version,
@@ -403,10 +403,17 @@ def build_database_readonly_runtime(seed: int = 42, profile: str = "test", telem
     if not repository.healthcheck():
         raise RuntimeError("configured PostgreSQL source is unavailable")
 
-    graph = InMemoryGraphProjection()
     graph_window_lots = max(50, int(os.environ.get("FABOPS_GRAPH_WINDOW_LOTS", "250")))
-    projection = RcaProjectionWorker(repository, graph, telemetry=recorder, window_lots=graph_window_lots)
-    projection.rebuild_recent()
+    projection_backend = os.environ.get("FABOPS_PROJECTION_BACKEND", "memory").strip().lower()
+    if projection_backend == "postgres":
+        graph: GraphProjectionPort = PostgresGraphProjection(postgres_dsn, writable=False)
+        projection = RcaProjectionWorker(repository, graph, telemetry=recorder, window_lots=graph_window_lots)
+    elif projection_backend == "memory":
+        graph = InMemoryGraphProjection()
+        projection = RcaProjectionWorker(repository, graph, telemetry=recorder, window_lots=graph_window_lots)
+        projection.rebuild_recent()
+    else:
+        raise ValueError(f"unsupported FABOPS_PROJECTION_BACKEND: {projection_backend}")
     detector = DeterministicDetector(repository, telemetry=recorder)
     ingestion = IngestionService(repository, repository, repository, detector.consume, telemetry=recorder, transaction_factory=repository.transaction)
     queries = RcaQueryService(graph, repository, projection, telemetry=recorder)

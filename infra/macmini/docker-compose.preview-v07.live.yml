@@ -4,6 +4,7 @@ services:
       FABOPS_DATA_SOURCE: database
       FABOPS_LIVE_ENABLED: "true"
       FABOPS_GRAPH_WINDOW_LOTS: ${FABOPS_GRAPH_WINDOW_LOTS:-250}
+      FABOPS_PROJECTION_BACKEND: postgres
       FABOPS_POSTGRES_DSN: postgresql://fabops:${FABOPS_LIVE_POSTGRES_PASSWORD:?FABOPS_LIVE_POSTGRES_PASSWORD must be set}@live-postgres:5432/fabops
     depends_on:
       live-init:
@@ -167,6 +168,35 @@ services:
       FABOPS_REDPANDA_GROUP: fabops-preview-live-stream-v1
       FABOPS_STREAM_PROJECTION_MODE: postgres-only
     command: ["python", "-m", "systems.stream_worker.main"]
+    networks: [preview]
+
+  projection-worker:
+    profiles: ["live"]
+    build:
+      context: ${FABOPS_PUBLIC_SOURCE_ROOT:?FABOPS_PUBLIC_SOURCE_ROOT must be set}
+      dockerfile: infra/macmini/Dockerfile.api
+      args:
+        FABOPS_RELEASE_VERSION: ${FABOPS_CANDIDATE_LABEL:-0.6.0-v0.9-intelligence-candidate}
+        FABOPS_RELEASE_HASH: ${FABOPS_BASE_RELEASE_HASH:-ab8b20a696b9b1996495f23a3e413cc33a67b6861efa184c64742e0f310c6326}
+        FABOPS_DEPLOY_GIT_SHA: ${FABOPS_PUBLIC_GIT_SHA}
+        FABOPS_BASE_RELEASE_VERSION: ${FABOPS_BASE_RELEASE_VERSION:-0.6.0}
+        FABOPS_DEPLOYMENT_KIND: candidate
+        FABOPS_DEPLOYMENT_CHANNEL: public-preview
+        FABOPS_CANDIDATE_LABEL: ${FABOPS_CANDIDATE_LABEL:-0.6.0-v0.9-intelligence-candidate}
+        FABOPS_DEPLOYMENT_HASH: candidate-${FABOPS_PUBLIC_GIT_SHA}
+    restart: unless-stopped
+    cpus: 0.3
+    mem_limit: 384m
+    depends_on:
+      live-init:
+        condition: service_completed_successfully
+      live-postgres:
+        condition: service_healthy
+    environment:
+      FABOPS_POSTGRES_DSN: postgresql://fabops:${FABOPS_LIVE_POSTGRES_PASSWORD}@live-postgres:5432/fabops
+      FABOPS_GRAPH_WINDOW_LOTS: ${FABOPS_GRAPH_WINDOW_LOTS:-250}
+      FABOPS_PROJECTION_INTERVAL_SECONDS: ${FABOPS_PROJECTION_INTERVAL_SECONDS:-1.0}
+    command: ["python", "-m", "systems.projection_worker.main"]
     networks: [preview]
 
   intelligence-worker:

@@ -5,7 +5,7 @@ from typing import Any
 
 from services.ingestion.ports import CaseRepositoryPort
 from services.observability.telemetry import TelemetryRecorder
-from services.rca.graph import GraphProjectionPort
+from services.rca.graph import GraphProjectionPort, InMemoryGraphProjection
 from services.rca.projection import RcaProjectionWorker
 from services.rca.ranking import TransparentRcaRanker
 
@@ -53,6 +53,21 @@ class RcaQueryService:
         self.ranker = TransparentRcaRanker(graph)
         self.telemetry = telemetry
 
+    def _graph_for_lot(self, lot_id: str) -> GraphProjectionPort:
+        indexed = getattr(self.graph, "nodes_for_lot", None)
+        if callable(indexed) and indexed("Lot", lot_id):
+            return self.graph
+        if getattr(self.graph, "writable", True) is not False:
+            return self.graph
+        lot_event_reader = getattr(self.worker.events, "events_for_lots", None)
+        if not callable(lot_event_reader):
+            return self.graph
+        hydrated = InMemoryGraphProjection()
+        temporary_worker = RcaProjectionWorker(self.worker.events, hydrated)
+        for stored in lot_event_reader([lot_id]):
+            temporary_worker.project_stored(stored)
+        return hydrated
+
     def execute(self, query: TraceAffectedLotsQuery | RankRootCausesQuery | ProjectionStatusQuery) -> dict[str, Any]:
         if self.telemetry is not None:
             case_id = getattr(query, "case_id", None)
@@ -67,18 +82,21 @@ class RcaQueryService:
         case = self.cases.get_case(query.case_id)
         if case is None:
             raise KeyError(query.case_id)
-        ensure_lot = getattr(self.worker, "ensure_lot", None)
-        if callable(ensure_lot):
-            ensure_lot(str(case["lot_id"]))
+        lot_id = str(case["lot_id"])
+        graph = self._graph_for_lot(lot_id)
+        if graph is self.graph:
+            ensure_lot = getattr(self.worker, "ensure_lot", None)
+            if callable(ensure_lot):
+                ensure_lot(lot_id)
         if isinstance(query, RankRootCausesQuery):
-            return {"case_id": query.case_id, "projection": status, "candidates": self.ranker.rank(case)}
-        lot_id = case["lot_id"]
-        indexed = getattr(self.graph, "nodes_for_lot", None)
-        runs = indexed("ProcessRun", lot_id) if callable(indexed) else [node for node in self.graph.nodes("ProcessRun") if node.properties.get("lot_id") == lot_id]
+            ranker = self.ranker if graph is self.graph else TransparentRcaRanker(graph)
+            return {"case_id": query.case_id, "projection": status, "candidates": ranker.rank(case)}
+        indexed = getattr(graph, "nodes_for_lot", None)
+        runs = indexed("ProcessRun", lot_id) if callable(indexed) else [node for node in graph.nodes("ProcessRun") if node.properties.get("lot_id") == lot_id]
         path = []
         for run in sorted(runs, key=lambda node: node.properties.get("event_time", "")):
-            chamber_edges = self.graph.outgoing("ProcessRun", run.node_id, "USED_CHAMBER")
-            equipment_edges = self.graph.outgoing("ProcessRun", run.node_id, "USED")
+            chamber_edges = graph.outgoing("ProcessRun", run.node_id, "USED_CHAMBER")
+            equipment_edges = graph.outgoing("ProcessRun", run.node_id, "USED")
             path.append(
                 {
                     "lot_id": lot_id,

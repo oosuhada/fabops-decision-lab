@@ -92,6 +92,8 @@ def get_runtime() -> Runtime:
 
 def _refresh_projection(runtime: Runtime) -> None:
     """Catch a long-lived API process up with newly persisted source events."""
+    if getattr(runtime.graph, "writable", True) is False:
+        return
     try:
         with _PROJECTION_REFRESH_LOCK:
             runtime.projection.catch_up()
@@ -107,7 +109,10 @@ async def _continuous_projection_loop() -> None:
 
 @app.on_event("startup")
 async def start_continuous_projection() -> None:
-    if os.getenv("FABOPS_LIVE_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}:
+    if (
+        os.getenv("FABOPS_LIVE_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+        and getattr(get_runtime().graph, "writable", True) is not False
+    ):
         app.state.projection_task = asyncio.create_task(_continuous_projection_loop())
 
 

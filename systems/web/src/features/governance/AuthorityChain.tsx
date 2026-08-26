@@ -4,7 +4,7 @@ export function AuthorityChain({projection}: {projection: ProjectionStatus | nul
   const stages = [
     {id: "source", label: "Authoritative source", owner: "PostgreSQL / event log", role: "Observed operational facts"},
     {id: "deterministic", label: "Deterministic computation", owner: "SPC / RCA services", role: "Classification, score, recommendation"},
-    {id: "projection", label: "Rebuildable projection", owner: "Neo4j", role: projection?.stale ? `STALE · ${projection.lag_events} events` : "Current read projection"},
+    {id: "projection", label: "Rebuildable projection", owner: "Persistent read model", role: projection?.stale ? `STALE · ${projection.lag_events} events` : `Current read projection${projection?.slo_state ? ` · SLO ${projection.slo_state}` : ""}`},
     {id: "advisory", label: "System advisory", owner: "Evidence-grounded logic", role: "Proposal only · no mutation authority"},
     {id: "wording", label: "AI wording", owner: "Bounded PresentationSpec", role: "Wording only · recommendation immutable"},
     {id: "human", label: "Human authority", owner: "Yield / Process Engineer", role: "Approve, reject, request evidence"},

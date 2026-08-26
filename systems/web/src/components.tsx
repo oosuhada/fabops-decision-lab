@@ -36,7 +36,9 @@ export function MetricStrip({items}: {items: Array<{label: string; value: string
 
 export function ProjectionBadge({projection}: {projection: ProjectionStatus}) {
   return <span className={`projection-badge ${projection.stale ? "is-stale" : "is-fresh"}`}>
-    {projection.stale ? `STALE · ${projection.lag_events} events` : "PROJECTION FRESH"}
+    {projection.stale
+      ? `STALE · ${projection.lag_events} events${projection.slo_state ? ` · SLO ${projection.slo_state}` : ""}`
+      : `PROJECTION FRESH${projection.slo_state ? ` · SLO ${projection.slo_state}` : ""}`}
   </span>;
 }
 
@@ -141,7 +143,7 @@ export function EvidenceInspector({selectedCase, selectedPacket, projection, sou
       <dl className="property-list">
         <div><dt>Source timestamp</dt><dd>{sourceTimestamp ?? "—"}</dd></div>
         <div><dt>Projection</dt><dd>{projection?.projection_version ?? "—"}</dd></div>
-        <div><dt>Projection lag</dt><dd>{projection?.lag_events ?? "—"}</dd></div>
+        <div><dt>Projection lag</dt><dd>{projection ? `${projection.lag_events} events${projection.lag_seconds != null ? ` · ${projection.lag_seconds.toFixed(1)}s since checkpoint` : ""}` : "—"}</dd></div>
         <div><dt>Selected step</dt><dd>{selectedStep ?? "All steps"}</dd></div>
       </dl>
     </section>

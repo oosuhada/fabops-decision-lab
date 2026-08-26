@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 from services.ingestion.ports import EventRepositoryPort, StoredEvent
@@ -17,6 +18,9 @@ class ProjectionStatus:
     projection_checkpoint: int
     lag_events: int
     stale: bool
+    lag_seconds: float | None = None
+    last_successful_projection: str | None = None
+    slo_state: str = "UNKNOWN"
 
 
 class RcaProjectionWorker:
@@ -30,12 +34,27 @@ class RcaProjectionWorker:
         self.events = event_repository
         self.graph = graph
         self.telemetry = telemetry
-        self.projection_checkpoint = 0
+        persisted_checkpoint = getattr(graph, "projection_checkpoint", None)
+        self.projection_checkpoint = int(persisted_checkpoint()) if callable(persisted_checkpoint) else 0
         self.window_lots = window_lots
+
+    @property
+    def projection_version(self) -> str:
+        return str(getattr(self.graph, "projection_version", PROJECTION_VERSION))
+
+    def _persist_checkpoint(self) -> None:
+        writer = getattr(self.graph, "set_projection_checkpoint", None)
+        if callable(writer):
+            writer(self.projection_checkpoint)
+
+    def _refresh_checkpoint(self) -> None:
+        reader = getattr(self.graph, "projection_checkpoint", None)
+        if callable(reader):
+            self.projection_checkpoint = int(reader())
 
     def rebuild(self) -> ProjectionStatus:
         if self.telemetry is not None:
-            with self.telemetry.operation("projection.rebuild", projection_version=PROJECTION_VERSION):
+            with self.telemetry.operation("projection.rebuild", projection_version=self.projection_version):
                 return self._rebuild()
         return self._rebuild()
 
@@ -44,6 +63,7 @@ class RcaProjectionWorker:
         self.projection_checkpoint = 0
         for stored in self.events.all_events():
             self.project_stored(stored)
+        self._persist_checkpoint()
         return self.status()
 
     def rebuild_recent(self) -> ProjectionStatus:
@@ -59,6 +79,7 @@ class RcaProjectionWorker:
         latest = latest_reader() if callable(latest_reader) else None
         if latest is not None:
             self.projection_checkpoint = max(self.projection_checkpoint, latest.sequence)
+        self._persist_checkpoint()
         return self.status()
 
     def _prune_window(self) -> None:
@@ -71,6 +92,7 @@ class RcaProjectionWorker:
 
     def catch_up(self) -> ProjectionStatus:
         incremental = getattr(self.events, "events_after", None)
+        projected_any = False
         if callable(incremental):
             while True:
                 batch = incremental(self.projection_checkpoint, 2000)
@@ -78,18 +100,25 @@ class RcaProjectionWorker:
                     break
                 for stored in batch:
                     self.project_stored(stored)
+                    projected_any = True
+                self._persist_checkpoint()
                 if len(batch) < 2000:
                     break
         else:
             for stored in self.events.all_events():
                 if stored.sequence > self.projection_checkpoint:
                     self.project_stored(stored)
-        self._prune_window()
+                    projected_any = True
+            self._persist_checkpoint()
+        if projected_any:
+            self._prune_window()
         return self.status()
 
     def ensure_lot(self, lot_id: str) -> None:
         nodes_for_lot = getattr(self.graph, "nodes_for_lot", None)
         if callable(nodes_for_lot) and nodes_for_lot("Lot", lot_id):
+            return
+        if getattr(self.graph, "writable", True) is False:
             return
         lot_event_reader = getattr(self.events, "events_for_lots", None)
         if not callable(lot_event_reader):
@@ -102,10 +131,32 @@ class RcaProjectionWorker:
             self.projection_checkpoint = previous_checkpoint
 
     def status(self) -> ProjectionStatus:
+        self._refresh_checkpoint()
         counter = getattr(self.events, "event_count", None)
         source_checkpoint = int(counter()) if callable(counter) else len(self.events.all_events())
         lag = max(0, source_checkpoint - self.projection_checkpoint)
-        return ProjectionStatus(PROJECTION_VERSION, source_checkpoint, self.projection_checkpoint, lag, lag > 0)
+        updated_reader = getattr(self.graph, "projection_updated_at", None)
+        updated_at = updated_reader() if callable(updated_reader) else None
+        lag_seconds: float | None = None
+        last_successful_projection: str | None = None
+        if updated_at is not None:
+            if updated_at.tzinfo is None:
+                updated_at = updated_at.replace(tzinfo=timezone.utc)
+            lag_seconds = max(0.0, (datetime.now(timezone.utc) - updated_at).total_seconds())
+            last_successful_projection = updated_at.isoformat()
+        max_lag_events = 25
+        max_lag_seconds = 30.0
+        slo_state = "MET" if lag <= max_lag_events and (lag_seconds is None or lag_seconds <= max_lag_seconds or lag == 0) else "BREACHED"
+        return ProjectionStatus(
+            self.projection_version,
+            source_checkpoint,
+            self.projection_checkpoint,
+            lag,
+            lag > 0,
+            round(lag_seconds, 3) if lag_seconds is not None else None,
+            last_successful_projection,
+            slo_state,
+        )
 
     def project_stored(self, stored: StoredEvent) -> None:
         if self.telemetry is None:
@@ -117,7 +168,7 @@ class RcaProjectionWorker:
             with self.telemetry.operation(
                 "projection.project_event",
                 event_id=stored.event.get("event_id"),
-                projection_version=PROJECTION_VERSION,
+                projection_version=self.projection_version,
                 source_sequence=stored.sequence,
             ):
                 self._project_event(stored.event)
@@ -221,6 +272,7 @@ class RcaProjectionWorker:
                 maintenance_id,
                 {
                     "maintenance_id": maintenance_id,
+                    "lot_id": lot_id,
                     "maintenance_type": payload["maintenance_type"],
                     "result": payload["result"],
                     "equipment_id": equipment_id,
