@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import datetime, timedelta, timezone
 
 from adapters.acl.canonical import CanonicalInputAdapter
 from adapters.neo4j.adapter import Neo4jProjectionAdapter
@@ -20,6 +21,29 @@ from services.rca.graph import InMemoryGraphProjection
 from services.rca.projection import PROJECTION_VERSION, RcaProjectionWorker
 from simulator.config import load_config
 from simulator.fabtwin import FabTwinSimulator, canonical_hash
+
+
+class _PersistentStatusEvents:
+    def __init__(self, count: int) -> None:
+        self.count = count
+
+    def event_count(self) -> int:
+        return self.count
+
+
+class _PersistentStatusGraph(InMemoryGraphProjection):
+    projection_version = "rca-postgres-graph-v2.0.0"
+
+    def __init__(self, checkpoint: int, updated_at: datetime) -> None:
+        super().__init__()
+        self._checkpoint = checkpoint
+        self._updated_at = updated_at
+
+    def projection_checkpoint(self) -> int:
+        return self._checkpoint
+
+    def projection_updated_at(self) -> datetime:
+        return self._updated_at
 
 
 def _built(seed: int = 42):
@@ -47,6 +71,19 @@ def test_projection_models_required_traceability_entities():
     assert status.projection_version == PROJECTION_VERSION
     assert status.stale is False
     assert status.lag_events == 0
+
+
+def test_persistent_projection_stale_state_tracks_slo_breach_not_small_live_lag():
+    current_graph = _PersistentStatusGraph(90, datetime.now(timezone.utc))
+    current = RcaProjectionWorker(_PersistentStatusEvents(100), current_graph).status()
+    assert current.lag_events == 10
+    assert current.slo_state == "MET"
+    assert current.stale is False
+
+    old_graph = _PersistentStatusGraph(90, datetime.now(timezone.utc) - timedelta(seconds=45))
+    breached = RcaProjectionWorker(_PersistentStatusEvents(100), old_graph).status()
+    assert breached.slo_state == "BREACHED"
+    assert breached.stale is True
 
 
 def test_manual_trace_query_answers_lot_step_equipment_chamber_recipe():

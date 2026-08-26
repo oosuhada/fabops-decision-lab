@@ -147,12 +147,13 @@ class RcaProjectionWorker:
         max_lag_events = 25
         max_lag_seconds = 30.0
         slo_state = "MET" if lag <= max_lag_events and (lag_seconds is None or lag_seconds <= max_lag_seconds or lag == 0) else "BREACHED"
+        stale = (slo_state == "BREACHED") if updated_at is not None else lag > 0
         return ProjectionStatus(
             self.projection_version,
             source_checkpoint,
             self.projection_checkpoint,
             lag,
-            lag > 0,
+            stale,
             round(lag_seconds, 3) if lag_seconds is not None else None,
             last_successful_projection,
             slo_state,
