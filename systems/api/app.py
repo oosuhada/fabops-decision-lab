@@ -163,6 +163,12 @@ def _continuous_intelligence_status(runtime: Runtime) -> dict[str, Any]:
             "champions": {},
             "latest_predictions": [],
             "feedback": {},
+            "human_feedback": {
+                "total": 0,
+                "by_type": {},
+                "training_policy": "persist-for-evaluation-and-curation-only",
+                "automatic_retraining_from_clicks": False,
+            },
             "drift": {"status": "unavailable", "score": 0.0, "recent_rows": 0, "baseline_rows": 0},
             "reports": [],
             "visualization_plans": [],
@@ -344,6 +350,23 @@ class ProposalRequest(BaseModel):
 
 class DecisionRequest(BaseModel):
     reason: str = Field(min_length=3, max_length=800)
+
+
+class HumanFeedbackRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    feedback_type: Literal[
+        "useful",
+        "not_useful",
+        "false_positive",
+        "true_positive",
+        "wrong_priority",
+        "wrong_mechanism",
+        "investigation_confirmed",
+        "investigation_contradicted",
+    ]
+    prediction_target: str | None = Field(default=None, max_length=120)
+    note: str | None = Field(default=None, max_length=500)
 
 
 class CloseRequest(BaseModel):
@@ -875,6 +898,83 @@ def precompute_narration(
                 }
             )
     return {"source": "internal-precompute", "generated": generated, "count": len(generated)}
+
+
+@app.post("/api/cases/{case_id}/feedback")
+def submit_human_feedback(
+    case_id: str,
+    body: HumanFeedbackRequest,
+    identity: Annotated[tuple[str, str], Depends(actor_headers)],
+    runtime: Annotated[Runtime, Depends(get_runtime)],
+    preview_mode: Annotated[str | None, Header(alias="X-FabOps-Preview-Mode")] = None,
+) -> dict[str, Any]:
+    # The public preview ingress marks requests read-only. Human feedback is a
+    # private/operator write path and must not turn an anonymous portfolio URL
+    # into a generally writable database surface.
+    if str(preview_mode or "").strip().lower() == "read-only":
+        raise HTTPException(status_code=403, detail="human feedback is disabled on the read-only public preview")
+    case = runtime.case_repository.get_case(case_id)
+    if case is None:
+        raise HTTPException(status_code=404, detail="case not found")
+    dsn = os.getenv("FABOPS_POSTGRES_DSN", "").strip()
+    if not dsn:
+        raise HTTPException(status_code=503, detail="human feedback persistence is unavailable")
+    repository = PostgresRepository(PostgresConfig(dsn))
+    lot_id = str(case.get("lot_id") or "")
+    predictions = ContinuousIntelligenceService.semantic_v2_predictions(
+        repository.latest_predictions_for_lots([lot_id]).get(lot_id, [])
+    )
+    selected_prediction = next(
+        (item for item in predictions if body.prediction_target and item.get("target") == body.prediction_target),
+        None,
+    )
+    ordered_outcomes = ContinuousIntelligenceService._ordered_outcomes(repository.learning_outcomes())
+    outcome_index = next((index for index, item in enumerate(ordered_outcomes) if str(item.get("lot_id")) == lot_id), None)
+    current_outcome = ordered_outcomes[outcome_index] if outcome_index is not None else None
+    next_outcome = ordered_outcomes[outcome_index + 1] if outcome_index is not None and outcome_index + 1 < len(ordered_outcomes) else None
+    actual_outcome: Any = None
+    if body.prediction_target == "final_yield" and current_outcome is not None:
+        actual_outcome = current_outcome.get("yield_value")
+    elif body.prediction_target == "final_excursion_probability" and current_outcome is not None:
+        actual_outcome = bool(current_outcome.get("physical_excursion"))
+    elif body.prediction_target == "next_lot_excursion_alarm_probability" and next_outcome is not None:
+        actual_outcome = bool(next_outcome.get("physical_excursion") or next_outcome.get("equipment_alarm"))
+    elif body.prediction_target == "next_lot_maintenance_attention_probability" and next_outcome is not None:
+        actual_outcome = bool(next_outcome.get("maintenance_attention"))
+    role, actor = identity
+    feedback = repository.append_human_feedback(
+        {
+            "case_id": case_id,
+            "lot_id": lot_id,
+            "feedback_type": body.feedback_type,
+            "prediction_id": selected_prediction.get("prediction_id") if selected_prediction else None,
+            "prediction_target": body.prediction_target,
+            "actor": actor,
+            "actor_role": role,
+            "note": body.note,
+            "model_prediction": (
+                {
+                    "prediction_id": selected_prediction.get("prediction_id"),
+                    "target": selected_prediction.get("target"),
+                    "score": selected_prediction.get("score"),
+                    "model_version": selected_prediction.get("model_version"),
+                }
+                if selected_prediction
+                else None
+            ),
+            "human_assessment": body.feedback_type,
+            "actual_outcome": actual_outcome,
+            "governance": {
+                "automatic_retraining": False,
+                "use": "evaluation-threshold-tuning-and-curated-candidate-datasets",
+            },
+        }
+    )
+    return {
+        "source": "structured-human-feedback",
+        "feedback": feedback,
+        "training_policy": "persist-first-no-direct-retraining",
+    }
 
 
 @app.post("/api/cases/{case_id}/request-evidence")

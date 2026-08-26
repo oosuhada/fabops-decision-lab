@@ -450,6 +450,63 @@ class ContinuousIntelligenceService:
             return 1.0 - float(metrics.get("mae", 1.0))
         return 1.0 - float(metrics.get("brier", 1.0))
 
+    @classmethod
+    def _promotion_gate(
+        cls,
+        *,
+        model_name: str,
+        candidate_metrics: dict[str, Any],
+        incumbent_metrics: dict[str, Any] | None,
+    ) -> tuple[bool, dict[str, Any]]:
+        """Compare candidate and incumbent on the exact same shadow window.
+
+        Registry metrics from an older champion belong to its historical test
+        window and are not directly comparable with a newly trained candidate.
+        Promotion therefore re-scores the incumbent parameters on the current
+        candidate shadow window before applying non-regression guardrails.
+        """
+
+        if incumbent_metrics is None:
+            return True, {
+                "decision": "initial_champion",
+                "minimum_quality_improvement": None,
+                "guardrails_met": True,
+            }
+        candidate_quality = cls._quality(model_name, candidate_metrics)
+        incumbent_quality = cls._quality(model_name, incumbent_metrics)
+        minimum_improvement = 0.002 if model_name == "final_yield_post_cmp" else 0.003
+        quality_delta = candidate_quality - incumbent_quality
+        guardrails: dict[str, bool]
+        if model_name == "final_yield_post_cmp":
+            guardrails = {
+                "bias_non_regression": abs(float(candidate_metrics.get("bias", 1.0)))
+                <= abs(float(incumbent_metrics.get("bias", 1.0))) + 0.01,
+                "interval_coverage_non_regression": float(candidate_metrics.get("interval_coverage", 0.0))
+                >= float(incumbent_metrics.get("interval_coverage", 0.0)) - 0.10,
+            }
+        else:
+            guardrails = {
+                "auprc_non_regression": float(candidate_metrics.get("auprc", 0.0))
+                >= float(incumbent_metrics.get("auprc", 0.0)) - 0.02,
+                "false_positive_rate_non_regression": float(candidate_metrics.get("false_positive_rate", 1.0))
+                <= float(incumbent_metrics.get("false_positive_rate", 1.0)) + 0.05,
+                "calibration_non_regression": float(candidate_metrics.get("calibration_error", 1.0))
+                <= float(incumbent_metrics.get("calibration_error", 1.0)) + 0.03,
+                "recall_non_regression": float(candidate_metrics.get("recall", 0.0))
+                >= float(incumbent_metrics.get("recall", 0.0)) - 0.10,
+            }
+        guardrails_met = all(guardrails.values())
+        promoted = quality_delta >= minimum_improvement and guardrails_met
+        return promoted, {
+            "decision": "promote" if promoted else "reject",
+            "minimum_quality_improvement": minimum_improvement,
+            "candidate_quality": round(candidate_quality, 6),
+            "incumbent_quality_same_shadow": round(incumbent_quality, 6),
+            "quality_delta_same_shadow": round(quality_delta, 6),
+            "guardrails": guardrails,
+            "guardrails_met": guardrails_met,
+        }
+
     @staticmethod
     def _temporal_split(length: int) -> tuple[int, int]:
         if length < 12:
@@ -613,18 +670,33 @@ class ContinuousIntelligenceService:
                 },
             }
             incumbent = champions.get(model_name)
+            incumbent_current_metrics: dict[str, Any] | None = None
+            if incumbent is not None:
+                incumbent_parameters = dict(incumbent.get("parameters", {}))
+                incumbent_current_metrics = (
+                    self._classification_metrics(incumbent_parameters, test_vectors, test_targets)
+                    if kind == "logistic"
+                    else self._regression_metrics(incumbent_parameters, test_vectors, test_targets)
+                )
+            champion, promotion_gate = self._promotion_gate(
+                model_name=model_name,
+                candidate_metrics=metrics,
+                incumbent_metrics=incumbent_current_metrics,
+            )
             candidate_quality = self._quality(model_name, metrics)
-            incumbent_quality = self._quality(model_name, incumbent.get("metrics", {})) if incumbent else -1.0
-            minimum_improvement = 0.002 if model_name == "final_yield_post_cmp" else 0.003
-            champion = incumbent is None or candidate_quality >= incumbent_quality + minimum_improvement
             status = "champion" if champion else "rejected"
             promotion_reason = (
                 "initial_semantically_valid_champion"
                 if incumbent is None
-                else f"shadow_test_quality_improved_by_{candidate_quality - incumbent_quality:.6f}"
+                else f"same_shadow_quality_improved_by_{promotion_gate['quality_delta_same_shadow']:.6f}"
                 if champion
-                else f"rejected_required_improvement_{minimum_improvement:.3f}_actual_{candidate_quality - incumbent_quality:.6f}"
+                else (
+                    f"rejected_same_shadow_required_{promotion_gate['minimum_quality_improvement']:.3f}_"
+                    f"actual_{promotion_gate['quality_delta_same_shadow']:.6f}_guardrails_{str(promotion_gate['guardrails_met']).lower()}"
+                )
             )
+            model["metrics"]["incumbent_same_shadow"] = incumbent_current_metrics
+            model["metrics"]["promotion_gate"] = promotion_gate
             model["promotion_reason"] = promotion_reason
             self.repository.register_model(model, status=status)
             if champion:
@@ -757,6 +829,7 @@ class ContinuousIntelligenceService:
         outcomes = self._ordered_outcomes(self.repository.learning_outcomes())
         predictions = self.semantic_v2_predictions(self.repository.latest_predictions(48))[:24]
         queue_status_reader = getattr(self.repository, "inference_queue_status", None)
+        human_feedback_reader = getattr(self.repository, "human_feedback_summary", None)
         return {
             "schema_version": "fabops-continuous-intelligence-v2",
             "learning_enabled": True,
@@ -768,6 +841,11 @@ class ContinuousIntelligenceService:
             "champions": champions,
             "latest_predictions": predictions,
             "feedback": self.repository.prediction_feedback_summary(),
+            "human_feedback": (
+                human_feedback_reader()
+                if callable(human_feedback_reader)
+                else {"total": 0, "by_type": {}, "training_policy": "persist-for-evaluation-and-curation-only", "automatic_retraining_from_clicks": False}
+            ),
             "drift": self.drift_status(),
             "reports": self.repository.latest_intelligence_reports(12),
             "visualization_plans": self.repository.latest_visualization_plans(12),

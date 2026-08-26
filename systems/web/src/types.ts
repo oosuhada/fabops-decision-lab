@@ -96,6 +96,7 @@ export interface LiveStatusResponse {
 }
 
 export interface LearnedPrediction {
+  prediction_id?: number;
   lot_id: string;
   model_name: string;
   model_version: string;
@@ -192,6 +193,12 @@ export interface ContinuousIntelligenceStatus {
   champions: Record<string, ChampionModel>;
   latest_predictions: LearnedPrediction[];
   feedback: Record<string, {samples: number; mae: number; mse: number}>;
+  human_feedback?: {
+    total: number;
+    by_type: Record<string, number>;
+    training_policy: string;
+    automatic_retraining_from_clicks: boolean;
+  };
   drift: {status: "warming" | "stable" | "watch" | "drift" | string; score: number; recent_rows: number; baseline_rows: number; drift_types?: string[]; retraining_recommended?: boolean; top_shifts?: Array<{feature: string; shift?: number; mean_shift?: number; psi?: number}>};
   reports: IntelligenceReport[];
   visualization_plans: AdaptiveVisualizationPlan[];

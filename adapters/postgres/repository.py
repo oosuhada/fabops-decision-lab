@@ -490,10 +490,10 @@ class PostgresRepository:
     def latest_predictions(self, limit: int = 40) -> list[dict[str, Any]]:
         with self._connection() as connection:
             rows = connection.execute(
-                "SELECT prediction_document FROM fabops_predictions ORDER BY prediction_id DESC LIMIT %s",
+                "SELECT prediction_id, prediction_document FROM fabops_predictions ORDER BY prediction_id DESC LIMIT %s",
                 (limit,),
             ).fetchall()
-        return [deepcopy(row["prediction_document"]) for row in rows]
+        return [{"prediction_id": int(row["prediction_id"]), **deepcopy(row["prediction_document"])} for row in rows]
 
     def latest_predictions_for_lots(self, lot_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
         if not lot_ids:
@@ -501,7 +501,7 @@ class PostgresRepository:
         with self._connection() as connection:
             rows = connection.execute(
                 """
-                SELECT DISTINCT ON (lot_id, target) lot_id, target, prediction_document
+                SELECT DISTINCT ON (lot_id, target) prediction_id, lot_id, target, prediction_document
                 FROM fabops_predictions
                 WHERE lot_id = ANY(%s)
                 ORDER BY lot_id, target, prediction_id DESC
@@ -510,7 +510,9 @@ class PostgresRepository:
             ).fetchall()
         result: dict[str, list[dict[str, Any]]] = {}
         for row in rows:
-            result.setdefault(str(row["lot_id"]), []).append(deepcopy(row["prediction_document"]))
+            result.setdefault(str(row["lot_id"]), []).append(
+                {"prediction_id": int(row["prediction_id"]), **deepcopy(row["prediction_document"])}
+            )
         return result
 
     def unevaluated_predictions(self, limit: int = 200) -> list[dict[str, Any]]:
@@ -559,6 +561,75 @@ class PostgresRepository:
                 "mse": round(float(row["mse"]), 6),
             }
             for row in rows
+        }
+
+    def append_human_feedback(self, feedback: dict[str, Any]) -> dict[str, Any]:
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                INSERT INTO fabops_human_feedback(
+                    case_id, prediction_id, feedback_type, prediction_target,
+                    actor, actor_role, note, feedback_document
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING feedback_id, created_at
+                """,
+                (
+                    feedback["case_id"],
+                    feedback.get("prediction_id"),
+                    feedback["feedback_type"],
+                    feedback.get("prediction_target"),
+                    feedback["actor"],
+                    feedback["actor_role"],
+                    feedback.get("note"),
+                    Jsonb(feedback),
+                ),
+            ).fetchone()
+        return {
+            **deepcopy(feedback),
+            "feedback_id": int(row["feedback_id"]),
+            "created_at": row["created_at"].isoformat(),
+        }
+
+    def human_feedback_for_case(self, case_id: str, limit: int = 20) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT feedback_id, created_at, feedback_document
+                FROM fabops_human_feedback
+                WHERE case_id = %s
+                ORDER BY created_at DESC, feedback_id DESC
+                LIMIT %s
+                """,
+                (case_id, limit),
+            ).fetchall()
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            document = deepcopy(row["feedback_document"])
+            document.update(
+                {
+                    "feedback_id": int(row["feedback_id"]),
+                    "created_at": row["created_at"].isoformat(),
+                }
+            )
+            result.append(document)
+        return result
+
+    def human_feedback_summary(self) -> dict[str, Any]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT feedback_type, count(*) AS count
+                FROM fabops_human_feedback
+                GROUP BY feedback_type
+                ORDER BY feedback_type
+                """
+            ).fetchall()
+        by_type = {str(row["feedback_type"]): int(row["count"]) for row in rows}
+        return {
+            "total": sum(by_type.values()),
+            "by_type": by_type,
+            "training_policy": "persist-for-evaluation-and-curation-only",
+            "automatic_retraining_from_clicks": False,
         }
 
     def append_intelligence_report(self, report: dict[str, Any]) -> bool:

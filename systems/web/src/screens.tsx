@@ -520,6 +520,7 @@ export function OperationsOverview({overview, liveStatus, intelligence, onSelect
         <article><span>Randomized regime mix</span><strong>{intelligence?.dataset_mix ? `${(intelligence.dataset_mix.randomized_share * 100).toFixed(0)}%` : "—"}</strong><small>{intelligence?.dataset_mix ? `${intelligence.dataset_mix.randomized_rows}/${intelligence.dataset_mix.rows} semantic-v2 outcomes` : "regime provenance warming"}</small></article>
         <article><span>Champion models</span><strong>{champions.length}</strong><small>cutoff yield · excursion · next-lot alarm · maintenance attention</small></article>
         <article><span>Prediction feedback</span><strong>{feedbackSamples}</strong><small>predictions compared with realized outcomes</small></article>
+        <article><span>Human feedback</span><strong>{intelligence?.human_feedback?.total ?? 0}</strong><small>persisted for evaluation and curated retraining only</small></article>
         <article><span>Feature drift</span><strong>{intelligence?.drift.status?.toUpperCase() ?? "WAITING"}</strong><small>{intelligence ? `drift score ${intelligence.drift.score.toFixed(3)}` : "learning window warming"}</small></article>
       </div>
       <div className="champion-model-grid">

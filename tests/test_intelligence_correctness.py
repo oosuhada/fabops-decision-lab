@@ -173,6 +173,52 @@ def test_semantic_v2_status_filters_legacy_predictions_and_champions() -> None:
     assert set(filtered_champions) == {"final_yield_post_cmp", "next_lot_excursion_alarm_risk"}
 
 
+def test_champion_promotion_uses_same_shadow_window_and_guardrails() -> None:
+    promoted, gate = ContinuousIntelligenceService._promotion_gate(
+        model_name="next_lot_excursion_alarm_risk",
+        candidate_metrics={
+            "brier": 0.09,
+            "auprc": 0.91,
+            "false_positive_rate": 0.04,
+            "calibration_error": 0.08,
+            "recall": 0.82,
+        },
+        incumbent_metrics={
+            "brier": 0.10,
+            "auprc": 0.90,
+            "false_positive_rate": 0.03,
+            "calibration_error": 0.07,
+            "recall": 0.84,
+        },
+    )
+
+    assert promoted is True
+    assert gate["quality_delta_same_shadow"] == 0.01
+    assert gate["guardrails_met"] is True
+
+    rejected, rejected_gate = ContinuousIntelligenceService._promotion_gate(
+        model_name="next_lot_excursion_alarm_risk",
+        candidate_metrics={
+            "brier": 0.08,
+            "auprc": 0.91,
+            "false_positive_rate": 0.04,
+            "calibration_error": 0.08,
+            "recall": 0.60,
+        },
+        incumbent_metrics={
+            "brier": 0.10,
+            "auprc": 0.90,
+            "false_positive_rate": 0.03,
+            "calibration_error": 0.07,
+            "recall": 0.84,
+        },
+    )
+
+    assert rejected is False
+    assert rejected_gate["quality_delta_same_shadow"] == 0.02
+    assert rejected_gate["guardrails"]["recall_non_regression"] is False
+
+
 def test_inference_queue_policy_never_uses_vertex_for_normal_auto_busy_state() -> None:
     normal = queue_policy("material_intelligence_change", "NORMAL")
     high = queue_policy("material_intelligence_change", "HIGH")
