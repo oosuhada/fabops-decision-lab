@@ -334,11 +334,15 @@ def case_telemetry(runtime: Runtime, case_id: str) -> Iterator[None]:
     causal_trace_id = case_id
     if case is not None:
         lot_id = str(case.get("lot_id") or "")
-        for stored in runtime.event_repository.all_events():
-            event = stored.event
-            if str(event.get("lot_id") or "") == lot_id and event.get("trace_id"):
-                causal_trace_id = str(event["trace_id"])
-                break
+        trace_reader = getattr(runtime.event_repository, "trace_id_for_lot", None)
+        if callable(trace_reader):
+            causal_trace_id = trace_reader(lot_id) or case_id
+        else:
+            for stored in runtime.event_repository.all_events():
+                event = stored.event
+                if str(event.get("lot_id") or "") == lot_id and event.get("trace_id"):
+                    causal_trace_id = str(event["trace_id"])
+                    break
     with runtime.telemetry.bind_causal_trace(causal_trace_id):
         yield
 

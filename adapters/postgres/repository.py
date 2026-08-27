@@ -217,6 +217,20 @@ class PostgresRepository:
             ).fetchall()
         return [StoredEvent(deepcopy(row["envelope"]), str(row["delivery_status"]), int(row["sequence"])) for row in rows]
 
+    def trace_id_for_lot(self, lot_id: str) -> str | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                SELECT trace_id
+                FROM fabops_event_log
+                WHERE lot_id = %s AND trace_id IS NOT NULL AND trace_id <> ''
+                ORDER BY sequence
+                LIMIT 1
+                """,
+                (lot_id,),
+            ).fetchone()
+        return str(row["trace_id"]) if row and row["trace_id"] else None
+
     def delivery_status_counts(self) -> dict[str, int]:
         with self._connection() as connection:
             rows = connection.execute(

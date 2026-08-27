@@ -27,6 +27,13 @@ class InMemoryEventRepository:
     def all_events(self) -> list[StoredEvent]:
         return deepcopy(self._events)
 
+    def trace_id_for_lot(self, lot_id: str) -> str | None:
+        for stored in self._events:
+            event = stored.event
+            if str(event.get("lot_id") or "") == lot_id and event.get("trace_id"):
+                return str(event["trace_id"])
+        return None
+
     def append_outbox(self, topic: str, payload: dict[str, Any]) -> None:
         self._outbox.append({"sequence": len(self._outbox) + 1, "topic": topic, "payload": deepcopy(payload), "published": False})
 
