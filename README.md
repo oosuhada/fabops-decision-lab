@@ -1,20 +1,92 @@
 # FabOps Decision Lab — Evidence-Grounded Yield Excursion Triage
 
-반도체 수율 이상 대응을 위한 **evidence-grounded engineering decision platform** 포트폴리오입니다. 재현 가능한 synthetic fab 이벤트를 기반으로 ingest → deterministic detection → RCA projection → advisory → human approval → audit/replay/evaluation을 하나의 검증 가능한 의사결정 루프로 연결합니다.
+**Live demo / 라이브 데모:** https://fabops-preview.oosu.dev
 
-FabOps Decision Lab is a portfolio-scale engineering decision platform for yield-excursion triage. It connects deterministic synthetic events, source-of-truth persistence, explainable RCA, human-governed workflow, replay, observability and release evidence without requiring an external LLM.
+반도체 수율 이상 대응을 위한 **evidence-grounded engineering decision platform** 포트폴리오입니다. 재현 가능한 synthetic fab 이벤트를 기반으로 ingest → deterministic detection → persistent RCA projection → learned prediction → situation assessment → human approval → audit/replay/evaluation을 하나의 검증 가능한 의사결정 루프로 연결합니다.
 
-> **Live Demo — GOVERNED PUBLIC CANDIDATE:** https://fabops-preview.oosu.dev  
-> The public UI is a **v0.7 candidate** running beside the still-authoritative `0.6.0` M8 soak target. Portfolio data is synthetic. GET/HEAD decision data is cache-only/deterministic and workflow mutation remains blocked at ingress. Live AI wording is available only through predefined bounded demo intents with signed anonymous sessions, application/edge rate limits, provider concurrency and daily budgets. AI wording cannot change the deterministic recommendation, and the demo exposes **NO TOOL CONTROL** or equipment execution. v0.7 is not an official release yet.
+FabOps Decision Lab is a portfolio-scale decision-intelligence workbench for semiconductor yield-excursion triage. The current public candidate combines deterministic evidence, temporal prediction semantics, incident-level prioritization, a durable local-LLM queue, bounded adaptive visualization and human-governed decisions without giving AI equipment-control authority.
 
-![FabOps Semiconductor Forensics V2 decision cockpit](docs/assets/semiconductor-forensics-v2/decision-cockpit-1440.png)
-
-The current workbench uses a **Semiconductor Forensics × Governed Decision Instrument** visual system: `Ⅰ Decide / Ⅱ Investigate / Ⅲ Trust`, source-backed scope, counter-evidence, projection freshness, deterministic recommendation and human authority are prioritized ahead of decorative telemetry. Candidate build identity and authoritative base-release identity are exposed separately in both API and UI. Spatial die coordinates are not fabricated when the API does not provide them.
+> **Governed public candidate:** `0.6.0-v0.9-intelligence-candidate` runs beside the authoritative `0.6.0` release line. Portfolio data and measured model results are synthetic. AI wording cannot change deterministic recommendation identity, workflow authority remains human, and the public preview exposes **NO EQUIPMENT CONTROL**.
 
 <!-- RELEASE_IDENTITY_START -->
 > Release `0.6.0` · canonical release hash `ab8b20a696b9b1996495f23a3e413cc33a67b6861efa184c64742e0f310c6326` · source commit `6824ca11198a`
 > Generated from `evidence/release/release-manifest.json`; this block is updated by `python -m evaluation.release_manifest`.
 <!-- RELEASE_IDENTITY_END -->
+
+## Overview / 개요
+
+The workbench is organized around three operating questions rather than around model output alone:
+
+- **Ⅰ Decide** — what needs a human decision now, and what deterministic guardrails bound that decision?
+- **Ⅱ Investigate** — which source-linked measurements, process steps, alarms and RCA relationships explain the case?
+- **Ⅲ Trust** — is the projection fresh, which model/evidence version produced the output, and what is still uncertain?
+
+The candidate keeps source truth, deterministic computation, learned prediction, AI wording and human authority visibly separate. It also keeps legacy model history for audit while exposing only semantic-v2 predictions in the current operational API/UI.
+
+## Product walkthrough / 제품 화면
+
+### 1. Decision Cockpit — raw cases to a small set of human decisions
+
+![FabOps Decision Cockpit](docs/screenshots/01-decision-cockpit.png)
+
+The cockpit combines incident/episode clustering, composite decision priority, POST_CMP learned predictions, projection freshness and the `HUMAN / NO EQUIPMENT CONTROL` boundary. Recurrent raw cases are correlated into operational episodes before entering the ranked decision queue.
+
+### 2. Case Investigation — evidence before recommendation
+
+![FabOps Case Investigation](docs/screenshots/02-case-investigation.png)
+
+Case Investigation separates deterministic RCA hypotheses from supporting and contradicting evidence. Case detail is loaded first; advisory/replay context hydrates independently so secondary context no longer blocks the primary investigation surface.
+
+### 3. Evidence Graph — bounded source-linked RCA projection
+
+![FabOps Evidence Graph](docs/screenshots/03-evidence-graph.png)
+
+The graph traces Lot → process run → chamber → measurement/alarm/inspection evidence through the rebuildable RCA read model. A dedicated projection worker persists a bounded live graph and checkpoint while older cases can still hydrate their lot-specific graph on demand.
+
+### 4. Analysis Workbench — reproducible, read-only evidence analysis
+
+![FabOps Analysis Workbench](docs/screenshots/04-analysis-workbench.png)
+
+The analysis canvas builds a reproducible path from a locked input case through bounded filter, comparison, aggregation, chart and evidence-verification blocks. It cannot execute arbitrary SQL/code, mutate RCA ranking or change workflow state. The layout responds to the **actual work-surface width**, including when both side panes are pinned.
+
+### 5. Decision & Approval — AI wording around deterministic guardrails
+
+![FabOps Decision and Approval](docs/screenshots/05-decision-approval.png)
+
+Decision & Approval keeps recommendation identity and action boundaries deterministic while allowing a bounded narration layer to explain the evidence for manager/engineer audiences. Final proposal/approval/rejection authority remains human-governed.
+
+### 6. Model & Evidence — semantic-v2 provenance and promotion governance
+
+![FabOps Model and Evidence](docs/screenshots/06-model-evidence.png)
+
+The learned-intelligence view exposes feature-set/cutoff provenance, temporal TRAIN → CALIBRATION → SHADOW TEST partitions, calibration metrics and champion promotion decisions. Current prediction contracts are `final_yield`, `final_excursion_probability`, `next_lot_excursion_alarm_probability` and `next_lot_maintenance_attention_probability`; the last two are explicitly **not** equipment-failure probability or RUL.
+
+### 7. System Health — projection, queue and runtime truthfulness
+
+![FabOps System Health](docs/screenshots/07-system-health.png)
+
+System Health surfaces persistent projection checkpoint/SLO state, runtime identity and local inference status without exposing credentials or private user prompts. Local Qwen availability is treated as READY/BUSY/WAITING rather than turning normal contention into a provider failure.
+
+### 8. Guided case hydration — onboarding instead of a blank wait state
+
+![FabOps guided case hydration](docs/screenshots/08-guided-case-hydration.png)
+
+When a case is genuinely still loading, the workbench shows approximate staged progress plus rotating mini-previews of the screens the user can explore next. In-flight case-detail requests are deduplicated and cached across navigation, so already-hydrated cases switch between investigation surfaces without repeating the same network work.
+
+## Current candidate capabilities / 현재 후보 기능
+
+| Capability | Current implementation |
+|---|---|
+| Prediction semantics | `fabops-feature-set-v2`, explicit `POST_CMP` cutoff, `feature_timestamp < target_timestamp`, exact next-lot targets |
+| Model governance | temporal TRAIN/CALIBRATION/SHADOW split, calibration metrics, same-shadow incumbent comparison, guarded champion promotion, CPU histogram challenger |
+| Live simulation | seeded domain randomization on the live stream only; canonical deterministic fixtures remain unchanged |
+| Incident intelligence | recurrent raw cases correlated into NEW/ONGOING/ESCALATING/RECOVERING/RESOLVED episodes before decision ranking |
+| Situation intelligence | append-only `SituationAssessment` history with deltas, uncertainty, next investigations and validated visualization intent |
+| Local AI | PostgreSQL durable inference queue → MacBook Pro gateway → LM Studio/Qwen3 Coder Next, concurrency 1, BUSY means wait rather than fail |
+| Cloud fallback | automatic non-HIGH stays local-only; HIGH/manual can use bounded Vertex fallback only after the configured local wait/failure policy |
+| Projection | dedicated projection worker → persistent bounded PostgreSQL RCA read model + checkpoint/SLO; API is a read-side consumer |
+| Human feedback | prediction / human assessment / actual outcome persisted separately; feedback does not trigger ungoverned automatic retraining |
+| UX/runtime | bounded overview/cockpit payloads, indexed case hydration, replay-by-lot lookup, in-flight request reuse, guided loading and work-surface container queries |
 
 ## Problem / 문제
 
@@ -30,7 +102,7 @@ The platform is designed to help answer four questions within a compact engineer
 ## Decision loop / 의사결정 루프
 
 ```text
-FabTwin-Sim synthetic events
+FabTwin-Sim synthetic + seeded live-regime events
         ↓
 Schema validation + idempotent ingestion
         ↓
@@ -38,16 +110,20 @@ PostgreSQL authoritative event/case/audit state
         ↓
 Deterministic SPC/EWMA detection
         ↓
-Neo4j rebuildable RCA projection
+Dedicated projection worker → persistent bounded RCA read model
         ↓
-Evidence-grounded RCA + five-tool advisory layer
+Evidence-grounded RCA + temporal feature/prediction loop
+        ↓
+Incident clustering + composite decision priority
+        ↓
+SituationAssessment + durable local-Qwen inference queue
         ↓
 Human proposal / approval / rejection / close
         ↓
 Append-only audit + replay + evaluation + telemetry
 ```
 
-Redpanda/Kafka is the at-least-once transport boundary. PostgreSQL remains authoritative. Neo4j is a rebuildable read projection and is never treated as source of truth.
+Redpanda/Kafka remains the at-least-once transport boundary and PostgreSQL remains authoritative. The current candidate uses a persistent bounded PostgreSQL RCA read model written by a dedicated projection worker; the Neo4j adapter remains part of the earlier release/integration verification surface and is still non-authoritative.
 
 ## Architecture / 아키텍처
 
@@ -58,8 +134,11 @@ Redpanda/Kafka is the at-least-once transport boundary. PostgreSQL remains autho
 | PostgreSQL | event log, cases, audit, outbox, quarantine, checkpoints | **production source of truth** |
 | Detection | deterministic SPC/EWMA anomaly logic | owns anomaly score/classification |
 | Redpanda | publish/consume/reconsume transport | non-authoritative transport |
-| Neo4j | traceability/RCA graph | rebuildable projection |
+| Projection worker | incrementally materializes the bounded live RCA graph + checkpoint/SLO | rebuildable read model only |
+| PostgreSQL RCA read model | current candidate traceability/RCA projection | non-authoritative projection |
+| Neo4j adapter | retained release/integration projection path | non-authoritative projection |
 | Advisory | evidence retrieval and recommendation | advisory only |
+| Local inference queue | durable local-Qwen scheduling, BUSY/backoff/fallback state | wording/assessment only |
 | Workflow | proposal/approval/rejection/close | human-governed state transition |
 | Workbench | evidence, provenance, release/integration state | presentation only |
 
