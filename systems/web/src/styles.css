@@ -2094,6 +2094,28 @@ body::before {
    so a pinned inspector never overlays Operations Queue or forces handoff copy
    into an artificial extra line. */
 @container work-surface (max-width: 1000px) {
+  .cockpit-hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+    padding: 22px 24px;
+  }
+  .cockpit-hero__status {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    min-width: 0;
+  }
+  .cockpit-hero__status > div {
+    min-width: 0;
+    min-height: 70px;
+  }
+  .cockpit-hero__status span,
+  .cockpit-hero__status strong,
+  .cockpit-hero__status small {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
   .overview-visual-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .glass-visual-card--anomaly { grid-column: 1 / -1; }
   .shift-handoff-hero { grid-template-columns: 1fr; align-items: stretch; }
@@ -2102,13 +2124,158 @@ body::before {
   .shift-handoff-summary > div:nth-child(3) { border-right: 0; }
   .shift-handoff-list > ol > li { grid-template-columns: 70px minmax(0, 1.3fr) minmax(0, 1fr); }
   .shift-handoff-next { grid-column: 2 / -1; }
+
+  .analysis-workbench {
+    grid-template-columns: 180px minmax(0, 1fr);
+    min-width: 0;
+  }
+  .analysis-canvas,
+  .analysis-canvas > header,
+  .analysis-path,
+  .analysis-result-strip,
+  .analysis-visualization {
+    min-width: 0;
+  }
+  .analysis-provenance {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-top: 1px solid #dbe4e9;
+    border-left: 0;
+  }
+  .analysis-provenance > header,
+  .analysis-provenance footer {
+    grid-column: 1 / -1;
+  }
+  .analysis-canvas > header {
+    flex-wrap: wrap;
+  }
+  .analysis-canvas > header > div:first-child {
+    min-width: 0;
+    flex: 1 1 220px;
+  }
+  .analysis-canvas > header > div:first-child strong,
+  .analysis-step > div strong,
+  .analysis-step > div small,
+  .analysis-result-strip span,
+  .analysis-result-strip strong {
+    overflow-wrap: anywhere;
+  }
+  .analysis-canvas > header > div:last-child {
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .analysis-result-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .analysis-result-strip > div {
+    min-width: 0;
+    border-bottom: 1px solid #e0e7eb;
+  }
+  .analysis-result-strip > div:nth-child(2n) { border-right: 0; }
+  .analysis-result-strip > div:nth-last-child(-n+2) { border-bottom: 0; }
 }
 
 @container work-surface (max-width: 680px) {
+  .cockpit-hero {
+    gap: 16px;
+    padding: 18px 16px;
+  }
+  .cockpit-hero__status > div {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    gap: 4px;
+    padding: 10px 11px;
+  }
+  .cockpit-hero__status strong,
+  .cockpit-hero__status .cockpit-trust strong {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+    font-size: 18px;
+    line-height: 1.05;
+  }
+  .cockpit-hero__status small {
+    line-height: 1.35;
+  }
+
   .overview-visual-grid { grid-template-columns: 1fr; gap: 9px; }
   .glass-visual-card--anomaly { grid-column: auto; }
   .shift-handoff-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .shift-handoff-list > ol > li { grid-template-columns: 54px minmax(0, 1fr); }
   .shift-handoff-evidence,
   .shift-handoff-next { grid-column: 2; }
+
+  .analysis-workbench {
+    display: block;
+    min-height: 0;
+    overflow: visible;
+  }
+  .analysis-builder {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-right: 0;
+    border-bottom: 1px solid #dbe4e9;
+  }
+  .analysis-builder > header,
+  .analysis-block-catalog {
+    grid-column: 1 / -1;
+  }
+  .analysis-builder > header {
+    flex-direction: row;
+    align-items: center;
+  }
+  .analysis-block-catalog {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .analysis-canvas {
+    width: 100%;
+    overflow: visible;
+  }
+  .analysis-step {
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+  }
+  .analysis-visualization,
+  .analysis-comparison {
+    max-width: calc(100% - 26px);
+  }
+  .analysis-bars > div {
+    grid-template-columns: minmax(64px, 88px) minmax(0, 1fr) 46px;
+  }
+  .analysis-provenance {
+    display: block;
+    border-left: 0;
+  }
+}
+
+@container work-surface (max-width: 440px) {
+  .cockpit-hero__status {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .analysis-builder {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .analysis-builder > header,
+  .analysis-block-catalog {
+    grid-column: auto;
+  }
+  .analysis-block-catalog,
+  .analysis-result-strip {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .analysis-result-strip > div,
+  .analysis-result-strip > div:nth-child(2n),
+  .analysis-result-strip > div:nth-last-child(-n+2) {
+    border-right: 0;
+    border-bottom: 1px solid #e0e7eb;
+  }
+  .analysis-result-strip > div:last-child { border-bottom: 0; }
+  .analysis-canvas > header > div:last-child {
+    width: 100%;
+    justify-content: stretch;
+  }
+  .analysis-canvas > header button {
+    flex: 1 1 120px;
+  }
 }
