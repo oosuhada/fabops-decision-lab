@@ -44,7 +44,9 @@ def test_macmini_operational_scripts_and_same_origin_web_exist() -> None:
     for name in ("deploy.sh", "status.sh", "logs.sh", "backup.sh", "restore-test.sh", "rollback.sh"):
         assert (ROOT / "infra/macmini/scripts" / name).is_file()
     nginx = (ROOT / "infra/macmini/nginx.conf").read_text(encoding="utf-8")
-    assert "proxy_pass http://api:8000" in nginx
+    assert "resolver 127.0.0.11" in nginx
+    assert "set $fabops_api_upstream api:8000" in nginx
+    assert "proxy_pass http://$fabops_api_upstream" in nginx
     assert "VITE_API_URL: \"\"" in COMPOSE
 
 

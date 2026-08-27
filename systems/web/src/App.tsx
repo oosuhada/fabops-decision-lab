@@ -286,7 +286,7 @@ export default function App() {
     setSelectedEvidenceNode(null);
     setCockpitBrief(null);
     setCockpitAnalysisFeedback(null);
-    if (selectedCaseId) void loadCase(selectedCaseId, {hydrateContext: screen === "case" || screen === "decision"});
+    if (selectedCaseId) void loadCase(selectedCaseId, {hydrateContext: screen === "case" || screen === "decision" || screen === "replay"});
   }, [loadCase, screen, selectedCaseId]);
   useEffect(() => {
     if (!selectedCaseId || screen !== "decision") return;

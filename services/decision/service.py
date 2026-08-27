@@ -528,6 +528,13 @@ class DecisionSupportService:
             packet["incident_episode"] = {key: value for key, value in episode.items() if key != "representative_case"}
             packet["incident_episode"]["current_decision"] = packet["decision_question"]
             queue.append(packet)
+        queue.sort(
+            key=lambda packet: (
+                -int(packet["priority_rank"]),
+                -float(packet["evidence"].get("anomaly_score", 0.0)),
+                str(packet["case_id"]),
+            )
+        )
         counts: dict[str, int] = {"HIGH": 0, "MEDIUM": 0, "VERIFY_DATA": 0}
         for case in ordered_cases:
             band = str(_decision_definition(str(case["classification"]))["priority_band"])

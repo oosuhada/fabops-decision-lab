@@ -4,8 +4,7 @@ import math
 from collections import defaultdict
 from typing import Any
 
-from services.detection.service import DetectorConfig, SENSOR_INDEX, STEP_INDEX
-
+from services.detection.service import SENSOR_INDEX, STEP_INDEX, DetectorConfig
 
 PREDICTION_VERSION = "transparent-online-risk-v1.0.0"
 
