@@ -148,6 +148,7 @@ export default function App() {
   const [feedback, setFeedback] = useState<{kind: "ok" | "error" | "unauthorized"; message: string} | null>(null);
   const initialRootLoaded = useRef(false);
   const caseDetailCache = useRef(new Map<string, CaseDetailResponse>());
+  const caseDetailInflight = useRef(new Map<string, Promise<CaseDetailResponse>>());
   const caseLoadSerial = useRef(0);
   const [caseHydration, setCaseHydration] = useState<CaseHydrationState>({
     caseId: null,
@@ -182,8 +183,9 @@ export default function App() {
     }
   }, []);
 
-  const loadCase = useCallback(async (caseId: string, options: {hydrateContext?: boolean} = {}) => {
+  const loadCase = useCallback(async (caseId: string, options: {hydrateContext?: boolean; refresh?: boolean} = {}) => {
     const hydrateContext = options.hydrateContext !== false;
+    const refresh = options.refresh === true;
     const requestId = ++caseLoadSerial.current;
     const startedAt = Date.now();
     const cached = caseDetailCache.current.get(caseId) ?? null;
@@ -197,12 +199,8 @@ export default function App() {
       setAdvisory(null);
       setCaseReplayTrace(null);
     }
-    try {
-      const nextDetail = await api.caseDetail(caseId);
-      if (caseLoadSerial.current !== requestId) return;
-      caseDetailCache.current.set(caseId, nextDetail);
-      setDetail(nextDetail);
-      setSelectedStep((current) => current && nextDetail.trace.process_path.some((item) => item.step_id === current) ? current : nextDetail.trace.process_path[0]?.step_id ?? null);
+
+    const hydrateSecondaryContext = () => {
       if (!hydrateContext) return;
       setCaseHydration({caseId, startedAt, advisoryPending: true, replayPending: true});
       void api.advisory(caseId).then((nextAdvisory) => {
@@ -221,6 +219,27 @@ export default function App() {
         if (caseLoadSerial.current !== requestId) return;
         setCaseHydration((current) => current.caseId === caseId ? {...current, replayPending: false} : current);
       });
+    };
+
+    if (cached && !refresh) {
+      hydrateSecondaryContext();
+      return;
+    }
+    try {
+      let detailRequest = caseDetailInflight.current.get(caseId);
+      if (!detailRequest) {
+        detailRequest = api.caseDetail(caseId);
+        caseDetailInflight.current.set(caseId, detailRequest);
+        void detailRequest.finally(() => {
+          if (caseDetailInflight.current.get(caseId) === detailRequest) caseDetailInflight.current.delete(caseId);
+        }).catch(() => undefined);
+      }
+      const nextDetail = await detailRequest;
+      if (caseLoadSerial.current !== requestId) return;
+      caseDetailCache.current.set(caseId, nextDetail);
+      setDetail(nextDetail);
+      setSelectedStep((current) => current && nextDetail.trace.process_path.some((item) => item.step_id === current) ? current : nextDetail.trace.process_path[0]?.step_id ?? null);
+      hydrateSecondaryContext();
     } catch (reason) {
       if (caseLoadSerial.current !== requestId) return;
       setError(reason instanceof Error ? reason.message : "Unable to load selected case");
@@ -299,7 +318,7 @@ export default function App() {
       void loadRoot();
       void loadLiveStatus();
       void loadIntelligenceStatus();
-      if (selectedCaseId && detail?.case.case_id === selectedCaseId) void loadCase(selectedCaseId, {hydrateContext: false});
+      if (selectedCaseId && detail?.case.case_id === selectedCaseId) void loadCase(selectedCaseId, {hydrateContext: false, refresh: true});
     }, 15000);
     return () => window.clearInterval(timer);
   }, [detail?.case.case_id, liveStatus?.live_enabled, loadCase, loadIntelligenceStatus, loadLiveStatus, loadRoot, selectedCaseId]);
@@ -339,7 +358,7 @@ export default function App() {
     setFeedback(null);
     try {
       await action();
-      await Promise.all([loadRoot(), loadCase(selectedCaseId)]);
+      await Promise.all([loadRoot(), loadCase(selectedCaseId, {hydrateContext: true, refresh: true})]);
       setFeedback({kind: "ok", message: "The append-only workflow ledger and current case state were updated."});
     } catch (reason) {
       const status = typeof reason === "object" && reason !== null && "status" in reason ? Number((reason as {status: number}).status) : 0;
