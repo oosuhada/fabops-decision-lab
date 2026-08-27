@@ -241,8 +241,8 @@ describe("FabOps workbench", () => {
     expect(metadata).toHaveTextContent("local-event-adapter");
     expect(payload).toHaveTextContent("Recorded payload");
     fireEvent.click(screen.getByRole("button", {name: "Next"}));
-    expect(screen.getByRole("heading", {name: "case.detected"})).toBeInTheDocument();
-    expect(screen.getByText("decision-audit")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", {name: "case.detected"})).toBeInTheDocument();
+    expect(await screen.findByText("decision-audit")).toBeInTheDocument();
     expect(metadata).toHaveTextContent("decision-audit");
     expect(payload).not.toHaveTextContent('"sensor_name": "rf_power"');
   });
