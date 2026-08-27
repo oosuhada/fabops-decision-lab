@@ -86,6 +86,18 @@ class InMemoryCaseRepository:
     def audit_log(self) -> list[dict[str, Any]]:
         return deepcopy(self._audit)
 
+    def audit_for_case(self, case_id: str) -> list[dict[str, Any]]:
+        return [deepcopy(record) for record in self._audit if record.get("case_id") == case_id]
+
+    def related_cases(self, classification: str, exclude_case_id: str, limit: int = 3) -> list[dict[str, Any]]:
+        matches = [
+            deepcopy(case)
+            for case in self._cases.values()
+            if case.get("classification") == classification and case.get("case_id") != exclude_case_id
+        ]
+        matches.sort(key=lambda case: str(case.get("lot_id", "")), reverse=True)
+        return matches[: max(1, int(limit))]
+
     def snapshot(self) -> dict[str, Any]:
         return {"cases": deepcopy(self._cases), "audit": deepcopy(self._audit)}
 

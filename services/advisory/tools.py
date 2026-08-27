@@ -67,13 +67,17 @@ class ToolRegistry:
     def compare_chamber_baselines(self, case_id: str) -> dict[str, Any]:
         case = self._case(case_id)
         lot_id = case["lot_id"]
-        target_measurements = [node for node in self.graph.nodes("Measurement") if node.properties.get("lot_id") == lot_id]
+        indexed = getattr(self.graph, "nodes_for_lot", None)
+        target_measurements = indexed("Measurement", lot_id) if callable(indexed) else [
+            node for node in self.graph.nodes("Measurement") if node.properties.get("lot_id") == lot_id
+        ]
+        all_measurements = self.graph.nodes("Measurement")
         by_sensor: dict[str, dict[str, Any]] = {}
         for sensor in sorted({str(node.properties["sensor_name"]) for node in target_measurements}):
             target_values = [float(node.properties["value"]) for node in target_measurements if node.properties["sensor_name"] == sensor]
             baseline_values = [
                 float(node.properties["value"])
-                for node in self.graph.nodes("Measurement")
+                for node in all_measurements
                 if node.properties["sensor_name"] == sensor and node.properties.get("lot_id") != lot_id
             ]
             by_sensor[sensor] = {
@@ -90,8 +94,15 @@ class ToolRegistry:
     def find_related_alarms_and_changes(self, case_id: str) -> dict[str, Any]:
         case = self._case(case_id)
         lot_id = case["lot_id"]
-        alarms = [node.properties for node in self.graph.nodes("Alarm") if node.properties.get("lot_id") == lot_id]
-        runs = [node.properties for node in self.graph.nodes("ProcessRun") if node.properties.get("lot_id") == lot_id]
+        indexed = getattr(self.graph, "nodes_for_lot", None)
+        alarm_nodes = indexed("Alarm", lot_id) if callable(indexed) else [
+            node for node in self.graph.nodes("Alarm") if node.properties.get("lot_id") == lot_id
+        ]
+        run_nodes = indexed("ProcessRun", lot_id) if callable(indexed) else [
+            node for node in self.graph.nodes("ProcessRun") if node.properties.get("lot_id") == lot_id
+        ]
+        alarms = [node.properties for node in alarm_nodes]
+        runs = [node.properties for node in run_nodes]
         mismatches = [
             {"process_run_id": run["process_run_id"], "actual": run["recipe_id"], "expected": run["expected_recipe_id"]}
             for run in runs
@@ -114,11 +125,16 @@ class ToolRegistry:
             "sensor_bias_suspected": "SOP-SYN-SENSOR-02: verify calibration against independent measurement before equipment attribution.",
             "data_quality_incident": "SOP-SYN-DQ-03: reconcile/replay event stream; do not initiate physical containment from data-quality evidence alone.",
         }.get(classification, "SOP-SYN-GENERAL-00: request additional evidence.")
-        related = [
-            {"case_id": item["case_id"], "lot_id": item["lot_id"], "classification": item["classification"], "state": item["state"]}
+        related_reader = getattr(self.cases, "related_cases", None)
+        related_cases = related_reader(classification, case_id, 3) if callable(related_reader) else [
+            item
             for item in self.cases.list_cases()
             if item["case_id"] != case_id and item["classification"] == classification
         ][:3]
+        related = [
+            {"case_id": item["case_id"], "lot_id": item["lot_id"], "classification": item["classification"], "state": item["state"]}
+            for item in related_cases
+        ]
         return {
             "tool": "retrieve_sop_and_past_cases",
             "case_id": case_id,

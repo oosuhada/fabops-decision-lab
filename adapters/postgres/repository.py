@@ -369,6 +369,38 @@ class PostgresRepository:
             result.append(record)
         return result
 
+    def audit_for_case(self, case_id: str) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT audit_sequence, record
+                FROM fabops_decision_audit
+                WHERE case_id = %s
+                ORDER BY audit_sequence
+                """,
+                (case_id,),
+            ).fetchall()
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            record = deepcopy(row["record"])
+            record["audit_sequence"] = int(row["audit_sequence"])
+            result.append(record)
+        return result
+
+    def related_cases(self, classification: str, exclude_case_id: str, limit: int = 3) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT case_document
+                FROM fabops_cases
+                WHERE classification = %s AND case_id <> %s
+                ORDER BY lot_id DESC, updated_at DESC
+                LIMIT %s
+                """,
+                (classification, exclude_case_id, max(1, int(limit))),
+            ).fetchall()
+        return [deepcopy(row["case_document"]) for row in rows]
+
     def put(self, raw_event: dict[str, Any], reason: str) -> None:
         with self._connection() as connection:
             connection.execute(

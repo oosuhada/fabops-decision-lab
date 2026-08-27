@@ -5,6 +5,7 @@ import {AnalysisWorkbench} from "./features/analysis/AnalysisWorkbench";
 import {CaseComparisonWorkbench} from "./features/comparison/CaseComparisonWorkbench";
 import type {EvidenceGraphNode} from "./features/evidence/evidenceGraphModel";
 import {ShiftHandoffBrief} from "./features/handoff/ShiftHandoffBrief";
+import {CaseContextHydration, CaseHydrationExperience} from "./features/loading/CaseHydrationExperience";
 import {WorkbenchResizeHandle} from "./platform/workbench/WorkbenchResizeHandle";
 import {useWorkbenchLayout} from "./platform/workbench/useWorkbenchLayout";
 import {useLocale} from "./locale";
@@ -70,6 +71,13 @@ function screenFromPath(pathname: string): ScreenId {
 
 type BootStage = "ledger" | "cases" | "intelligence" | "workspace";
 const BOOT_STAGE_ORDER: Record<BootStage, number> = {ledger: 0, cases: 1, intelligence: 2, workspace: 3};
+
+interface CaseHydrationState {
+  caseId: string | null;
+  startedAt: number;
+  advisoryPending: boolean;
+  replayPending: boolean;
+}
 
 function InitialBoot({stage}: {stage: BootStage}) {
   const [elapsed, setElapsed] = useState(0);
@@ -139,6 +147,14 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<{kind: "ok" | "error" | "unauthorized"; message: string} | null>(null);
   const initialRootLoaded = useRef(false);
+  const caseDetailCache = useRef(new Map<string, CaseDetailResponse>());
+  const caseLoadSerial = useRef(0);
+  const [caseHydration, setCaseHydration] = useState<CaseHydrationState>({
+    caseId: null,
+    startedAt: Date.now(),
+    advisoryPending: false,
+    replayPending: false,
+  });
 
   const loadRoot = useCallback(async () => {
     const isInitialLoad = !initialRootLoaded.current;
@@ -166,17 +182,47 @@ export default function App() {
     }
   }, []);
 
-  const loadCase = useCallback(async (caseId: string) => {
-    setDetail((current) => current?.case.case_id === caseId ? current : null);
-    setAdvisory(null);
-    setCaseReplayTrace(null);
+  const loadCase = useCallback(async (caseId: string, options: {hydrateContext?: boolean} = {}) => {
+    const hydrateContext = options.hydrateContext !== false;
+    const requestId = ++caseLoadSerial.current;
+    const startedAt = Date.now();
+    const cached = caseDetailCache.current.get(caseId) ?? null;
+    if (cached) {
+      setDetail(cached);
+    } else {
+      setDetail((current) => current?.case.case_id === caseId ? current : null);
+      setCaseHydration({caseId, startedAt, advisoryPending: false, replayPending: false});
+    }
+    if (hydrateContext) {
+      setAdvisory(null);
+      setCaseReplayTrace(null);
+    }
     try {
-      void api.advisory(caseId).then(setAdvisory).catch(() => undefined);
-      void api.caseReplayTrace(caseId).then(setCaseReplayTrace).catch(() => undefined);
       const nextDetail = await api.caseDetail(caseId);
+      if (caseLoadSerial.current !== requestId) return;
+      caseDetailCache.current.set(caseId, nextDetail);
       setDetail(nextDetail);
       setSelectedStep((current) => current && nextDetail.trace.process_path.some((item) => item.step_id === current) ? current : nextDetail.trace.process_path[0]?.step_id ?? null);
+      if (!hydrateContext) return;
+      setCaseHydration({caseId, startedAt, advisoryPending: true, replayPending: true});
+      void api.advisory(caseId).then((nextAdvisory) => {
+        if (caseLoadSerial.current !== requestId) return;
+        setAdvisory(nextAdvisory);
+        setCaseHydration((current) => current.caseId === caseId ? {...current, advisoryPending: false} : current);
+      }).catch(() => {
+        if (caseLoadSerial.current !== requestId) return;
+        setCaseHydration((current) => current.caseId === caseId ? {...current, advisoryPending: false} : current);
+      });
+      void api.caseReplayTrace(caseId).then((nextTrace) => {
+        if (caseLoadSerial.current !== requestId) return;
+        setCaseReplayTrace(nextTrace);
+        setCaseHydration((current) => current.caseId === caseId ? {...current, replayPending: false} : current);
+      }).catch(() => {
+        if (caseLoadSerial.current !== requestId) return;
+        setCaseHydration((current) => current.caseId === caseId ? {...current, replayPending: false} : current);
+      });
     } catch (reason) {
+      if (caseLoadSerial.current !== requestId) return;
       setError(reason instanceof Error ? reason.message : "Unable to load selected case");
     }
   }, []);
@@ -221,8 +267,8 @@ export default function App() {
     setSelectedEvidenceNode(null);
     setCockpitBrief(null);
     setCockpitAnalysisFeedback(null);
-    if (selectedCaseId) void loadCase(selectedCaseId);
-  }, [loadCase, selectedCaseId]);
+    if (selectedCaseId) void loadCase(selectedCaseId, {hydrateContext: screen === "case" || screen === "decision"});
+  }, [loadCase, screen, selectedCaseId]);
   useEffect(() => {
     if (!selectedCaseId || screen !== "decision") return;
     setDecisionBrief(null);
@@ -253,10 +299,10 @@ export default function App() {
       void loadRoot();
       void loadLiveStatus();
       void loadIntelligenceStatus();
-      if (selectedCaseId) void loadCase(selectedCaseId);
+      if (selectedCaseId && detail?.case.case_id === selectedCaseId) void loadCase(selectedCaseId, {hydrateContext: false});
     }, 15000);
     return () => window.clearInterval(timer);
-  }, [liveStatus?.live_enabled, loadCase, loadIntelligenceStatus, loadLiveStatus, loadRoot, selectedCaseId]);
+  }, [detail?.case.case_id, liveStatus?.live_enabled, loadCase, loadIntelligenceStatus, loadLiveStatus, loadRoot, selectedCaseId]);
   useEffect(() => {
     if (!liveStatus?.live_enabled || screen !== "replay") return;
     const timer = window.setInterval(() => void api.replay().then(setReplay).catch(() => undefined), 60000);
@@ -413,7 +459,12 @@ export default function App() {
   let workSurface;
   if (screen === "cockpit") workSurface = <DecisionCockpit cockpit={cockpit} detail={detail} projection={overview.projection} sourceTimestamp={overview.source_timestamp} liveStatus={liveStatus} intelligence={intelligenceStatus} manualBrief={cockpitBrief} analyzing={cockpitAnalyzing} analysisFeedback={cockpitAnalysisFeedback} selectedCaseId={selectedCaseId} onAnalyzeNow={analyzeCockpitNow} onOpenCase={selectCase} onOpenDecision={openDecision} />;
   else if (screen === "overview") workSurface = <OperationsOverview overview={overview} liveStatus={liveStatus} intelligence={intelligenceStatus} onSelectCase={selectCase} />;
-  else if ((screen === "case" || screen === "graph" || screen === "analysis" || screen === "decision") && !detail) workSurface = <WorkbenchState kind="loading" title={screen === "graph" ? "Hydrating evidence graph" : "Loading selected case"} detail={screen === "graph" ? "Streaming the selected case first. RCA nodes and graph relationships appear as soon as source-linked evidence arrives." : "Loading source-linked case evidence first. Advisory and replay context continue hydrating in parallel."} />;
+  else if ((screen === "case" || screen === "graph" || screen === "analysis" || screen === "decision") && !detail) workSurface = <CaseHydrationExperience
+    screen={screen}
+    caseId={selectedCaseId}
+    lotId={selectedPacket?.lot_id ?? selectedCase?.lot_id ?? null}
+    startedAt={caseHydration.caseId === selectedCaseId ? caseHydration.startedAt : Date.now()}
+  />;
   else if (screen === "case" && detail) workSurface = <ExcursionCase detail={detail} advisory={advisory} />;
   else if (screen === "graph" && detail) workSurface = <EvidenceGraph detail={detail} selectedStep={selectedStep} onSelectStep={setSelectedStep} onSelectEvidenceNode={setSelectedEvidenceNode} />;
   else if (screen === "analysis" && detail) workSurface = <AnalysisWorkbench detail={detail} />;
@@ -521,7 +572,12 @@ export default function App() {
       </> : null}
     </aside>
     {workbench.layout.leftOpen ? <WorkbenchResizeHandle side="left" width={workbench.layout.leftWidth} onBegin={workbench.beginResize} onMove={workbench.moveResize} onEnd={workbench.endResize} onKeyboardResize={workbench.keyboardResize} onReset={workbench.resetWidth} /> : null}
-    <main id="work-surface" className="work-surface" tabIndex={-1} onMouseEnter={() => { workbench.dismissPane("left"); workbench.dismissPane("right"); }} onClick={() => { workbench.dismissPane("left"); workbench.dismissPane("right"); }}>{workSurface}</main>
+    <main id="work-surface" className="work-surface" tabIndex={-1} onMouseEnter={() => { workbench.dismissPane("left"); workbench.dismissPane("right"); }} onClick={() => { workbench.dismissPane("left"); workbench.dismissPane("right"); }}>
+      {(screen === "case" || screen === "decision") && detail && caseHydration.caseId === selectedCaseId && (caseHydration.advisoryPending || caseHydration.replayPending)
+        ? <CaseContextHydration advisoryPending={caseHydration.advisoryPending} replayPending={caseHydration.replayPending} />
+        : null}
+      {workSurface}
+    </main>
     {workbench.layout.rightOpen ? <WorkbenchResizeHandle side="right" width={workbench.layout.rightWidth} onBegin={workbench.beginResize} onMove={workbench.moveResize} onEnd={workbench.endResize} onKeyboardResize={workbench.keyboardResize} onReset={workbench.resetWidth} /> : null}
     {workbench.isDesktop ? <button type="button" className="pane-edge-trigger pane-edge-trigger--right" aria-label="Open inspector pane" aria-expanded={workbench.rightVisible} onMouseEnter={() => workbench.previewPane("right")} onFocus={() => workbench.previewPane("right")} onClick={() => workbench.previewPane("right")}><span>Inspector</span></button> : null}
     <div className={`${workbench.rightVisible ? "evidence-inspector-slot" : "evidence-inspector-slot is-collapsed"}${workbench.isDesktop && !workbench.layout.rightOpen ? " is-overlay" : ""}`} aria-hidden={!workbench.rightVisible} onMouseEnter={() => workbench.previewPane("right")} onMouseLeave={() => workbench.dismissPane("right")}>

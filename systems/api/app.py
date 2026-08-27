@@ -584,13 +584,17 @@ def get_case(case_id: str, runtime: Annotated[Runtime, Depends(get_runtime)]) ->
         inspection_nodes = indexed("Inspection", lot_id) if callable(indexed) else [node for node in runtime.graph.nodes("Inspection") if node.properties.get("lot_id") == lot_id]
         measurements = [node.properties for node in measurement_nodes]
         inspections = [node.properties for node in inspection_nodes]
+        audit_reader = getattr(runtime.case_repository, "audit_for_case", None)
+        audit = audit_reader(case_id) if callable(audit_reader) else [
+            record for record in runtime.case_repository.audit_log() if record["case_id"] == case_id
+        ]
         return {
             "source": "inferred",
             "case": case,
             "rca": ranking,
             "trace": trace,
             "evidence_series": {"measurements": measurements, "inspections": inspections},
-            "audit": [record for record in runtime.case_repository.audit_log() if record["case_id"] == case_id],
+            "audit": audit,
         }
 
 
@@ -601,7 +605,10 @@ def get_case_replay_trace(case_id: str, runtime: Annotated[Runtime, Depends(get_
         raise HTTPException(status_code=404, detail="case not found")
 
     lot_id = str(case["lot_id"])
-    source_events = [item for item in runtime.event_repository.all_events() if item.event.get("lot_id") == lot_id]
+    lot_event_reader = getattr(runtime.event_repository, "events_for_lots", None)
+    source_events = lot_event_reader([lot_id]) if callable(lot_event_reader) else [
+        item for item in runtime.event_repository.all_events() if item.event.get("lot_id") == lot_id
+    ]
     source_by_id = {str(item.event.get("event_id")): item for item in source_events}
 
     def _phase(event_type: str) -> str:
@@ -644,7 +651,10 @@ def get_case_replay_trace(case_id: str, runtime: Annotated[Runtime, Depends(get_
         if event_id in source_by_id
     ]
     detection_time = max((value for value in trigger_times if value), default=None)
-    audit_records = [record for record in runtime.case_repository.audit_log() if record.get("case_id") == case_id]
+    audit_reader = getattr(runtime.case_repository, "audit_for_case", None)
+    audit_records = audit_reader(case_id) if callable(audit_reader) else [
+        record for record in runtime.case_repository.audit_log() if record.get("case_id") == case_id
+    ]
     for record in audit_records:
         event_name = str(record.get("event", "workflow.audit"))
         inferred_time = detection_time if event_name == "case.detected" else None
