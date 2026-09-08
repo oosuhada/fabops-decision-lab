@@ -380,6 +380,14 @@ These numbers are **not** PostgreSQL/Neo4j/Redpanda production capacity claims. 
 
 이 수치는 PostgreSQL/Neo4j/Redpanda의 **production capacity 주장**이 아닙니다. 자세한 정의와 제한은 `docs/operations/SLO.md`에 있습니다.
 
+### PostgreSQL query-plan evidence / PostgreSQL 실행계획 근거
+
+Two real repository query shapes were profiled against an isolated PostgreSQL 16 benchmark database using `EXPLAIN (ANALYZE, BUFFERS)` over 200,000 event rows and 80,000 case rows. A composite `(event_type, sequence DESC)` index reduced the recent-measurement query p50 from **10.230 ms to 0.033 ms** and buffer hits from **12,078 to 14**. A `(classification, lot_id DESC, updated_at DESC)` index reduced the related-case query p50 from **0.162 ms to 0.018 ms**, while removing the previous incremental-sort step.
+
+실제 repository query shape 두 개를 격리 PostgreSQL 16 환경에서 20만 event / 8만 case fixture와 `EXPLAIN (ANALYZE, BUFFERS)`로 측정했습니다. `(event_type, sequence DESC)` composite index는 recent-measurement query p50을 **10.230 ms → 0.033 ms**, buffer hit을 **12,078 → 14**로 줄였고, `(classification, lot_id DESC, updated_at DESC)` index는 related-case query p50을 **0.162 ms → 0.018 ms**로 줄이면서 기존 incremental-sort 단계를 제거했습니다.
+
+Full experiment, plan names, variance and limitations: `docs/POSTGRESQL_PROFILING.md` and `evidence/postgres/operational-index-profile.json`.
+
 ### Executed incident exercise / 실제 장애 훈련
 
 The M6 Neo4j dependency outage exercise actually stopped the project Neo4j container, observed degraded readiness, restarted it, and observed recovery:
