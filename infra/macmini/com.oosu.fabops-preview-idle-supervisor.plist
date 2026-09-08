@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.oosu.fabops-preview-idle-supervisor</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/gabrieljang/Services/fabops-decision-lab-ops/deploy/fabops_preview_idle_supervisor.py</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>FABOPS_PREVIEW_IDLE_SECONDS</key>
+    <string>2700</string>
+    <key>FABOPS_PREVIEW_MIN_UP_SECONDS</key>
+    <string>300</string>
+    <key>FABOPS_PREVIEW_SUPERVISOR_HOST</key>
+    <string>127.0.0.1</string>
+    <key>FABOPS_PREVIEW_SUPERVISOR_PORT</key>
+    <string>8231</string>
+    <key>FABOPS_PREVIEW_PROJECT</key>
+    <string>fabops-decision-lab-preview-v07</string>
+    <key>PYTHONUNBUFFERED</key>
+    <string>1</string>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/Users/gabrieljang/Services/fabops-decision-lab-data/public-preview/idle-supervisor.stdout.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/gabrieljang/Services/fabops-decision-lab-data/public-preview/idle-supervisor.stderr.log</string>
+  <key>WorkingDirectory</key>
+  <string>/Users/gabrieljang/Services/fabops-decision-lab-ops/deploy</string>
+</dict>
+</plist>
