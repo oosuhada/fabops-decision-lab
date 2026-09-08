@@ -6,7 +6,7 @@
   <string>com.oosu.fabops-preview-idle-supervisor</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/usr/bin/python3</string>
+    <string>/opt/homebrew/bin/python3</string>
     <string>/Users/gabrieljang/Services/fabops-decision-lab-ops/deploy/fabops_preview_idle_supervisor.py</string>
   </array>
   <key>RunAtLoad</key>
