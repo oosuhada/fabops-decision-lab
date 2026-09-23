@@ -58,6 +58,12 @@ services:
     command: >-
       rpk topic create fabops.events.v1 --brokers redpanda:9092 || true;
       rpk topic create fabops.events.dlq.v1 --brokers redpanda:9092 || true
+    # The Redpanda image declares its data directory as a VOLUME. Without an
+    # explicit mount, every short-lived init container leaves behind a unique
+    # anonymous Docker volume. Keep it project-scoped so `compose down -v`
+    # reliably removes/reuses it during canonical verification.
+    volumes:
+      - fabops_redpanda_init_data:/var/lib/redpanda/data
     networks: [fabops_internal]
     restart: "no"
     mem_limit: 128m
@@ -78,6 +84,14 @@ services:
       retries: 30
     volumes:
       - fabops_neo4j_data:/data
+      # Neo4j also declares /logs as a VOLUME. Make it project-scoped instead
+      # of creating a new anonymous volume on every isolated verification.
+      - fabops_neo4j_logs:/logs
+    # Neo4j expands the Browser bundle under /tmp during startup. The
+    # canonical gate repeatedly creates this stack, so keep those files
+    # ephemeral and bounded rather than growing the writable layer.
+    tmpfs:
+      - /tmp:size=256m,mode=1777
     networks: [fabops_internal]
     restart: unless-stopped
     mem_limit: 768m
@@ -158,4 +172,6 @@ networks:
 volumes:
   fabops_postgres_data:
   fabops_redpanda_data:
+  fabops_redpanda_init_data:
   fabops_neo4j_data:
+  fabops_neo4j_logs:
