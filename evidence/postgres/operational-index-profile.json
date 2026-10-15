@@ -1,0 +1,85 @@
+{
+  "database": "fabops_bench",
+  "experiment": "fabops-postgresql-operational-index-profile-v1",
+  "fixture": {
+    "case_rows": 80000,
+    "event_rows": 200000
+  },
+  "limitations": [
+    "Synthetic portfolio fixture; results are not a production-fab capacity claim.",
+    "Warm-cache EXPLAIN ANALYZE runs on one local PostgreSQL instance.",
+    "The benchmark isolates read-plan effects and does not quantify index write amplification."
+  ],
+  "queries": {
+    "recent_measurement_events": {
+      "after": {
+        "index_names": [
+          "fabops_event_log_event_type_sequence_idx"
+        ],
+        "mean_ms": 0.0351,
+        "p50_ms": 0.033,
+        "p95_ms": 0.0413,
+        "plan_nodes": [
+          "Limit",
+          "Index Scan"
+        ],
+        "shared_hit_blocks": 14,
+        "shared_read_blocks": 0,
+        "variance_ms2": 0.000016
+      },
+      "before": {
+        "index_names": [
+          "fabops_event_log_pkey"
+        ],
+        "mean_ms": 10.2462,
+        "p50_ms": 10.23,
+        "p95_ms": 10.627,
+        "plan_nodes": [
+          "Limit",
+          "Index Scan"
+        ],
+        "shared_hit_blocks": 12078,
+        "shared_read_blocks": 0,
+        "variance_ms2": 0.058831
+      },
+      "index": "fabops_event_log_event_type_sequence_idx",
+      "p50_improvement_percent": 99.68
+    },
+    "related_cases": {
+      "after": {
+        "index_names": [
+          "fabops_cases_classification_lot_updated_idx"
+        ],
+        "mean_ms": 0.0207,
+        "p50_ms": 0.018,
+        "p95_ms": 0.0324,
+        "plan_nodes": [
+          "Limit",
+          "Index Scan"
+        ],
+        "shared_hit_blocks": 46,
+        "shared_read_blocks": 0,
+        "variance_ms2": 0.000074
+      },
+      "before": {
+        "index_names": [
+          "idx_fabops_cases_lot_id"
+        ],
+        "mean_ms": 0.1637,
+        "p50_ms": 0.162,
+        "p95_ms": 0.1799,
+        "plan_nodes": [
+          "Limit",
+          "Incremental Sort",
+          "Index Scan"
+        ],
+        "shared_hit_blocks": 2844,
+        "shared_read_blocks": 0,
+        "variance_ms2": 0.000095
+      },
+      "index": "fabops_cases_classification_lot_updated_idx",
+      "p50_improvement_percent": 88.89
+    }
+  },
+  "repeats_per_phase": 15
+}

@@ -1,0 +1,69 @@
+name: postgres-profile
+
+on:
+  pull_request:
+    paths:
+      - "adapters/postgres/**"
+      - "evaluation/postgres_profile.py"
+      - "tests/test_postgres_profile.py"
+      - ".github/workflows/postgres-profile.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "adapters/postgres/**"
+      - "evaluation/postgres_profile.py"
+      - "tests/test_postgres_profile.py"
+      - ".github/workflows/postgres-profile.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fabops_bench
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d fabops_bench"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: python -m pip install --no-cache-dir uv
+
+      - name: Install locked dependencies
+        run: uv sync --locked --dev
+
+      - name: Lint and unit tests
+        run: |
+          uv run ruff check evaluation/postgres_profile.py tests/test_postgres_profile.py
+          uv run pytest -q tests/test_postgres_profile.py
+
+      - name: Verify PostgreSQL plans and latency direction
+        run: >-
+          uv run python -m evaluation.postgres_profile
+          --dsn postgresql://postgres:postgres@127.0.0.1:5432/fabops_bench
+          --event-rows 50000
+          --case-rows 20000
+          --repeats 3
+          --strict
